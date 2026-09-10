@@ -2,6 +2,41 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-10
+- **Fix**: Gemini is **two catalogue entries** now, because its limits are per model and one entry
+  can only hold one set. The compromise `rpm: 10, rpd: 1500` produced **1,090 HTTP 429s across
+  1,200 calls** on 2026-09-09 — about a third of the whole fleet's daily refusals from a single
+  provider. The real numbers came from this account's own AI Studio rate-limit dashboard, because
+  Google stopped publishing them: **3.6 Flash is RPM 5 / RPD 20**, **3.5 Flash-Lite is RPM 15 /
+  RPD 500**. True daily allowance 520, not 1,500.
+  The mechanism is worth keeping: 3.6 Flash scored one point higher (64 vs 63), so the router
+  chose it first, spent its twenty calls, and took a 429 on every attempt after. And the wrong
+  `rpd` **disabled the ledger's own correction** — `QuotaLedger` lowers `observed_limit` only when
+  a 429 arrives near the configured allowance, so a refusal at call 21 against a configured 1,500
+  reads as a per-minute limit and teaches it nothing. A 75x-too-high number does not merely
+  over-plan; it guarantees the ledger never learns better. Flash-Lite also gains throughput: its
+  real RPM is 15 and the old shared 10 left a third of it unused.
+  `fetch_upstream_models` now matches `spec.name.startswith("gemini")` — an exact match would have
+  sent the new second entry to the OpenAI-compat `/models` Google does not implement, which is the
+  bug the 2026-09-05 review caught for Cloudflare, one provider later.
+- **Observed**: `localgpu` answered **152 calls with 152 errors** on 2026-09-09 — a provider at
+  100% failure, the shape [[2026-08-cerebras-free-tier-ended]] and the paid-fallback post-mortem
+  both cost us before. Not yet diagnosed; its own config comment names the two candidates
+  (Cloudflare's 100 s origin timeout answering 524, and the `enable_thinking:false` flag whose
+  absence makes every answer unparseable).
+- **Observed**: no new free-tier provider worth adding. **Vercel AI Gateway** has a renewing
+  monthly credit and an OpenAI-compatible endpoint but deliberately publishes no numbers — "this
+  page describes behavior rather than fixed numbers… contact Vercel" — and the ledger cannot plan
+  against a support ticket. **Cohere** is 1,000 calls a month and non-commercial use only.
+  **BazaarLink** is 50/day. SambaNova, NVIDIA NIM and SiliconFlow were declined on 2026-09-05.
+- **Correction**: the enrichment/extraction split (2,409 calls against 87 on 2026-09-09) is **not**
+  a defect and was re-opened here in error on 2026-09-05. `main.py:_enrich_body` carries the
+  reasoning: yielding to extraction was tried on 2026-08-21 and reverted the same day, because
+  42,091 community pages with 68% missing long descriptions and 34 visitors a day make the
+  marginal extracted page worth less than a thin page made rankable. The traffic since supports
+  it — meetapedia.com went from 8 visitors on 2026-09-05 to 65 on 2026-09-09. Read the comment
+  before proposing the change again.
+
 ## 2026-09-06
 - **Decision**: `localgpu` runs **Qwen3-4B Q4_K_M, measured 73** — the *smallest* of the three candidates and the best of them. One shared sample (`d13dfe914a92`, 16 hu pages, 17 expected), so the numbers are comparable: 4B **73** (2.5 GB), 8B **67** (5.0 GB), gpt-oss-20b **65** (12.1 GB), and the 4B answered 16/16. This is the header of `providers.yaml` proving itself — LLMStructBench found prompting strategy outweighs model size for JSON extraction — so read it as our prompt doing the work, not as 4B beating 20B in general. The practical lesson is to measure the small model **first**, not last: two days of the fleet's history assume bigger is better. Memory settled the rest. On a 16 GB machine its owner is actually using, the 8B ran at 5.4 tok/s against 15.8-16.6 idle, because everything else was paging and unified memory means that steals the bandwidth the GPU needs; at 5.4 tok/s one extraction is ~109 s. Open risk recorded, not solved: the scored run averaged **89 s/page** against Cloudflare's 100 s origin timeout, and it ran over loopback where no timeout applied. Through the tunnel a slow page will 524 — benign (retried, never quarantined) but a cap on how much this provider can contribute.
 - **Observed**: a thinking model that reasons in **plain text** is a quarantine hazard, not just a bad answer. Qwen3-4B ignores `--reasoning-budget 0` (which works on gpt-oss) and emits `"Okay, let's tackle this..."` as `content` — no `<think>` tags, no `reasoning` field, so neither llama.cpp nor `_json_items` can separate it. All 16 golden pages came back as `ExtractorContentError`, and that is **exactly** what `_Quarantine` counts: in production three of those retire a real page permanently under the current fingerprint. A misconfigured local model would therefore delete pages from the corpus while looking merely unlucky. The fix is `--chat-template-kwargs '{"enable_thinking":false}'`, which reaches the model's own template instead of llama.cpp's generic budget. Worth remembering when adding any model: verify the *shape* of one answer before trusting a score, because a score of `n/a` and a score of 0 look alike in a summary and mean opposite things.

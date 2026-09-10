@@ -237,8 +237,13 @@ def fetch_upstream_models(spec: ProviderSpec, timeout: int = 20) -> tuple[list[s
     if not key:
         return [], "no API key"
     try:
-        if spec.name == "gemini":
+        if spec.name.startswith("gemini"):
             # Google's OpenAI-compat surface has no /models; the native API does.
+            # `startswith`, not `==`: Gemini is two catalogue entries since
+            # 2026-09-10 (its limits are per model), and an exact match would
+            # send the second one to the OpenAI-compat /models it does not have
+            # — the same shape of bug the 2026-09-05 review caught for
+            # Cloudflare, one provider later.
             url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
             req = urllib.request.Request(url, headers={"User-Agent": _UA})
             with urllib.request.urlopen(req, timeout=timeout) as resp:

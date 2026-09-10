@@ -159,25 +159,56 @@ providers:
       # that does not exist here, not an account problem.
 
   # ── Google Gemini (AI Studio) ─────────────────────────────────────────────
-  # Reached through Google's OpenAI-compatibility endpoint so it needs no
-  # separate client. Highest published daily request allowance.
+  # SPLIT IN TWO on 2026-09-10, because Gemini's limits are per *model* and one
+  # provider entry can only hold one set. The old single entry carried the
+  # compromise `rpm: 10, rpd: 1500` and on 2026-09-09 that produced **1,090
+  # HTTP 429s across 1,200 calls** — roughly a third of the whole fleet's daily
+  # refusals, from one misconfigured provider.
+  #
+  # The real numbers, read from this account's own AI Studio rate-limit
+  # dashboard (aistudio.google.com/rate-limit) rather than from documentation,
+  # which Google no longer publishes:
+  #
+  #     Gemini 3.6 Flash        RPM 5    TPM 250K   RPD 20
+  #     Gemini 3.5 Flash-Lite   RPM 15   TPM 250K   RPD 500
+  #
+  # So the true daily allowance is **520**, not 1,500 — and 3.6 Flash is spent
+  # after twenty calls. Because it scored one point higher (64 vs 63) the router
+  # picked it first every time and then took a 429 for the rest of the day.
+  #
+  # Worse, the wrong number disabled the ledger's own correction. `QuotaLedger`
+  # only lowers `observed_limit` when a 429 arrives *near the configured
+  # allowance*; a refusal at call 21 against a configured 1,500 reads as a
+  # per-minute limit and teaches it nothing. A 75x-too-high `rpd` does not just
+  # over-plan — it guarantees the ledger never learns better.
   - name: gemini
     enabled: true
     api_key_env: GEMINI_API_KEY
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
-    # 10, not 15. Google publishes 15 RPM for Flash-Lite but 10 for Flash, and
-    # this is one number for both models: pacing at the higher figure means the
-    # faster model is always slightly over its limit. On 2026-08-22 Gemini took
-    # **301** 429s across 1,200 calls and the breaker had it blocked with 924
-    # requests still unspent. There is no published tokens-per-day cap to model
-    # here — the limits are RPM, TPM and RPD — so `tpd` stays unset.
-    rpm: 10
-    rpd: 1500
+    # Flash-Lite carries the work: 500 a day against Flash's 20. `rpm: 15` is
+    # its real limit — the old 10 was a compromise with Flash and left a third
+    # of this model's throughput unused.
+    rpm: 15
+    rpd: 500
+    models:
+      - model: gemini-3.5-flash-lite
+        quality: 63
+
+  # ── Google Gemini 3.6 Flash (separate entry: 20 requests a day) ────────────
+  # Same key, same endpoint, its own budget. Twenty calls of quality 64 against
+  # Flash-Lite's 63 is one point, which [[free-tier-model-router]] says is not a
+  # reliable ordering — so this exists for capacity, not preference. If it ever
+  # looks like more trouble than twenty calls is worth, deleting this block is
+  # the whole change.
+  - name: gemini_flash
+    enabled: true
+    api_key_env: GEMINI_API_KEY
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    rpm: 5
+    rpd: 20
     models:
       - model: gemini-3.6-flash
         quality: 64
-      - model: gemini-3.5-flash-lite
-        quality: 63
 
   # ── Mistral ───────────────────────────────────────────────────────────────
   - name: mistral
