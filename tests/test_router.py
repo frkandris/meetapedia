@@ -1363,3 +1363,100 @@ def test_unfencing_does_not_forgive_actually_broken_output():
                 '{"communities": [{"name": "Cut off mid'):
         with pytest.raises(ExtractorContentError):
             _json_items(raw, "communities", "communities", "u")
+
+
+# ── a learned ceiling is a hypothesis, not a verdict ─────────────────────────
+
+def test_a_stale_learned_ceiling_stops_binding(tmp_path, monkeypatch):
+    """A ceiling inferred from one refusal must not own the rest of the day.
+
+    On 2026-09-09 Groq's day ended at 187 calls against a real allowance of
+    1,000: a per-minute *token* limit answers 429 exactly like a spent day, and
+    the pin was only ever lowered. Past the TTL the router plans against the
+    configured number again and finds out.
+    """
+    db = _db(tmp_path)
+    spec = _spec(rpd=1000)
+    ledger = QuotaLedger(db, day="2026-09-09")
+    ledger.reload()
+
+    now = [1_000_000.0]
+    monkeypatch.setattr("scraper.router.time.time", lambda: now[0])
+
+    ledger._row("groq").update({"calls": 187, "observed_limit": 187,
+                                "observed_at": now[0]})
+    assert ledger.budget(spec) == int(187 * 0.95)   # fresh: believed
+    assert ledger.remaining(spec) == 0
+
+    now[0] += QuotaLedger._OBSERVED_LIMIT_TTL_S + 1
+    assert ledger.budget(spec) == int(1000 * 0.95)  # stale: re-tested
+    assert ledger.remaining(spec) > 0
+
+
+def test_a_refusal_renews_a_ceiling_it_only_reconfirms(tmp_path, monkeypatch):
+    """Freshness is what the router trusts, so re-confirming must renew it.
+
+    Otherwise a *correctly* learned ceiling expires while the provider is still
+    saying no, and the fleet re-tests a provider that has genuinely finished
+    every half hour instead of once.
+    """
+    db = _db(tmp_path)
+    spec = _spec(rpd=1000)
+    ledger = QuotaLedger(db, day="2026-09-09")
+    ledger.reload()
+
+    now = [2_000_000.0]
+    monkeypatch.setattr("scraper.router.time.time", lambda: now[0])
+
+    ledger._row("groq").update({"calls": 800, "observed_limit": 800,
+                                "observed_at": now[0]})
+    now[0] += QuotaLedger._OBSERVED_LIMIT_TTL_S + 1     # would be stale now
+
+    # The re-test happens and the provider refuses again, saying "per day".
+    ledger.note_call("groq", ok=False, rate_limited=True, retry_after=60,
+                     error="rate limit: requests per day", spec=spec)
+    assert ledger._row("groq")["observed_at"] == now[0]
+    assert ledger.budget(spec) == int(800 * 0.95)       # believed again
+
+
+def test_a_success_above_the_ceiling_unlearns_it(tmp_path):
+    """The provider itself is the only thing allowed to raise a ceiling.
+
+    Lowering stays cautious — an unproven number must never talk down a proven
+    one — but a call that *succeeds* past the ceiling is not a guess, and
+    without this the day never recovers from a wrong inference.
+    """
+    db = _db(tmp_path)
+    spec = _spec(rpd=1000)
+    ledger = QuotaLedger(db, day="2026-09-09")
+    ledger.reload()
+
+    record_provider_call(db, "2026-09-09", "groq", ok=False, rate_limited=True,
+                         observed_limit=187, observed_at=5.0)
+    ledger.reload()
+    assert ledger._row("groq")["observed_limit"] == 187
+
+    ledger._row("groq")["calls"] = 188          # the re-test call
+    ledger.note_call("groq", ok=True, spec=spec)
+
+    assert ledger._row("groq").get("observed_limit") in (None, 0)
+    assert get_provider_usage(db, "2026-09-09")["groq"]["observed_limit"] is None
+    assert ledger.budget(spec) == int(1000 * 0.95)
+
+
+def test_a_success_below_the_ceiling_leaves_it_alone(tmp_path):
+    """Only a success *past* the ceiling is evidence about the ceiling.
+
+    Ordinary successful calls happen all day underneath it and say nothing.
+    """
+    db = _db(tmp_path)
+    spec = _spec(rpd=1000)
+    ledger = QuotaLedger(db, day="2026-09-09")
+    ledger.reload()
+    record_provider_call(db, "2026-09-09", "groq", ok=False, rate_limited=True,
+                         observed_limit=500, observed_at=5.0)
+    ledger.reload()
+
+    ledger._row("groq")["calls"] = 100
+    ledger.note_call("groq", ok=True, spec=spec)
+    assert ledger._row("groq")["observed_limit"] == 500

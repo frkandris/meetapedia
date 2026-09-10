@@ -30,7 +30,7 @@ from pathlib import Path
 
 import structlog
 
-from .db import get_provider_usage, record_provider_call
+from .db import clear_observed_limit, get_provider_usage, record_provider_call
 from .providers import (ProviderCatalogue, ProviderSpec, OpenAICompatExtractor,
                         build_extractors, load_catalogue)
 
@@ -151,11 +151,37 @@ class QuotaLedger:
         )
 
     def budget(self, spec: ProviderSpec) -> int:
-        """Effective daily allowance: the observed ceiling when we have proven
-        one, otherwise the configured (published, possibly stale) number."""
-        observed = self._row(spec.name).get("observed_limit")
-        limit = observed if observed else spec.rpd
+        """Effective daily allowance: the observed ceiling while it is still
+        fresh, otherwise the configured (published, possibly stale) number.
+
+        A learned ceiling expires on purpose. It is an inference from a refusal,
+        the inference is sometimes wrong, and it used to be irreversible within
+        a day — see `_OBSERVED_LIMIT_TTL_S`. Re-testing costs one refused call
+        per cooldown when the ceiling was right, and recovers a provider's whole
+        remaining day when it was wrong.
+
+        Pure: reads the row and the clock, nothing else. `remaining()` feeds the
+        admin page and the daily report as well as routing, so it must not have
+        side effects — an earlier draft handed out "probe slots" from here and
+        would have consumed one every time someone loaded /admin/providers.
+        """
+        row = self._row(spec.name)
+        observed = row.get("observed_limit")
+        if observed and self._pin_is_fresh(row):
+            limit = observed
+        else:
+            limit = spec.rpd
         return max(0, int(limit * _DAILY_HEADROOM))
+
+    def _pin_is_fresh(self, row: dict) -> bool:
+        """Is this learned ceiling still inside its TTL?
+
+        A row written before `observed_at` existed has 0 and reads as stale,
+        which is the safe direction: the first refusal after the upgrade stamps
+        it properly.
+        """
+        stamped = float(row.get("observed_at") or 0.0)
+        return (time.time() - stamped) < self._OBSERVED_LIMIT_TTL_S
 
     def used(self, provider: str) -> int:
         return int(self._row(provider).get("calls") or 0)
@@ -189,6 +215,34 @@ class QuotaLedger:
 
     def remaining(self, spec: ProviderSpec) -> int:
         return max(0, self.budget(spec) - self.used(spec.name))
+
+    def _unlearn_if_served_past_ceiling(self, provider: str, row: dict) -> None:
+        """A success above the learned ceiling proves the ceiling wrong.
+
+        The TTL in `budget()` is what lets us get here: once the pin goes stale
+        the router plans against the configured number, issues a call that the
+        old ceiling said was impossible, and the provider answers it. That is
+        not an optimistic guess talking a proven limit back up — it is the
+        provider demonstrating the inference was wrong, which is the one thing
+        allowed to raise a ceiling.
+
+        Cleared rather than raised to the current count: the count only says
+        "at least this many", and the configured number is the honest next
+        hypothesis. If it is still too high, the next refusal pins it again.
+        """
+        observed = row.get("observed_limit")
+        if not observed or int(row.get("calls") or 0) <= int(observed):
+            return
+        log.info("provider_daily_limit_unlearned", provider=provider,
+                 was=int(observed), served_at_call=int(row.get("calls") or 0))
+        row["observed_limit"] = None
+        row["observed_at"] = 0.0
+        if not self.db_path:
+            return
+        try:
+            clear_observed_limit(self.db_path, self.day, provider)
+        except Exception as exc:
+            log.warning("quota_ledger_write_failed", provider=provider, error=str(exc))
 
     def blocked(self, provider: str) -> bool:
         """True while a 429's Retry-After window is still open.
@@ -230,6 +284,20 @@ class QuotaLedger:
     #: daily cap points at the next UTC midnight, which is hours away.
     _DAILY_429_RETRY_AFTER = 1800.0
 
+    #: How long a learned daily ceiling is believed before it must be proven
+    #: again. The ceiling is inferred from a refusal, and the inference is
+    #: sometimes wrong in the expensive direction: a per-minute *token* limit
+    #: answers 429 like a spent day does, and on 2026-09-09 Groq's day ended at
+    #: 187 calls against a real allowance of 1,000. Lowering had no way back —
+    #: the pin was only ever lowered, so one bad reading cost the rest of the
+    #: day.
+    #:
+    #: Past this, the router plans against the configured number again and finds
+    #: out. Being wrong the other way is cheap and self-correcting: one refused
+    #: call, and the pin returns for another cooldown. Being wrong the old way
+    #: cost a provider's entire remaining allowance.
+    _OBSERVED_LIMIT_TTL_S = 1800.0
+
     def reserve_call(self, provider: str) -> None:
         """Take a request slot before issuing the call, not after it returns.
 
@@ -259,6 +327,8 @@ class QuotaLedger:
         how a router walks into a hard block."""
         self._sync()
         row = self._row(provider)
+        if ok:
+            self._unlearn_if_served_past_ceiling(provider, row)
         if reserved:
             # The slot was claimed by reserve_call, which also stamped the
             # pacing clock at call *start*. Counting again would double the
@@ -275,6 +345,7 @@ class QuotaLedger:
             row["failures"] = int(row.get("failures") or 0) + 1
         blocked_until = None
         observed_limit = None
+        observed_at = None
         if billing_blocked:
             # HTTP 402 is not a wait-and-retry condition — the provider is
             # saying there is no credit. It was recorded as one more failed
@@ -323,6 +394,13 @@ class QuotaLedger:
                 observed_limit = row["calls"]
                 prev = row.get("observed_limit")
                 row["observed_limit"] = min(prev, observed_limit) if prev else observed_limit
+                # Stamped on every confirmation, not only when the number moves.
+                # The freshness of a ceiling is what the router now trusts, so a
+                # refusal that merely re-confirms an existing pin has to renew
+                # it — otherwise a correctly-learned ceiling would expire while
+                # the provider kept saying no.
+                observed_at = time.time()
+                row["observed_at"] = observed_at
                 log.warning("provider_daily_limit_learned", provider=provider,
                             observed=row["observed_limit"], configured=configured,
                             wait_s=round(wait, 1))
@@ -347,6 +425,7 @@ class QuotaLedger:
             record_provider_call(
                 self.db_path, self.day, provider, ok=ok, rate_limited=rate_limited,
                 blocked_until=blocked_until, error=error, observed_limit=observed_limit,
+                observed_at=observed_at,
                 tokens=int(tokens or 0), cost_usd=float(cost_usd or 0.0),
             )
         except Exception as exc:

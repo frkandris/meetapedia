@@ -3,6 +3,25 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-10
+- **Decision**: a learned daily ceiling is a **hypothesis with a TTL**, not a verdict for the day.
+  `observed_limit` is inferred from a refusal, the inference is sometimes wrong in the expensive
+  direction — a per-minute *token* 429 is indistinguishable from a spent day — and it was only ever
+  lowered, so one bad reading owned the provider until midnight. On 2026-09-09 that ended Groq's
+  day at **187 calls against a real allowance of 1,000**.
+  Two changes, in opposite directions and deliberately asymmetric. **Expiry**: past
+  `_OBSERVED_LIMIT_TTL_S` (30 min) `budget()` stops believing the pin and plans against the
+  configured number again; if the provider really is finished it refuses once more and the pin
+  returns, so being wrong now costs *one call per cooldown* instead of a day's allowance. Every
+  refusal re-stamps `observed_at`, including one that does not change the value — otherwise a
+  correctly learned ceiling would expire while the provider was still saying no. **Unlearning**: a
+  call that *succeeds* past the ceiling clears it outright (`clear_observed_limit`), because that
+  is the provider demonstrating the inference was wrong rather than an optimistic number talking a
+  proven one back up. The MIN that guards lowering is untouched, and so is the rule from
+  2026-08-18 that `near_daily` compares against the *configured* rpd — that ratchet walked Groq's
+  13,680 down to 336 and is exactly what must not come back.
+  `budget()` stays a pure function of row and clock. An earlier draft handed out "probe slots" from
+  `remaining()`, which feeds the admin page and the daily report as well as routing — loading
+  `/admin/providers` would have consumed one.
 - **Fix**: Gemini is **two catalogue entries** now, because its limits are per model and one entry
   can only hold one set. The compromise `rpm: 10, rpd: 1500` produced **1,090 HTTP 429s across
   1,200 calls** on 2026-09-09 — about a third of the whole fleet's daily refusals from a single

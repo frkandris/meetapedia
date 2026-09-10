@@ -631,6 +631,15 @@ def init_db(db_path: Path, force: bool = False) -> None:
                 -- limits are stale or unpublished for most providers, so the
                 -- observed ceiling is what actually governs routing.
                 observed_limit  INTEGER,
+                -- When `observed_limit` was last confirmed, as an epoch. The
+                -- ceiling is a *hypothesis*, and a stale one is expensive: a
+                -- per-minute refusal misread as a daily cap used to end a
+                -- provider's day with most of its allowance unspent, with no
+                -- way back until midnight. Past a TTL the router stops
+                -- believing it and plans against the configured number again;
+                -- if the provider really is finished it refuses once more and
+                -- the pin returns, costing one call per cooldown.
+                observed_at     REAL NOT NULL DEFAULT 0,
                 blocked_until   REAL NOT NULL DEFAULT 0,
                 last_error      TEXT,
                 -- Tokens, not just calls. Groq's free tier is bounded by
@@ -651,7 +660,8 @@ def init_db(db_path: Path, force: bool = False) -> None:
             )
         """)
         for _col, _type in (("tokens", "INTEGER NOT NULL DEFAULT 0"),
-                            ("cost_usd", "REAL NOT NULL DEFAULT 0")):
+                            ("cost_usd", "REAL NOT NULL DEFAULT 0"),
+                            ("observed_at", "REAL NOT NULL DEFAULT 0")):
             try:
                 conn.execute(f"ALTER TABLE provider_usage ADD COLUMN {_col} {_type}")
             except sqlite3.OperationalError:
@@ -3766,6 +3776,7 @@ def record_provider_call(
     blocked_until: float | None = None,
     error: str | None = None,
     observed_limit: int | None = None,
+    observed_at: float | None = None,
     tokens: int = 0,
     cost_usd: float = 0.0,
 ) -> None:
@@ -3780,9 +3791,15 @@ def record_provider_call(
     a reasoning model costs us — so the price is taken from the usage the
     provider itself reported, not from whether we could use the answer.
 
-    `observed_limit` is only ever lowered, never raised — once a provider has
-    proven it stops at N requests, a later run must not optimistically restore a
-    higher published number.
+    `observed_limit` is only ever lowered *here*, never raised: within one
+    confirmation a provider that proved it stops at N must not be talked back up
+    by a later optimistic number. Raising it is a separate, deliberate act —
+    `clear_observed_limit`, called when a request actually succeeds past the
+    ceiling, which is direct evidence the ceiling was wrong.
+
+    `observed_at` stamps every confirmation, including one that does not change
+    the value. The router stops trusting a stale pin, so a refusal that merely
+    re-confirms an existing ceiling still has to say so.
     """
     with _connect(db_path) as conn:
         conn.execute(
@@ -3803,13 +3820,37 @@ def record_provider_call(
                        WHEN ? IS NULL THEN observed_limit
                        WHEN observed_limit IS NULL THEN ?
                        ELSE MIN(observed_limit, ?)
+                   END,
+                   observed_at    = CASE
+                       WHEN ? IS NULL THEN observed_at
+                       ELSE ?
                    END
              WHERE day=? AND provider=?
             """,
             (int(tokens or 0), float(cost_usd or 0.0),
              0 if ok else 1, 1 if rate_limited else 0,
              blocked_until, error,
-             observed_limit, observed_limit, observed_limit, day, provider),
+             observed_limit, observed_limit, observed_limit,
+             observed_limit, float(observed_at or 0.0), day, provider),
+        )
+        conn.commit()
+
+
+def clear_observed_limit(db_path: Path, day: str, provider: str) -> None:
+    """Forget a learned daily ceiling, because a call just succeeded past it.
+
+    The counterpart to the MIN in `record_provider_call`. Lowering is cautious
+    by design — an unproven higher number must never talk down a proven one —
+    but that made the ceiling a one-way door, and a wrong one cost a provider
+    its whole remaining day. A *success* above the ceiling is not an optimistic
+    guess; it is the provider itself demonstrating the number was wrong, and it
+    is the only thing allowed to raise it.
+    """
+    with _connect(db_path) as conn:
+        conn.execute(
+            "UPDATE provider_usage SET observed_limit=NULL, observed_at=0 "
+            "WHERE day=? AND provider=?",
+            (day, provider),
         )
         conn.commit()
 
