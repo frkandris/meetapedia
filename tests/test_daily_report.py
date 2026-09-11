@@ -460,3 +460,53 @@ def test_a_run_that_aborts_at_preflight_still_records_its_attempts():
     assert src.count("_persist_attempts(") >= 3      # def + abort + throughput
     i = src.index("extractor_preflight_failed")
     assert "_persist_attempts(" in src[i:i + 400]
+
+
+def test_more_calls_than_the_ledger_saw_is_reported_not_clamped():
+    """The two counters measure the same universe; a gap is a finding.
+
+    On 2026-09-10 the line read "2400 hívás (11 kinyerés 2641 leírás)" — its own
+    numbers exceeding its own total by 252, with nothing said about it, because
+    `max(0, ...)` swallowed the difference. The ledger is what governs routing,
+    so calls it never saw are calls no budget was charged for, and undercounting
+    a budget is how a router walks into a hard block. The excess is the one
+    direction that must not be rounded away.
+    """
+    from scraper.report import build_report_html
+
+    def _blank():
+        return {k: 0 for k in ("new_communities", "changed_communities", "change_rows",
+                               "new_venues", "new_persons", "pages_scraped",
+                               "pages_extracted", "searches")}
+
+    hu = _blank()
+    hu["pages_extracted"] = 7
+    summary = {
+        "hu": hu, "intl": _blank(),
+        "totals": {"hu": 0, "intl": 0, "covered_pairs_hu": 0, "covered_pairs_intl": 0},
+        "runs": [],
+        # The 2026-09-10 figures, verbatim.
+        "enrich_attempts": 2641, "extract_attempts": 11,
+        "providers": [
+            {"name": "mistral", "configured": True, "used": 433, "budget": 475,
+             "failures": 409, "rate_limits": 407, "tokens": 21799},
+            {"name": "openrouter", "configured": True, "used": 950, "budget": 950,
+             "failures": 28, "rate_limits": 24, "tokens": 2261314},
+            {"name": "gemini", "configured": True, "used": 510, "budget": 475,
+             "failures": 459, "rate_limits": 454, "tokens": 82784},
+            {"name": "groq", "configured": True, "used": 257, "budget": 950,
+             "failures": 164, "rate_limits": 23, "tokens": 188422},
+            {"name": "cloudflare", "configured": True, "used": 95, "budget": 95,
+             "failures": 4, "rate_limits": 0, "tokens": 240004},
+            {"name": "localgpu", "configured": True, "used": 136, "budget": 95000,
+             "failures": 136, "rate_limits": 0, "tokens": 0},
+            {"name": "gemini_flash", "configured": True, "used": 19, "budget": 19,
+             "failures": 19, "rate_limits": 18, "tokens": 0},
+        ],
+    }
+    _, html = build_report_html("2026-09-10", summary, {}, None, None)
+
+    assert "2400 hívás" in html
+    assert "252" in html                 # 2652 - 2400, named rather than hidden
+    assert "kvótakönyvelés" in html
+    assert "egyéb" not in html           # there is no surplus to attribute

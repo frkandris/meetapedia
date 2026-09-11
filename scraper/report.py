@@ -281,7 +281,17 @@ def build_report_html(day: str, summary: dict, traffic: dict,
             # observation across reports rather than a derivation inside one.
             _enrich = int(summary.get("enrich_attempts") or 0)
             _extract = int(summary.get("extract_attempts") or 0)
-            _other = max(0, _calls - _enrich - _extract)
+            # `max(0, ...)` used to sit here, and on 2026-09-10 it printed
+            # "2400 hívás (11 kinyerés 2641 leírás)" — a line whose own numbers
+            # do not add up, with nothing said about it. The workload counters
+            # and the quota ledger are supposed to measure the same universe of
+            # provider attempts; when they disagree the *ledger* is the one that
+            # governs routing, so an excess means calls were made that no budget
+            # was charged for. Undercounting a budget is how a router walks into
+            # a hard block, which makes this the one direction that must never
+            # be rounded away. Reported, not clamped.
+            _unaccounted = _calls - _enrich - _extract
+            _other = max(0, _unaccounted)
             ratio = f"{_fetched / _done:.1f}×" if _done else "—"
             refused = f"{_fails * 100 // _calls}%" if _calls else "0%"
             _split = f"{_extract} kinyerés, {_enrich} leírás"
@@ -289,6 +299,9 @@ def build_report_html(day: str, summary: dict, traffic: dict,
                 # preflight() probes every provider once per run, and the /v1
                 # gateway is other software entirely. Named, not folded in.
                 _split += f", {_other} egyéb (preflight, átjáró)"
+            elif _unaccounted < 0:
+                _split += (f" — ⚠️ {-_unaccounted} hívással több, mint amennyit "
+                           f"a kvótakönyvelés lát")
             ai_html += (
                 "<p style='margin:8px 0 0;font-size:13px;color:#8C8478'>"
                 f"{_calls} hívás ({_split}) → <b>{_done} feldolgozott oldal</b>. "

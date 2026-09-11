@@ -2,6 +2,32 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-11
+- **Observed**: the 2026-09-10 fixes worked at the provider level. Refused calls **87% → 50%**;
+  OpenRouter went from 712 refusals in 800 calls to **24 in 950**; and the expiring ceiling did its
+  job — Groq ended 2026-09-09 pinned at 187 and spent 2026-09-10 working against its configured
+  950 with no pin at all. The Gemini split behaved exactly as measured: `gemini_flash` took 19
+  calls against its real allowance of 20 and learned a ceiling of 17.
+- **Fix**: the daily report's call-split line no longer hides a discrepancy. On 2026-09-10 it read
+  "2400 hívás (11 kinyerés 2641 leírás)" — its own parts exceeding its own total by **252** —
+  because `max(0, _calls - _enrich - _extract)` clamped the difference to zero. The workload
+  counters and the quota ledger are supposed to count the same provider attempts; the ledger is
+  what governs routing, so an excess means calls nobody charged a budget for, and undercounting a
+  budget is how a router walks into a hard block. The line now names the gap. **Cause not yet
+  found** — `calls_made` explicitly *excludes* preflight, which would make it smaller than the
+  ledger, not larger, so the usual suspect is ruled out. This is the sixth time this one line has
+  been wrong (see 2026-08-27); each previous version was wrong by computing something, this one by
+  concealing something.
+- **Open**: `gemini` (Flash-Lite) still took **454 refusals in 510 calls** with correct per-model
+  limits configured (RPD 500, RPM 15). Hypothesis worth testing before touching config again:
+  Google's daily quota may not reset at 00:00 **UTC**, in which case our UTC day straddles two
+  Google days and half the allowance is already spent when ours begins.
+- **Open**: `localgpu` answered **136 calls with 136 errors**, a second full day at 100% failure.
+- **Observed**: extraction fell to 11 attempts and 7 pages, with 0 new communities, 0 pages
+  fetched and every `search_only` run returning 0 records all day. Most likely the priority scope
+  is simply caught up and the budget flowed to descriptions as [[free-tier-model-router]] intends —
+  but "no work found" and "no work left" are different states and the report cannot tell them apart.
+
 ## 2026-09-10
 - **Decision**: a learned daily ceiling is a **hypothesis with a TTL**, not a verdict for the day.
   `observed_limit` is inferred from a refusal, the inference is sometimes wrong in the expensive
