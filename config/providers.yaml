@@ -194,21 +194,22 @@ providers:
       - model: gemini-3.5-flash-lite
         quality: 63
 
-  # ── Google Gemini 3.6 Flash (separate entry: 20 requests a day) ────────────
-  # Same key, same endpoint, its own budget. Twenty calls of quality 64 against
-  # Flash-Lite's 63 is one point, which [[free-tier-model-router]] says is not a
-  # reliable ordering — so this exists for capacity, not preference. If it ever
-  # looks like more trouble than twenty calls is worth, deleting this block is
-  # the whole change.
-  - name: gemini_flash
-    enabled: true
-    api_key_env: GEMINI_API_KEY
-    base_url: https://generativelanguage.googleapis.com/v1beta/openai
-    rpm: 5
-    rpd: 20
-    models:
-      - model: gemini-3.6-flash
-        quality: 64
+  # ── Google Gemini 3.6 Flash — REMOVED 2026-09-11 ──────────────────────────
+  # Added 2026-09-10 as its own entry with the real limits (RPM 5, RPD 20), and
+  # the entry was right: `gemini_flash` took exactly the 19-20 calls a day it
+  # was budgeted. It is the *model* that was not worth having. Two days:
+  #
+  #     2026-09-10   19 calls   19 errors    0 served
+  #     2026-09-11   20 calls   18 errors    2 served
+  #
+  # Two successful extractions out of 39 attempts, for one quality point over
+  # Flash-Lite (64 vs 63) — a gap [[free-tier-model-router]] already says is not
+  # a reliable ordering. The block's own note said deleting it was the whole
+  # change if twenty calls ever looked like more trouble than they were worth;
+  # 37 refusals for 2 answers is that.
+  #
+  # Flash-Lite keeps the Gemini slot and is healthy on it: 479 calls and **3**
+  # errors on 2026-09-11, against 1,102 errors the day before the split.
 
   # ── Mistral ───────────────────────────────────────────────────────────────
   - name: mistral

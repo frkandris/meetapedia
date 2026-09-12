@@ -2,6 +2,30 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-12
+- **Fix**: the unaccounted attempts had a cause, and it was a floor. `_count_attempts` recorded
+  `max(1, n)`, so an enrichment call that raised **before reaching any provider** — fleet paced
+  out, breaker open, quota spent, all of which `write_descriptions` raises on without calling
+  anyone — still booked one attempt against a ledger that had seen nothing. Those cluster exactly
+  on the days a refusing fleet produces them in bulk, so the phantom count tracked the refusal
+  rate: **252** unaccounted on 2026-09-10, **464** on 2026-09-11. Zero is now a real answer, and
+  whether the extractor counts attempts at all is asked once from the object (`hasattr`) rather
+  than inferred from a delta of zero — on a real extractor that delta is information, on a stub it
+  is nothing. Surfaced by the 2026-09-11 report change that stopped clamping the difference; the
+  number had been there all along.
+- **Fix**: `gemini_flash` removed. The *entry* was correct — it took exactly the 19-20 calls a day
+  its real limits allow — but the model was not worth having: **39 calls over two days produced 2
+  answers** (19/19 errors on 09-10, 18/20 on 09-11) for one quality point over Flash-Lite, a gap
+  [[free-tier-model-router]] already calls unreliable. Its own block said deleting it was the whole
+  change if twenty calls ever cost more than they returned.
+- **Observed**: the 2026-09-10 split is vindicated for Flash-Lite, which is what mattered. Gemini
+  went from **1,102 errors in 1,200 calls** (09-09, one shared entry) to **3 in 479** (09-11). Fleet
+  refusals 87% → 50% → **31%**, pages processed 39 → 7 → **226**, extraction attempts 87 → 11 →
+  **447**. The 09-10 dip was the priority scope catching up, not starvation — worth remembering
+  before reading a single quiet day as a regression.
+- **Open**: `localgpu` has now answered **142 calls with 142 errors**, a third consecutive day at
+  100% failure.
+
 ## 2026-09-11
 - **Observed**: the 2026-09-10 fixes worked at the provider level. Refused calls **87% → 50%**;
   OpenRouter went from 712 refusals in 800 calls to **24 in 950**; and the expiring ceiling did its

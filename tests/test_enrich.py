@@ -387,3 +387,32 @@ def test_a_call_that_walks_the_fallback_chain_counts_every_attempt(tmp_path):
                                      fetch_missing=False))
     assert stats["enriched"] == 1
     assert _counter(db) == 3
+
+
+# ── attempt accounting ───────────────────────────────────────────────────────
+
+def test_a_description_that_never_reached_a_provider_counts_zero(tmp_path):
+    """A phantom attempt inflates the budget picture exactly when it hurts.
+
+    `_count_attempts` used to floor at `max(1, n)`, so a description that raised
+    before any provider call — fleet paced out, breaker open, quota spent, all
+    of which `write_descriptions` raises on without calling anyone — still
+    booked one attempt. Those cluster on the days a refusing fleet produces them
+    in bulk, so the phantom count tracked the refusal rate: the daily report's
+    workload counters exceeded the quota ledger by 252 attempts on 2026-09-10
+    and 464 on 2026-09-11, having seen calls the ledger never did.
+    """
+    from scraper.db import init_db
+    from scraper.enrich import _count_attempts
+
+    db = tmp_path / "s.db"
+    init_db(db)
+
+    _count_attempts(db, 0)
+    assert _counter(db) == 0
+
+    _count_attempts(db, 3)          # one description, three providers walked
+    assert _counter(db) == 3
+
+    _count_attempts(db, -1)         # never happens, but must not decrement
+    assert _counter(db) == 3

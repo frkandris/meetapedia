@@ -73,10 +73,22 @@ def _count_attempts(db_path, n: int) -> None:
     also stamps the right day for a batch running through midnight, which the
     ledger already does; a batch-end stamp moved an evening's spend into the
     next morning's report.
+
+    **Zero is a real answer.** This used to floor at `max(1, n)`, so a
+    description that never reached a provider — the fleet paced out, the breaker
+    open, the quota spent, all of which make `write_descriptions` raise before
+    any call — still booked one attempt. Those are exactly the moments a busy
+    refusing fleet produces in bulk, so the phantom count grew with the refusal
+    rate: 252 unaccounted attempts on 2026-09-10, 464 on 2026-09-11, against a
+    ledger that had seen neither. The caller decides what a missing counter
+    means; this function only records what it is given.
     """
+    n = int(n)
+    if n <= 0:
+        return
     from .db import bump_daily_counter
     bump_daily_counter(db_path, datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                       "enrich_attempts", max(1, int(n)))
+                       "enrich_attempts", n)
 
 
 async def enrich_batch(
@@ -129,6 +141,12 @@ async def enrich_batch(
         # attempts, so the report can only subtract like from like — counting
         # one per description under-subtracts exactly as often as the fleet
         # fails over, which on 2026-08-23 was 858 attempts in 1,794.
+        # Whether the extractor counts provider attempts at all is a property
+        # of the object, not of how this call went — so it is asked once, here,
+        # and not inferred later from a delta of zero. A zero delta on a real
+        # extractor means "no provider was called", which is information; on a
+        # stub that has no counter it would mean nothing at all.
+        _tracks_attempts = hasattr(extractor, "calls_made")
         _attempts_before = int(getattr(extractor, "calls_made", 0) or 0)
         try:
             res = await extractor.write_descriptions(
@@ -159,11 +177,11 @@ async def enrich_batch(
         finally:
             # `finally`, so the attempts are recorded however the call ended —
             # including `asyncio.CancelledError`, which is a BaseException and
-            # never reaches the `except Exception` above. An extractor that
-            # does not track `calls_made` still counts as one attempt.
+            # never reaches the `except Exception` above.
             _count_attempts(
                 db_path,
-                int(getattr(extractor, "calls_made", 0) or 0) - _attempts_before)
+                (int(getattr(extractor, "calls_made", 0) or 0) - _attempts_before)
+                if _tracks_attempts else 1)
         ok = validate(res.get("short_description", ""), res.get("long_description", ""))
         if not ok:
             stats["skipped"] += 1
