@@ -1,4 +1,5 @@
 """Free-tier model router: catalogue, quota ledger, ordering, upgrade policy."""
+import time
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,36 @@ def _spec(name="groq", rpd=1000, paid=False, quality=(60, 40), env="X_KEY", tpd=
                      for i, q in enumerate(quality)),
         rpm=30, rpd=rpd, tpd=tpd, paid=paid,
     )
+
+
+def _virtual_clock(monkeypatch) -> list[float]:
+    """Let the chain's pacing pass time without spending it.
+
+    A *virtual* clock, not a skipped wait — the difference matters and cost a
+    first attempt. `QuotaLedger.pace_wait` computes
+    `min_interval_s - (monotonic() - last_call)`, so simply making `_sleep` a
+    no-op leaves the clock frozen, every provider paced out forever, and the
+    chain raising "all providers rate limited" — a green test turned red for a
+    reason that has nothing to do with what it tests. Advancing a fake clock by
+    exactly the requested amount is what Fowler means by substituting the system
+    clock: every decision runs, against a clock that moves when the code asks
+    it to.
+
+    Returns the waits that were requested, so a test can still assert the chain
+    *decided* to wait. The decision is under test; the second it burns is not —
+    and those seconds were 98 of the suite's 138, with the longer of the two
+    tests failing roughly one run in five.
+    """
+    now = [0.0]
+    waits: list[float] = []
+
+    async def _advance(seconds: float) -> None:
+        waits.append(float(seconds))
+        now[0] += float(seconds)
+
+    monkeypatch.setattr("scraper.extract._sleep", _advance)
+    monkeypatch.setattr(time, "monotonic", lambda: now[0])
+    return waits
 
 
 def _catalogue(*specs, enabled=True, allow_paid=False, min_gain=8, max_per_run=500):
@@ -969,6 +1000,7 @@ async def test_a_dead_fleet_still_opens_the_breaker(tmp_path, monkeypatch):
         async def extract(self, *a, **kw):
             raise ExtractorUnavailableError("500 upstream exploded")
 
+    _virtual_clock(monkeypatch)
     chain = FallbackExtractor(primaries=[_Broken()], router=router)
     for i in range(25):
         with pytest.raises(ExtractorUnavailableError):
@@ -1048,6 +1080,7 @@ async def test_one_broken_provider_does_not_retire_a_healthy_one(tmp_path, monke
             _Healthy.calls += 1
             return []
 
+    _virtual_clock(monkeypatch)
     chain = FallbackExtractor(primaries=[_Broken(), _Healthy()], router=router)
     for i in range(30):
         assert await chain.extract(text="t", city="c", topic="running", locale="hu",

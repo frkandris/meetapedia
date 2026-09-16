@@ -4489,6 +4489,11 @@ async def public_home(request: Request, city: str = ""):
 #: Cached (value, monotonic_ts) for the health endpoint's record count.
 _HEALTH_COUNT_CACHE: tuple[int, float] = (0, 0.0)
 _HEALTH_COUNT_TTL = 60.0
+#: How long /healthz will wait for the community count before answering without
+#: it. Named rather than inlined because a test has to sleep *past* it to prove
+#: a busy database still gets a green check, and a literal in both places is two
+#: numbers that can drift apart — the test's was ten times this one.
+_HEALTH_COUNT_TIMEOUT_S = 3.0
 
 
 @_fastapi.get("/healthz")
@@ -4514,7 +4519,8 @@ async def healthz():
     if (_t.monotonic() - ts) > _HEALTH_COUNT_TTL:
         try:
             count = await asyncio.wait_for(
-                asyncio.to_thread(get_total_community_count, _db()), timeout=3.0)
+                asyncio.to_thread(get_total_community_count, _db()),
+                timeout=_HEALTH_COUNT_TIMEOUT_S)
             _HEALTH_COUNT_CACHE = (count, _t.monotonic())
         except (asyncio.TimeoutError, Exception):
             # Stale count, and say so — but stay green. A locked database is a

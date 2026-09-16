@@ -43,6 +43,30 @@ def _shared_client(timeout: float) -> "httpx.AsyncClient":
     return client
 
 
+async def _sleep(seconds: float) -> None:
+    """The one place this module waits on the clock.
+
+    Named so it can be substituted in tests, which is Fowler's remedy for
+    non-deterministic tests ("always wrap the system clock"). Not a style point
+    here — it was measured. On 2026-09-16 three tests took **128.6 of the
+    suite's 138.4 seconds** while the other 570 shared the remaining ten; two of
+    the three were sleeping out rpm pacing a real second at a time, and the
+    slowest also failed about one run in five, because a test whose result
+    depends on wall-clock timing has no reason to be stable.
+
+    Substitute a *virtual clock*, not a no-op. `QuotaLedger.pace_wait` computes
+    `min_interval_s - (monotonic() - last_call)`, so a sleep that returns
+    without moving the clock leaves every provider paced out forever and the
+    chain reporting "all providers rate limited" — tried first, and it turned
+    two green tests red for a reason unrelated to what they test. A stub that
+    advances a fake monotonic clock by exactly the requested amount runs every
+    decision against a clock that moves when the code asks it to, which is what
+    keeps this seam honest rather than a way of not testing the thing.
+    `tests/test_router.py::_virtual_clock` is that stub.
+    """
+    await asyncio.sleep(seconds)
+
+
 def _prompt_hash(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:12]
 
@@ -820,7 +844,7 @@ class _ApiExtractor:
         async with self._rate_lock:
             elapsed = time.monotonic() - self._last_request_time
             if elapsed < self.rate_limit_seconds:
-                await asyncio.sleep(self.rate_limit_seconds - elapsed)
+                await _sleep(self.rate_limit_seconds - elapsed)
             self._last_request_time = time.monotonic()
 
     async def _post(self, payload: dict, label: str) -> dict:
@@ -1327,7 +1351,7 @@ class FallbackExtractor:
             log.debug("extractor_awaiting_rpm", wait_s=round(wait, 2))
             self.wait_seconds += wait
             waited += wait
-            await asyncio.sleep(wait + 0.01)
+            await _sleep(wait + 0.01)
 
     def _note_router_reserve(self, primary) -> bool:
         """Claim a request slot for `primary`. Never raises — see `_note_router`."""
@@ -1623,7 +1647,7 @@ class FallbackExtractor:
                 if 0 < wait <= self._max_wait_now():
                     log.info("extractor_awaiting_rate_limit", wait_s=round(wait, 1), label=label)
                     self.wait_seconds += wait
-                    await asyncio.sleep(wait + 0.1)
+                    await _sleep(wait + 0.1)
                     continue
             break
 

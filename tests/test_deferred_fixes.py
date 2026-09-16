@@ -392,9 +392,14 @@ def test_healthz_stays_green_when_the_database_is_slow(tmp_path, monkeypatch):
     app_state.db_path = db
     web_app._HEALTH_COUNT_CACHE = (0, 0.0)  # force a fresh lookup
     try:
+        # Just past the endpoint's own 3s ceiling, not ten times it. The stub
+        # blocks a real worker thread, and the test does not finish until that
+        # thread does — so the 30 here was 26 seconds of the suite's runtime
+        # buying nothing. What the test asserts is that /healthz answers while
+        # the database is still busy, and 4 > 3 establishes that as well as 30.
         def _hangs(*a, **k):
             import time
-            time.sleep(30)  # longer than the endpoint's own ceiling
+            time.sleep(web_app._HEALTH_COUNT_TIMEOUT_S + 1.0)
 
         monkeypatch.setattr(web_app, "get_total_community_count", _hangs)
         resp = TestClient(web_app.app).get("/healthz")

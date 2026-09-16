@@ -2,6 +2,35 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-16
+- **Fix**: the test suite runs in **13.2 s instead of 138.4 s**, and the flakiest test in it is
+  deterministic. Measured before touched: three tests took **128.6 of the 138.4 seconds** while the
+  other 570 shared the remaining ten. Two were sleeping out rpm pacing a real second at a time, and
+  the longer of those — `test_one_broken_provider_does_not_retire_a_healthy_one` — had been failing
+  roughly one run in five since 2026-09-05, which is what a result that depends on wall-clock timing
+  looks like.
+  `scraper/extract.py` now has one named `_sleep` seam for the three places the module waits, and
+  the tests substitute a **virtual clock**. The distinction is the whole lesson and cost a first
+  attempt: a no-op sleep leaves `QuotaLedger.pace_wait`'s `monotonic() - last_call` frozen, so every
+  provider is paced out forever and the chain raises "all providers rate limited" — two green tests
+  turned red for a reason unrelated to what they test. A stub that advances a fake clock by exactly
+  the requested amount runs every decision, against a clock that moves when the code asks it to.
+  The third test slept 30 s to outlast a 3 s endpoint ceiling; the ceiling is now
+  `_HEALTH_COUNT_TIMEOUT_S` and the stub sleeps one second past it — 30 s → 4 s.
+  **Verified not neutered**, which is the check Google's review guide asks for: reintroducing the
+  global failure counter the per-provider breaker replaced still fails the accelerated test. And
+  0 failures in 25 consecutive runs, against roughly 1 in 5 before.
+  Sources: [Fowler, *Eradicating Non-Determinism in
+  Tests*](https://martinfowler.com/articles/nonDeterminism.html) — "always wrap the system clock";
+  [Google, *What to look for in a code
+  review*](https://google.github.io/eng-practices/review/reviewer/looking-for.html) — tests must
+  "actually fail when the code is broken".
+- **Observed**: the 2026-09-12 counter fix is confirmed in production. The 2026-09-15 report reads
+  "2296 hívás (582 kinyerés 1500 leírás 214 egyéb)" — 582+1500+214 = 2296 exactly, with no
+  discrepancy warning, against 464 unaccounted attempts four days earlier. Fleet refusals are down
+  to **14%** from 87% on 2026-09-09.
+- **Open**: `localgpu` is on its fifth consecutive day at 100% failure — 142 calls, 142 errors.
+
 ## 2026-09-12
 - **Fix**: the unaccounted attempts had a cause, and it was a floor. `_count_attempts` recorded
   `max(1, n)`, so an enrichment call that raised **before reaching any provider** — fleet paced
