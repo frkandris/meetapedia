@@ -276,6 +276,179 @@ def _saver_city_groups(cities: list, priority: list[str] | None = None) -> list[
     return groups
 
 
+async def _sleep(seconds: float) -> None:
+    """The one place the enrichment loop waits on the clock.
+
+    Named so a test can substitute it, exactly as `extract._sleep` is — see that
+    docstring for why this is measured rather than stylistic. Here the stake is
+    a loop whose pauses are 75 and 900 seconds: without the seam, one test of
+    the rate-limit branch would cost more wall-clock time than the whole suite.
+    """
+    await asyncio.sleep(seconds)
+
+
+#: How long enrichment waits out a per-minute limit before trying again.
+#: Longer than the 60s windows the free tiers publish, short enough that a
+#: 9.5-hour budget is not spent asleep.
+_ENRICH_RATE_LIMIT_PAUSE_S = 75
+
+#: How long enrichment waits when there is nothing to do — the pool is empty,
+#: or the daily quota is spent. Long enough to be cheap, short enough that a
+#: midnight reset or a fresh batch of extractions is picked up promptly.
+_ENRICH_IDLE_PAUSE_S = 900
+
+
+async def _enrich_body(cfg, unbounded, start, end, enrich_batch,
+                       _build_extractor, free_quota_available) -> None:
+    """Run enrichment rounds until the window closes, the pool empties, or the
+    task is cancelled.
+
+    Module level, not a closure inside `main()`, so the suite can reach it: the
+    signature already injected `enrich_batch` and `_build_extractor` as if it
+    were testable, and it was not — `free_quota_available` completes the set.
+    Every wait goes through `_sleep`, the same seam `extract.py` uses, so a test
+    substitutes a virtual clock instead of spending 15 real minutes per pause.
+    """
+    log = structlog.get_logger()
+    extractor = _build_extractor(app_state.pipeline_cfg)
+    if extractor.exhausted:
+        log.info("enrich_skipped", reason="no_extractor")
+        return
+    # Probe the fleet before the batch, as run_pipeline does. Without it a
+    # stale model name costs one wasted request *per record* for the whole
+    # window — on 2026-08-16 every enrich call fanned out across four dead
+    # models before giving up.
+    try:
+        await extractor.preflight()
+    except Exception as exc:
+        log.warning("enrich_skipped", reason="preflight_failed", error=str(exc))
+        return
+
+    async def _pause(seconds: float, reason: str) -> None:
+        """Wait, then start the next round on a freshly built chain.
+
+        A provider retired by the circuit breaker stays retired for the life
+        of one extractor, and this run has no life span under
+        `worker_enabled` — so a provider that comes back is never noticed.
+        On 2026-09-17 `localgpu` spent the day answering 401 (its machine had
+        been reinstalled with a different key), was retired here, and every
+        batch went on reporting "all providers rate limited" for 20 minutes
+        after the machine was verifiably serving the `ai_only` pipeline —
+        which had rebuilt its own chain at its next preflight. A container
+        restart was the only cure.
+
+        Rebuilding is a config and ledger read, no HTTP, and it happens only
+        on a path that is already sleeping for 75 s or more. Deliberately no
+        preflight: model names cannot change without a deploy, so the probe
+        that is right once per run would here be one wasted call per pause.
+        """
+        nonlocal extractor
+        await _sleep(seconds)
+        extractor = _build_extractor(app_state.pipeline_cfg)
+        log.info("enrich_chain_rebuilt", reason=reason)
+
+    # The same country priority the pipeline walks, for the same reason.
+    # `get_enrichment_candidates` orders by id, and the international
+    # records were imported first — so an unscoped enrichment spends the
+    # whole budget on the secondary market before reaching a Hungarian
+    # record. On 2026-08-20 that was 488 international records updated and
+    # three Hungarian ones.
+    _groups = [g for g in _saver_city_groups(app_state.cities or [],
+                                             _settings_country_priority()) if g]
+    scope = {c.name for c in (_groups[0] if _groups else [])}
+    if not scope:
+        return
+    limit = int(cfg.get("enrich_batch_limit") or 200)
+    # Hard off-peak cutoff passed into each batch so a round started near the
+    # boundary stops issuing paid LLM calls the instant the window closes,
+    # instead of running a full limit-long round into peak pricing.
+    # Under the worker there is no window to close, so no deadline: the
+    # batch stops when the fleet runs out of quota and waits out per-minute
+    # limits, which is the only thing that ever needed a clock.
+    deadline = None if unbounded else _next_window_end(datetime.now(timezone.utc), end)
+    total = 0
+    try:
+        while unbounded or _within_window(datetime.now(timezone.utc), start, end):
+            # Deliberately NOT yielding to extraction. That was tried on
+            # 2026-08-21 and reverted the same day: enrichment was taking
+            # two thirds of the free budget, which looked like the problem
+            # until the traffic numbers were put next to it. 42,091
+            # community pages, 68% of them with no long description, and 34
+            # visitors a day — the marginal value of page 42,092 is close
+            # to zero, and making 28,795 thin pages rankable is not.
+            #
+            # The share was never the fault. Spending it on the secondary
+            # market was, and the country priority above fixes that.
+            stats = await enrich_batch(
+                app_state.db_path, extractor, scope, limit=limit,
+                fetch_missing=False,
+                blocked_domains=app_state.pipeline_cfg.fetch_blocked_domains,
+                deadline=deadline)
+            total += stats["enriched"]  # count before any early exit
+            if stats.get("stopped_at_deadline"):
+                log.info("enrich_window_closed", enriched_this_window=total)
+                break
+            if stats["pool"] == 0:
+                log.info("enrich_complete", enriched_this_window=total,
+                         scope_size=len(scope))
+                # This market is caught up; hand the budget to the next one
+                # rather than idling while a lower-priority backlog waits.
+                _groups = _groups[1:]
+                if _groups:
+                    scope = {c.name for c in _groups[0]}
+                    log.info("enrich_scope_advanced", cities=len(scope))
+                    continue
+                if not unbounded:
+                    break
+                # Caught up. Extraction keeps adding communities, so wait
+                # for them rather than ending — under the worker there is no
+                # cron that would start this again.
+                await _pause(_ENRICH_IDLE_PAUSE_S, "caught_up")
+                continue
+            # Provider down: enrich_batch fails fast and leaves candidates
+            # unmarked, so pool stays nonzero — bail out instead of tight-looping.
+            if stats.get("stopped_rate_limited"):
+                # A per-minute limit is the fleet asking us to slow down,
+                # and waiting it out is right — unless there is no daily
+                # budget left to wait for. A spent allowance also answers
+                # 429, and on 2026-08-18 that had enrichment retry every 75
+                # seconds for hours: 37 batches, zero records, every attempt
+                # another refused call.
+                if not free_quota_available():
+                    log.info("enrich_waiting_for_quota_reset",
+                             enriched_this_window=total)
+                    await _pause(_ENRICH_IDLE_PAUSE_S, "quota_reset")
+                    continue
+                log.info("enrich_waiting_out_rate_limit", enriched_this_window=total)
+                await _pause(_ENRICH_RATE_LIMIT_PAUSE_S, "rate_limited")
+                continue
+            # `stopped_no_provider` is the batch's own verdict and must be
+            # honoured even when it enriched a few records first — otherwise
+            # a batch that managed five before the fleet went quiet simply
+            # starts another doomed one.
+            if (stats.get("stopped_no_provider")
+                    or extractor.exhausted
+                    or (stats["enriched"] == 0 and stats["failed"] > 0)):
+                log.warning("enrich_aborted_provider_down", enriched_this_window=total)
+                if not unbounded:
+                    break
+                # Out of daily quota, most likely. It returns at 00:00 UTC
+                # and this is the only thing waiting for it — sleeping is
+                # how enrichment resumes on the new day without a cron.
+                await _pause(_ENRICH_IDLE_PAUSE_S, "provider_down")
+                continue
+            await _sleep(1)  # yield to the event loop between rounds
+        else:
+            log.info("enrich_window_closed", enriched_this_window=total)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.error("enrich_run_failed", error=str(exc))
+    finally:
+        app_state._enrich_running = False
+        app_state._enrich_task = None
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-once", action="store_true")
@@ -397,17 +570,6 @@ async def main() -> None:
             finally:
                 app_state.run_coordinator.release(task)
 
-    #: How long enrichment waits out a per-minute limit before trying again.
-    #: Longer than the 60s windows the free tiers publish, short enough that a
-    #: 9.5-hour budget is not spent asleep.
-    _ENRICH_RATE_LIMIT_PAUSE_S = 75
-
-    #: How long enrichment waits when there is nothing to do — the pool is empty,
-    #: or the daily quota is spent. Long enough to be cheap, short enough that a
-    #: midnight reset or a fresh batch of extractions is picked up promptly.
-    _ENRICH_IDLE_PAUSE_S = 900
-
-
     def _release_enrich() -> None:
         """Hand the enrichment slot back on an early return."""
         app_state._enrich_running = False
@@ -444,152 +606,12 @@ async def main() -> None:
         from .web.app import _build_extractor
         try:
             return await _enrich_body(cfg, unbounded, start, end, enrich_batch,
-                                      _build_extractor)
+                                      _build_extractor, _free_quota_available)
         finally:
             # Everything below the slot claim runs under this, including the
             # cancellable preflight: a stop during it used to leave
             # `_enrich_running` true for the life of the process.
             _release_enrich()
-
-    async def _enrich_body(cfg, unbounded, start, end, enrich_batch,
-                           _build_extractor) -> None:
-        extractor = _build_extractor(app_state.pipeline_cfg)
-        if extractor.exhausted:
-            log.info("enrich_skipped", reason="no_extractor")
-            return
-        # Probe the fleet before the batch, as run_pipeline does. Without it a
-        # stale model name costs one wasted request *per record* for the whole
-        # window — on 2026-08-16 every enrich call fanned out across four dead
-        # models before giving up.
-        try:
-            await extractor.preflight()
-        except Exception as exc:
-            log.warning("enrich_skipped", reason="preflight_failed", error=str(exc))
-            return
-
-        async def _pause(seconds: float, reason: str) -> None:
-            """Wait, then start the next round on a freshly built chain.
-
-            A provider retired by the circuit breaker stays retired for the life
-            of one extractor, and this run has no life span under
-            `worker_enabled` — so a provider that comes back is never noticed.
-            On 2026-09-17 `localgpu` spent the day answering 401 (its machine had
-            been reinstalled with a different key), was retired here, and every
-            batch went on reporting "all providers rate limited" for 20 minutes
-            after the machine was verifiably serving the `ai_only` pipeline —
-            which had rebuilt its own chain at its next preflight. A container
-            restart was the only cure.
-
-            Rebuilding is a config and ledger read, no HTTP, and it happens only
-            on a path that is already sleeping for 75 s or more. Deliberately no
-            preflight: model names cannot change without a deploy, so the probe
-            that is right once per run would here be one wasted call per pause.
-            """
-            nonlocal extractor
-            await asyncio.sleep(seconds)
-            extractor = _build_extractor(app_state.pipeline_cfg)
-            log.info("enrich_chain_rebuilt", reason=reason)
-
-        # The same country priority the pipeline walks, for the same reason.
-        # `get_enrichment_candidates` orders by id, and the international
-        # records were imported first — so an unscoped enrichment spends the
-        # whole budget on the secondary market before reaching a Hungarian
-        # record. On 2026-08-20 that was 488 international records updated and
-        # three Hungarian ones.
-        _groups = [g for g in _saver_city_groups(app_state.cities or [],
-                                                 _settings_country_priority()) if g]
-        scope = {c.name for c in (_groups[0] if _groups else [])}
-        if not scope:
-            return
-        limit = int(cfg.get("enrich_batch_limit") or 200)
-        # Hard off-peak cutoff passed into each batch so a round started near the
-        # boundary stops issuing paid LLM calls the instant the window closes,
-        # instead of running a full limit-long round into peak pricing.
-        # Under the worker there is no window to close, so no deadline: the
-        # batch stops when the fleet runs out of quota and waits out per-minute
-        # limits, which is the only thing that ever needed a clock.
-        deadline = None if unbounded else _next_window_end(datetime.now(timezone.utc), end)
-        total = 0
-        try:
-            while unbounded or _within_window(datetime.now(timezone.utc), start, end):
-                # Deliberately NOT yielding to extraction. That was tried on
-                # 2026-08-21 and reverted the same day: enrichment was taking
-                # two thirds of the free budget, which looked like the problem
-                # until the traffic numbers were put next to it. 42,091
-                # community pages, 68% of them with no long description, and 34
-                # visitors a day — the marginal value of page 42,092 is close
-                # to zero, and making 28,795 thin pages rankable is not.
-                #
-                # The share was never the fault. Spending it on the secondary
-                # market was, and the country priority above fixes that.
-                stats = await enrich_batch(
-                    app_state.db_path, extractor, scope, limit=limit,
-                    fetch_missing=False,
-                    blocked_domains=app_state.pipeline_cfg.fetch_blocked_domains,
-                    deadline=deadline)
-                total += stats["enriched"]  # count before any early exit
-                if stats.get("stopped_at_deadline"):
-                    log.info("enrich_window_closed", enriched_this_window=total)
-                    break
-                if stats["pool"] == 0:
-                    log.info("enrich_complete", enriched_this_window=total,
-                             scope_size=len(scope))
-                    # This market is caught up; hand the budget to the next one
-                    # rather than idling while a lower-priority backlog waits.
-                    _groups = _groups[1:]
-                    if _groups:
-                        scope = {c.name for c in _groups[0]}
-                        log.info("enrich_scope_advanced", cities=len(scope))
-                        continue
-                    if not unbounded:
-                        break
-                    # Caught up. Extraction keeps adding communities, so wait
-                    # for them rather than ending — under the worker there is no
-                    # cron that would start this again.
-                    await _pause(_ENRICH_IDLE_PAUSE_S, "caught_up")
-                    continue
-                # Provider down: enrich_batch fails fast and leaves candidates
-                # unmarked, so pool stays nonzero — bail out instead of tight-looping.
-                if stats.get("stopped_rate_limited"):
-                    # A per-minute limit is the fleet asking us to slow down,
-                    # and waiting it out is right — unless there is no daily
-                    # budget left to wait for. A spent allowance also answers
-                    # 429, and on 2026-08-18 that had enrichment retry every 75
-                    # seconds for hours: 37 batches, zero records, every attempt
-                    # another refused call.
-                    if not _free_quota_available():
-                        log.info("enrich_waiting_for_quota_reset",
-                                 enriched_this_window=total)
-                        await _pause(_ENRICH_IDLE_PAUSE_S, "quota_reset")
-                        continue
-                    log.info("enrich_waiting_out_rate_limit", enriched_this_window=total)
-                    await _pause(_ENRICH_RATE_LIMIT_PAUSE_S, "rate_limited")
-                    continue
-                # `stopped_no_provider` is the batch's own verdict and must be
-                # honoured even when it enriched a few records first — otherwise
-                # a batch that managed five before the fleet went quiet simply
-                # starts another doomed one.
-                if (stats.get("stopped_no_provider")
-                        or extractor.exhausted
-                        or (stats["enriched"] == 0 and stats["failed"] > 0)):
-                    log.warning("enrich_aborted_provider_down", enriched_this_window=total)
-                    if not unbounded:
-                        break
-                    # Out of daily quota, most likely. It returns at 00:00 UTC
-                    # and this is the only thing waiting for it — sleeping is
-                    # how enrichment resumes on the new day without a cron.
-                    await _pause(_ENRICH_IDLE_PAUSE_S, "provider_down")
-                    continue
-                await asyncio.sleep(1)  # yield to the event loop between rounds
-            else:
-                log.info("enrich_window_closed", enriched_this_window=total)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            log.error("enrich_run_failed", error=str(exc))
-        finally:
-            app_state._enrich_running = False
-            app_state._enrich_task = None
 
     scheduler = AsyncIOScheduler()
 

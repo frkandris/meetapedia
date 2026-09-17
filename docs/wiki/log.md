@@ -3,6 +3,18 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-17
+- **Update**: `_enrich_body` moved out of `main()`'s closure to module level, with
+  `free_quota_available` injected alongside the `enrich_batch` and `_build_extractor` parameters it
+  already had, and a `main.py:_sleep` seam mirroring `extract.py`'s. The loop that spends the whole
+  free-tier budget had **no test at all**, because nothing in the suite can reach a closure — and the
+  `enrich_chain_rebuilt` fix above is a `nonlocal` rebind in the middle of 130 lines, which wants a
+  test rather than a careful reading. Six tests in `tests/test_enrich_loop.py`, each ending the
+  unbounded loop by cancelling from the fake batch, because cancellation is how the real one ends.
+  Checked by mutation, not by passing: deleting the rebuild turns exactly the three tests that assert
+  it red. The seam is what keeps them honest *and* fast — real pauses are 75 s and 900 s, so one test
+  of the rate-limit branch would otherwise cost more than the whole 12-second suite. Deliberately no
+  virtual clock: `extract.py` needs one because `pace_wait` subtracts `monotonic()`, and this loop has
+  no such arithmetic, so recording the requested waits is the honest substitute.
 - **Creation**: [[local-gpu-machine-setup]] — the `localgpu` machine was reinstalled and the provider
   had been answering 100% errors for days, so the rebuild is now a runbook. Two things must be
   *retaken* rather than re-created, and both were learned by doing the opposite first. The named
@@ -23,9 +35,8 @@ Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 - **Fix**: every pause in the enrichment loop now **rebuilds** the provider chain
   (`main.py:_pause`, logging `enrich_chain_rebuilt`), so a provider that recovers is picked up within
   one pause. Deliberately no preflight on the rebuild: model names cannot change without a deploy, so
-  the probe that is right once per run would be one wasted call per pause. There is no unit test — the
-  loop is a closure inside `main()` and nothing in the suite can reach it; verification is the
-  production log line.
+  the probe that is right once per run would be one wasted call per pause. First shipped untested and
+  the loop was then extracted so it could be tested — see the entry below.
 - **Observed**: a provider that recovered mid-window did **not** rejoin the enrichment run.
   `main.py:_enrich_body` builds its chain once per run and `schedule.worker_enabled: true` makes that
   run unbounded, so `localgpu` — retired by the circuit breaker while it was 401ing — stayed retired
