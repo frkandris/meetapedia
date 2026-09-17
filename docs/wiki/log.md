@@ -3,6 +3,18 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-17
+- **Update**: the funnel answers contactability for **people** and in **addresses**, not only in
+  community rows — `persons`, `persons_with_email`, `persons_email_distinct` and
+  `records_email_distinct` in `get_funnel_counts`, so `/v1/funnel` carries them too. Prompted by a
+  question the existing numbers could not answer: production has **7,494 of 43,748 communities with
+  an email** (17.1%, against 544 with a website), and nothing at all was countable for `persons`
+  without opening the production database through the browser-only terminal. Distinct addresses
+  matter because rows overstate reach: one address appears on a club's page and on its leader's, and
+  a community centre's office address serves every group in the building. Addresses are folded on
+  case and whitespace — verified by mutation, because the first version of the test asserted the
+  distinct counts without distinguishing them from the row counts and passed with the folding
+  removed. Contactability is still not a send list: see [[acquisition-funnel]] for the Advertising
+  Act constraint, and `subscriptions` remains at zero.
 - **Correction**: the entry below blaming the API `restart` for a 404 outage **overstates what was
   measured**, and the correction is worth more than the original. Watching the next push deploy
   end to end: `d2efea8` served 200 while Coolify still said `in_progress`, then Traefik answered the

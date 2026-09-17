@@ -74,7 +74,13 @@ Consequences, and they are not negotiable:
   for, and every message needs the working unsubscribe (`/unsubscribe?token=`,
   already built, `Disallow`ed in robots.txt).
 - `records_with_email` in the funnel exists to size what an opt-in channel
-  *could* reach, not to build a list from.
+  *could* reach, not to build a list from. Since 2026-09-17 the same question is
+  answered for `persons` (a named leader or contact) and in **distinct addresses**
+  as well as rows: one address sits on a club's page and on its leader's, and a
+  community centre's office address serves every group in the building, so rows
+  overstate reach. The row counts size the corpus; `records_email_distinct` and
+  `persons_email_distinct` size the audience. The two tables are reported
+  separately rather than summed, because they overlap by design.
 
 Postal mail to a natural person does not need prior consent under the same Act.
 Noted for completeness; nobody is posting letters.

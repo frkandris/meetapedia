@@ -11,7 +11,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from scraper.db import get_funnel_counts, init_db, record_pageview, save_subscription
+from scraper.db import (get_funnel_counts, init_db, record_pageview, save_subscription,
+                        upsert_persons)
 from scraper.models import CommunityRecord
 from scraper.pipeline import CityConfig
 from scraper.store import save_results
@@ -43,6 +44,23 @@ def funnel_db(tmp_path: Path, monkeypatch):
             source_url="https://b.test", extracted_at="2026-01-01T00:00:00+00:00",
         ),
     ], db)
+    # Three people, two addresses, one of them the club's own — the case the row
+    # counts cannot distinguish from three contacts.
+    upsert_persons(db, [
+        {"name": "Kovács Anna", "city": "Budapest", "topic": "music",
+         "role": "leader", "person_id": "p1", "community_name": "Zenei Kör",
+         "email": "anna@example.test"},
+        {"name": "Nagy Béla", "city": "Budapest", "topic": "music",
+         "role": "leader", "person_id": "p2", "community_name": "Néma Klub",
+         "email": "KOR@example.test "},
+        {"name": "Tóth Csaba", "city": "Budapest", "topic": "music",
+         "role": "contact", "person_id": "p3", "community_name": "Néma Klub"},
+        # Anna's address again, differently typed. Without folding this is a
+        # fourth contact; with it, it is the same person reached twice.
+        {"name": "Szabó Dóra", "city": "Budapest", "topic": "music",
+         "role": "contact", "person_id": "p4", "community_name": "Zenei Kör",
+         "email": " ANNA@Example.test"},
+    ])
     old_db, old_cities = app_state.db_path, app_state.cities
     app_state.db_path = db
     app_state.cities = [
@@ -81,6 +99,8 @@ def test_the_funnel_counts_each_stage(funnel_db):
     assert counts["records"] == 2
     assert counts["records_with_email"] == 1
     assert counts["records_with_website"] == 1
+    assert counts["persons"] == 4
+    assert counts["persons_with_email"] == 3
 
 
 def test_a_claim_survives_without_a_mail_provider(funnel_db):
@@ -219,3 +239,42 @@ def test_a_claim_can_be_approved(funnel_db):
     assert get_edit_requests(funnel_db, status="pending") == []
     # Approving a claim must not silently mutate the community it names.
     assert get_edit_requests(funnel_db, status="approved")[0]["change_type"] == "claim"
+
+
+def test_contactability_counts_addresses_as_well_as_rows(funnel_db):
+    """Rows and addresses answer different questions.
+
+    "How many communities have an email" and "how many people could an opt-in
+    channel reach" are not the same number: one address can sit on a club's page
+    and on its leader's, and a community centre's office address serves every
+    group in the building. The row counts size the corpus; the distinct counts
+    size the audience. Both are reported because reading one as the other
+    overstates the reach.
+    """
+    counts = get_funnel_counts(funnel_db, days=365)
+
+    # Three rows carry an address and two addresses exist: ` ANNA@Example.test`
+    # is Anna's `anna@example.test` in different case with a leading space, so
+    # the folding is what the third row turns into rather than a fourth contact.
+    # `KOR@example.test ` is the club's own address on its leader's row — the
+    # same duplication across tables, which is why the two counts are reported
+    # separately rather than summed.
+    assert counts["persons_with_email"] == 3
+    assert counts["persons_email_distinct"] == 2
+    assert counts["records_with_email"] == 1
+    assert counts["records_email_distinct"] == 1
+
+
+def test_persons_counts_survive_a_database_without_the_table(tmp_path: Path):
+    """Old production databases predate `persons`; a missing table reports zero
+    rather than failing the whole funnel, like every other count here."""
+    db = tmp_path / "bare.db"
+    init_db(db)
+    with __import__("sqlite3").connect(db) as conn:
+        conn.execute("DROP TABLE persons")
+
+    counts = get_funnel_counts(db)
+
+    assert counts["persons"] == 0
+    assert counts["persons_with_email"] == 0
+    assert counts["records"] == 0

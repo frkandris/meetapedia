@@ -4119,6 +4119,8 @@ def get_funnel_counts(db_path: Path, days: int = 30) -> dict:
         "edit_requests": 0, "edit_requests_total": 0,
         "reports": 0, "reports_total": 0,
         "records": 0, "records_with_email": 0, "records_with_website": 0,
+        "records_email_distinct": 0,
+        "persons": 0, "persons_with_email": 0, "persons_email_distinct": 0,
         "days": days,
     }
     if not db_path.exists():
@@ -4190,4 +4192,23 @@ def get_funnel_counts(db_path: Path, days: int = 30) -> dict:
             out["records_with_website"] = _one(
                 "SELECT COUNT(*) FROM communities"
                 " WHERE COALESCE(json_extract(data,'$.website'),'') <> ''")
+            # Rows and addresses are different questions. One address can sit on
+            # a club's page and on its leader's, and the same office address
+            # serves every group in a community centre — so the row count sizes
+            # the corpus and the distinct count sizes the audience. Asked for on
+            # 2026-09-17 and the row count alone could not answer it.
+            out["records_email_distinct"] = _one(
+                "SELECT COUNT(DISTINCT lower(trim(json_extract(data,'$.email'))))"
+                " FROM communities"
+                " WHERE COALESCE(json_extract(data,'$.email'),'') <> ''")
+            # Persons are the other half of contactability: a named leader with
+            # an address is who a claim or a correction actually reaches.
+            out["persons"] = _one("SELECT COUNT(*) FROM persons")
+            out["persons_with_email"] = _one(
+                "SELECT COUNT(*) FROM persons"
+                " WHERE COALESCE(json_extract(data,'$.email'),'') <> ''")
+            out["persons_email_distinct"] = _one(
+                "SELECT COUNT(DISTINCT lower(trim(json_extract(data,'$.email'))))"
+                " FROM persons"
+                " WHERE COALESCE(json_extract(data,'$.email'),'') <> ''")
     return out
