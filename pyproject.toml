@@ -40,5 +40,19 @@ include = ["scraper*"]
 line-length = 100
 target-version = "py312"
 
+[tool.ruff.lint]
+# Ruff's historical default set, written down. It was implicit until 2026-09-17,
+# when a fresh `pip install -e ".[dev]"` picked up ruff 0.16.8 — whose defaults
+# are wider — and `ruff check scraper/ tests/` went from clean to 351 findings
+# on unchanged code. Nothing had broken: 108 of them were `except Exception`,
+# 97 a `datetime.UTC` alias preference, 61 import ordering.
+#
+# The floor in `[project.optional-dependencies]` is `ruff>=0.4`, so the version
+# is not the contract and pinning one would only move the surprise to whoever
+# bumps it. Naming the rules is what makes the command mean the same thing on a
+# new laptop as in CI. Adding a rule family is then a deliberate commit, with
+# the findings it produces fixed in that same commit.
+select = ["E4", "E7", "E9", "F"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
