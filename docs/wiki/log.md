@@ -3,6 +3,19 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-17
+- **Correction**: the entry below blaming the API `restart` for a 404 outage **overstates what was
+  measured**, and the correction is worth more than the original. Watching the next push deploy
+  end to end: `d2efea8` served 200 while Coolify still said `in_progress`, then Traefik answered the
+  same bare `404 page not found` from 19:11:06 until somewhere before 19:14:57 UTC, then 200 again
+  with no intervention. **Every deploy has a ~4-minute window with no route** — which is what
+  `smoke_test.py --wait 420` has always been waiting for. So the 18:41 404 is equally consistent with
+  the 18:37 push deploy's own window, the restart is not proven guilty, and the forced deploy at
+  18:42 most likely *extended* the outage by starting the swap again rather than ending it. The
+  "35 minutes" in that entry is the gap between my checks, not measured downtime. What survives: a
+  `text/plain` 404 is the proxy rather than the app, `status=running:healthy` says nothing about
+  routing, and the fix for a 404 that outlives the deploy window is the forced deploy. Recorded
+  rather than edited away, because a wrong root cause that was already committed is exactly the kind
+  of thing this log exists to catch — see [[production-monitoring]] for the ordered check.
 - **Fix**: the suite's one order-dependent test was not a timing fluke but a **pooled HTTP client
   keyed by `id(loop)`**. `search.shared_client()` caches one client per event loop; pytest-asyncio
   builds a loop per test, and CPython reuses an address once an object is collected, so a fresh loop

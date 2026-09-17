@@ -57,11 +57,19 @@ Conflating the two is what caused the incident.
    clean log with no traffic means the route, not the app.
 3. Restore routing: `POST /api/v1/deploy?uuid=…&force=true` (Coolify API, Bearer
    token). Prefer it over `restart`, which does not reliably re-register the
-   route — demonstrated on 2026-09-17, when an API `restart` (taken to rebuild a
-   provider chain) left `status=running:healthy` and Traefik answering a bare
-   `404 page not found`, content-type `text/plain`, on every host and path for
-   both domains, gateway and admin included. The git-push deploy that followed
-   did **not** restore it; the forced deploy did, ~7 minutes later. Container logs come from
+   route.
+
+**First rule out the deploy window.** A bare `404 page not found` with
+content-type `text/plain` is Traefik saying it has no route for the host — and
+**every deploy produces exactly that for about four minutes**, measured on
+2026-09-17: the push of `d2efea8` served 200 while Coolify still reported
+`in_progress`, then 404 from 19:11:06 to somewhere before 19:14:57 UTC, then 200
+again with nobody touching it. That is what `smoke_test.py --wait 420` is
+waiting for. So the diagnosis in this section applies to a 404 that is *still*
+there five minutes after the last deploy finished; inside that window it is the
+swap, and a forced deploy on top of one in flight only starts the window over.
+Confirm the timing first: `GET /api/v1/deployments` shows anything in flight and
+`GET /api/v1/deployments/applications/{uuid}` the finish times. Container logs come from
    `GET /api/v1/applications/{uuid}/logs?lines=N`; there is no exec endpoint in
    the v1 API.
 4. Verify with the smoke test before declaring it fixed.
