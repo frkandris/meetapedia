@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,11 @@ async def test_standard_search_posts_configured_high_priority(monkeypatch):
     posted = {}
 
     class FakeClient:
+        # `shared_client()` reuses a cached client unless it is closed, and
+        # `_search_standard` asks for one per poll — a fake without this
+        # attribute fails on the second call instead of standing in for a client.
+        is_closed = False
+
         async def __aenter__(self):
             return self
 
@@ -67,6 +73,11 @@ async def test_standard_search_falls_back_to_us_location_for_unknown_locale(monk
     posted = {}
 
     class FakeClient:
+        # `shared_client()` reuses a cached client unless it is closed, and
+        # `_search_standard` asks for one per poll — a fake without this
+        # attribute fails on the second call instead of standing in for a client.
+        is_closed = False
+
         async def __aenter__(self):
             return self
 
@@ -104,6 +115,11 @@ async def test_standard_task_post_rejection_fails_fast_without_polling(monkeypat
             }]}
 
     class FakeClient:
+        # `shared_client()` reuses a cached client unless it is closed, and
+        # `_search_standard` asks for one per poll — a fake without this
+        # attribute fails on the second call instead of standing in for a client.
+        is_closed = False
+
         async def __aenter__(self):
             return self
 
@@ -136,3 +152,31 @@ def test_normal_priority_gets_a_longer_polling_window():
     normal = DataForSEOClient("u", "p", mode="standard", standard_priority=1)
     assert high._STANDARD_TIMEOUT_SECONDS == 300.0
     assert normal._NORMAL_PRIORITY_TIMEOUT_SECONDS > high._STANDARD_TIMEOUT_SECONDS
+
+
+def test_shared_client_is_keyed_by_the_loop_object_not_its_id():
+    """The pooled client must not outlive its event loop.
+
+    Keyed by `id(loop)`, this test's two loops could collide: CPython reuses an
+    address once the object is collected, so the second `asyncio.run` could be
+    handed the first loop's client — a client whose connections belong to a loop
+    that no longer exists. In the suite that meant a monkeypatched fake leaking
+    into a later test, which is a symptom rather than the defect.
+    """
+    import gc
+
+    from scraper import search as search_mod
+
+    grabbed = []
+
+    async def _grab():
+        grabbed.append(search_mod.shared_client())
+
+    asyncio.run(_grab())
+    asyncio.run(_grab())
+
+    assert grabbed[0] is not grabbed[1], "a new loop must get its own client"
+
+    gc.collect()
+    assert len(search_mod._shared_clients) == 0, (
+        "entries must be released with their loop, not pinned for the process")

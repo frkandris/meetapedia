@@ -3,6 +3,20 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-17
+- **Fix**: the suite's one order-dependent test was not a timing fluke but a **pooled HTTP client
+  keyed by `id(loop)`**. `search.shared_client()` caches one client per event loop; pytest-asyncio
+  builds a loop per test, and CPython reuses an address once an object is collected, so a fresh loop
+  could be handed a dead one's client — in the suite, a client built while some earlier test had
+  monkeypatched `httpx.AsyncClient`, i.e. *another test's fake*. Two tests in `test_search.py` were
+  affected and which one failed depended on the file set: with `tests/test_enrich_loop.py` present
+  the whole suite passed, without it `test_standard_search_falls_back_to_us_location_for_unknown_locale`
+  failed every time, and running `test_search.py` alone failed a different test with
+  `'FakeClient' object has no attribute 'is_closed'`. One cause, three faces. The pool is now a
+  `WeakKeyDictionary` keyed by the loop object, so an entry dies with its loop; a conftest fixture
+  clears it between tests anyway, because isolation should not depend on when the collector runs;
+  and the three fakes declare `is_closed`, since `_search_standard` asks for a client per poll and a
+  fake that omits it is not standing in for a client. Verified by mutation: restoring the `id()` key
+  turns the new regression test red.
 - **Observed**: the `restart` warning in [[production-monitoring]] earned itself a date. An API
   `POST /api/v1/applications/{uuid}/restart` — taken deliberately, to rebuild a provider chain
   before the code fix existed — left the app `running:healthy` in Coolify while Traefik answered a

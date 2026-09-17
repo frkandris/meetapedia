@@ -1,4 +1,6 @@
 import asyncio
+import weakref
+
 import structlog
 import httpx
 
@@ -17,11 +19,23 @@ log = structlog.get_logger()
 #: Keyed by event loop, not global: a client holds connections belonging to the
 #: loop that created them, so reusing one across loops is wrong — and it is what
 #: made the first version of this leak into other tests.
-_shared_clients: "dict[int, httpx.AsyncClient]" = {}
+#:
+#: Keyed by the loop *object* in a WeakKeyDictionary, not by `id(loop)`. An id is
+#: only unique while its object is alive: CPython reuses the address once a loop
+#: is collected, so a fresh loop can be handed the dead one's client. In
+#: production there is one loop and that never fires; in the suite there is one
+#: per test, and it fired — a client built under a monkeypatched
+#: `httpx.AsyncClient` (i.e. some earlier test's fake) was served to a later
+#: test, which then failed on `client.is_closed` or on a payload its own fake
+#: never saw. Two tests in `test_search.py` were order-dependent for exactly
+#: this reason. The weak key also means the entry disappears with the loop
+#: instead of pinning it forever.
+_shared_clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = (
+    weakref.WeakKeyDictionary())
 
 
 def shared_client() -> "httpx.AsyncClient":
-    key = id(asyncio.get_running_loop())
+    key = asyncio.get_running_loop()
     client = _shared_clients.get(key)
     if client is None or client.is_closed:
         client = httpx.AsyncClient(

@@ -35,3 +35,23 @@ def _reset_sitemap_cache():
     _SITEMAP_CACHE.clear()
     yield
     _SITEMAP_CACHE.clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_shared_search_client():
+    """Drop the search module's pooled HTTP client between tests.
+
+    The pool is keyed by the running event loop, and pytest-asyncio builds one
+    per test, so in production this never holds anything stale. In the suite it
+    did: a test that monkeypatches `scraper.search.httpx.AsyncClient` leaves its
+    fake in the pool, and the next test to reach the same key was served
+    someone else's fake — which is what made two tests in `test_search.py`
+    order-dependent. The pool is now a WeakKeyDictionary (see
+    `scraper.search._shared_clients`), so this is belt *and* braces: isolation
+    should not depend on when the garbage collector runs.
+    """
+    from scraper.search import _shared_clients
+
+    _shared_clients.clear()
+    yield
+    _shared_clients.clear()
