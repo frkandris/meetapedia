@@ -466,6 +466,30 @@ async def main() -> None:
         except Exception as exc:
             log.warning("enrich_skipped", reason="preflight_failed", error=str(exc))
             return
+
+        async def _pause(seconds: float, reason: str) -> None:
+            """Wait, then start the next round on a freshly built chain.
+
+            A provider retired by the circuit breaker stays retired for the life
+            of one extractor, and this run has no life span under
+            `worker_enabled` — so a provider that comes back is never noticed.
+            On 2026-09-17 `localgpu` spent the day answering 401 (its machine had
+            been reinstalled with a different key), was retired here, and every
+            batch went on reporting "all providers rate limited" for 20 minutes
+            after the machine was verifiably serving the `ai_only` pipeline —
+            which had rebuilt its own chain at its next preflight. A container
+            restart was the only cure.
+
+            Rebuilding is a config and ledger read, no HTTP, and it happens only
+            on a path that is already sleeping for 75 s or more. Deliberately no
+            preflight: model names cannot change without a deploy, so the probe
+            that is right once per run would here be one wasted call per pause.
+            """
+            nonlocal extractor
+            await asyncio.sleep(seconds)
+            extractor = _build_extractor(app_state.pipeline_cfg)
+            log.info("enrich_chain_rebuilt", reason=reason)
+
         # The same country priority the pipeline walks, for the same reason.
         # `get_enrichment_candidates` orders by id, and the international
         # records were imported first — so an unscoped enrichment spends the
@@ -522,7 +546,7 @@ async def main() -> None:
                     # Caught up. Extraction keeps adding communities, so wait
                     # for them rather than ending — under the worker there is no
                     # cron that would start this again.
-                    await asyncio.sleep(_ENRICH_IDLE_PAUSE_S)
+                    await _pause(_ENRICH_IDLE_PAUSE_S, "caught_up")
                     continue
                 # Provider down: enrich_batch fails fast and leaves candidates
                 # unmarked, so pool stays nonzero — bail out instead of tight-looping.
@@ -536,10 +560,10 @@ async def main() -> None:
                     if not _free_quota_available():
                         log.info("enrich_waiting_for_quota_reset",
                                  enriched_this_window=total)
-                        await asyncio.sleep(_ENRICH_IDLE_PAUSE_S)
+                        await _pause(_ENRICH_IDLE_PAUSE_S, "quota_reset")
                         continue
                     log.info("enrich_waiting_out_rate_limit", enriched_this_window=total)
-                    await asyncio.sleep(_ENRICH_RATE_LIMIT_PAUSE_S)
+                    await _pause(_ENRICH_RATE_LIMIT_PAUSE_S, "rate_limited")
                     continue
                 # `stopped_no_provider` is the batch's own verdict and must be
                 # honoured even when it enriched a few records first — otherwise
@@ -554,7 +578,7 @@ async def main() -> None:
                     # Out of daily quota, most likely. It returns at 00:00 UTC
                     # and this is the only thing waiting for it — sleeping is
                     # how enrichment resumes on the new day without a cron.
-                    await asyncio.sleep(_ENRICH_IDLE_PAUSE_S)
+                    await _pause(_ENRICH_IDLE_PAUSE_S, "provider_down")
                     continue
                 await asyncio.sleep(1)  # yield to the event loop between rounds
             else:

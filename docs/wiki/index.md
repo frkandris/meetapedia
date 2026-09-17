@@ -142,3 +142,4 @@ vocabulary), [faq.md](faq.md) (recurring questions).
 - [[ai-provider-quota-runbook]] — How to bring a free LLM provider online, read the quota page, and react when one dies or changes its model names.
 - [[coolify-disk-cleanup]] — High-disk-usage alerts after deploy-heavy days are old Docker images and build cache; prune them from the server terminal — volumes and running containers are untouched.
 - [[exporting-a-golden-set]] — The scoring golden set lives in an 8.7 GB production DB behind a browser-only terminal; scripts/make_golden_db.py slims it to a few MB in one short command.
+- [[local-gpu-machine-setup]] — Exact steps to turn a freshly installed Apple Silicon Mac back into the `localgpu` provider — llama.cpp, the model, two launchd agents, and retaking the existing named tunnel.

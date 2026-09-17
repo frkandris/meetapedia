@@ -3,7 +3,7 @@ type: Decision
 title: Our Own GPU in the Fleet
 description: A laptop running Qwen3-4B scores 73 on our task — above the 8B and the 20B — and its allowance never runs out, which is the hole it fills.
 tags: [providers, router, local-inference, llama-cpp, quota, measurement]
-timestamp: 2026-09-06
+timestamp: 2026-09-17
 resource: config/providers.yaml
 ---
 
@@ -123,6 +123,9 @@ in the pipeline knows it is ours.
   free. Serialising at the far end instead (`llama-server --parallel 1`) would
   do the opposite: the request sits in the origin's own queue with the
   connection open and times out exactly as before.
+
+Rebuilding the machine itself — including retaking the tunnel and the key after a
+reinstall — is [[local-gpu-machine-setup]].
 
 On the machine: `llama-server` and `cloudflared` run as launchd agents
 (`com.meetapedia.llama`, `com.meetapedia.tunnel`) with `KeepAlive`, under

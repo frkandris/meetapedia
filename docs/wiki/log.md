@@ -2,6 +2,41 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-17
+- **Creation**: [[local-gpu-machine-setup]] — the `localgpu` machine was reinstalled and the provider
+  had been answering 100% errors for days, so the rebuild is now a runbook. Two things must be
+  *retaken* rather than re-created, and both were learned by doing the opposite first. The named
+  tunnel still exists in the Cloudflare account with its DNS record, so `cloudflared tunnel token
+  --cred-file` fetches its credentials; a second tunnel cannot have `gpu.meetapedia.com`. And
+  `LOCAL_GPU_KEY` in Coolify is the server's copy that survived the wipe — minting a fresh key on the
+  machine produced a *misleading* failure, because `/v1/models` and `/v1/quota` still answer 200 (they
+  only read the catalogue) while every completion returns Cloudflare's bare `error code: 502`. The app
+  log is unambiguous where the HTTP status is not: `api_request_failed … "Invalid API Key" … status=401`
+  then `gateway_upstream_unavailable … model=localgpu`. Taking the machine to the server's value needs
+  no deploy. Rebuilt throughput matches 2026-09-06: a full 8,000-char page in **57.6 s** (4,129 prompt
+  tokens at 287 tok/s, 1,094 generated at 25.4 tok/s), inside Cloudflare's 100 s ceiling.
+- **Observed**: `extractor_preflight_ok` is the fastest health check for this provider — it printed
+  `retired=1` with `localgpu` absent from `live=[…]` while every other entry read `(no budget)`. On
+  2026-09-17 every free provider's daily allowance was spent by 17:30 UTC, so the local machine was the
+  only one with budget: exactly the hole [[our-own-gpu-in-the-fleet]] was added to fill, observed in
+  production for the first time.
+- **Fix**: every pause in the enrichment loop now **rebuilds** the provider chain
+  (`main.py:_pause`, logging `enrich_chain_rebuilt`), so a provider that recovers is picked up within
+  one pause. Deliberately no preflight on the rebuild: model names cannot change without a deploy, so
+  the probe that is right once per run would be one wasted call per pause. There is no unit test — the
+  loop is a closure inside `main()` and nothing in the suite can reach it; verification is the
+  production log line.
+- **Observed**: a provider that recovered mid-window did **not** rejoin the enrichment run.
+  `main.py:_enrich_body` builds its chain once per run and `schedule.worker_enabled: true` makes that
+  run unbounded, so `localgpu` — retired by the circuit breaker while it was 401ing — stayed retired
+  and every batch logged `all providers rate limited` for 20 minutes after the machine was verifiably
+  serving the `ai_only` pipeline, which had rebuilt its own chain at its next preflight. A container
+  restart cleared it. The asymmetry is worth fixing in code: the pipeline rebuilds per run, enrichment
+  does not, and the unbounded worker makes "per run" mean "until someone restarts it".
+- **Observed**: `Python-urllib` gets a Cloudflare **403** at `gpu.meetapedia.com` while
+  `python-httpx` — what the server actually sends — gets 200. A hand-written probe can therefore
+  report a healthy provider as broken; set a `User-Agent` before believing one.
+
 ## 2026-09-16
 - **Fix**: the test suite runs in **13.2 s instead of 138.4 s**, and the flakiest test in it is
   deterministic. Measured before touched: three tests took **128.6 of the 138.4 seconds** while the
