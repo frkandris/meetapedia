@@ -3,6 +3,15 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-17
+- **Observed**: the `restart` warning in [[production-monitoring]] earned itself a date. An API
+  `POST /api/v1/applications/{uuid}/restart` — taken deliberately, to rebuild a provider chain
+  before the code fix existed — left the app `running:healthy` in Coolify while Traefik answered a
+  bare `404 page not found` (content-type `text/plain`, so unmistakably the proxy) on every host and
+  path: both public domains, `/v1`, `/admin`. Two things are worth keeping. The push deploy that
+  followed did not restore the route and only a `deploy?force=true` did, so "deploy again" is not
+  interchangeable with the forced one. And the page that says exactly this was already in the wiki:
+  it was not read before the restart, which is the actual mistake — `scripts/smoke_test.py` takes
+  under 5 s and would have caught the 404 immediately instead of 35 minutes later.
 - **Update**: `_enrich_body` moved out of `main()`'s closure to module level, with
   `free_quota_available` injected alongside the `enrich_batch` and `_build_extractor` parameters it
   already had, and a `main.py:_sleep` seam mirroring `extract.py`'s. The loop that spends the whole

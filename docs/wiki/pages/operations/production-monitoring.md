@@ -57,7 +57,11 @@ Conflating the two is what caused the incident.
    clean log with no traffic means the route, not the app.
 3. Restore routing: `POST /api/v1/deploy?uuid=…&force=true` (Coolify API, Bearer
    token). Prefer it over `restart`, which does not reliably re-register the
-   route. Container logs come from
+   route — demonstrated on 2026-09-17, when an API `restart` (taken to rebuild a
+   provider chain) left `status=running:healthy` and Traefik answering a bare
+   `404 page not found`, content-type `text/plain`, on every host and path for
+   both domains, gateway and admin included. The git-push deploy that followed
+   did **not** restore it; the forced deploy did, ~7 minutes later. Container logs come from
    `GET /api/v1/applications/{uuid}/logs?lines=N`; there is no exec endpoint in
    the v1 API.
 4. Verify with the smoke test before declaring it fixed.
