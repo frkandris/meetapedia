@@ -3,6 +3,27 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-18
+- **Creation**: `deepseek/deepseek-v4-flash-0731:free` added to the OpenRouter entry, unscored,
+  with a per-model `max_output_tokens: 4000`. It is new in OpenRouter's free catalogue since
+  2026-09-05 — and it is a model we have already measured, as the *paid* sibling. On 2026-08-27
+  the 0423 snapshot scored 80 answering 13 of 14 Hungarian pages; this 0731 snapshot scored the
+  same 80 and answered **4 of 14**. Every failure was `llm_output_truncated`: it is a reasoning
+  model, the reasoning is emitted as output, and it spent the 1,500-token cap before the JSON
+  closed. So 0731 is not a worse model, it is a model our cap strangles — and on a `:free` slug the
+  usual objection to raising the cap does not apply, because OpenRouter bills nothing and budgets
+  in requests per day rather than tokens. The cap costs seconds, never money; the same reasoning
+  localgpu's 4,000 already rests on.
+  It buys **quality, not capacity** — it shares the provider's 1000/day pool with the two models
+  above rather than adding to it — so it is worth having only if it beats nemotron's 58. `quality: 0`
+  until `POST /v1/score` says; putting the sibling's 80 here would be borrowing the number from the
+  snapshot that worked.
+- **Observed**: OpenRouter's free catalogue moved by five since 2026-09-05 —
+  `deepseek-v4-flash-0731`, `qwen/qwen3.8-27b`, `nex-agi/nex-n2.5-{mini,pro}`,
+  `inclusionai/ling-3.0-flash-vl` in; both `minimax` slugs out. Neither of our two configured slugs
+  is affected. Checked unauthenticated against the public catalogue; **the rest of the fleet was
+  not checked** — Groq, Gemini, Mistral and Cloudflare need `ROUTER_API_KEY` for
+  `check_free_models.py --remote`, so "no new models" is not a claim that can be made about them
+  today.
 - **Fix**: `extract.py`'s pooled HTTP client is keyed by the loop object too. `b263436` found and
   fixed exactly this in `search.py` the day before — `id(loop)` is unique only while the loop is
   alive, CPython reuses the address once it is collected, and a fresh loop is handed the dead one's

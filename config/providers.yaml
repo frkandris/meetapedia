@@ -251,6 +251,30 @@ providers:
         quality: 58
       - model: google/gemma-4-31b-it:free
         quality: 52
+      # Added 2026-09-18. Appeared in OpenRouter's free catalogue since
+      # 2026-09-05, and it is a model we have already measured — as the *paid*
+      # sibling. On 2026-08-27 `deepseek/deepseek-v4-flash` (the 0423 snapshot)
+      # scored 80 answering 13 of 14 Hungarian pages, while this 0731 snapshot
+      # scored the same 80 and answered **4 of 14**. The score hid the
+      # difference; the answer rate did not.
+      #
+      # Every one of those failures was `llm_output_truncated`. It is a
+      # reasoning model, the reasoning is emitted as output, and it spent the
+      # 1,500-token cap before the JSON closed — so 0731 is not a worse model,
+      # it is a model our cap strangles. `max_output_tokens` is per model since
+      # 2026-08-27 for exactly this, and here the usual objection does not
+      # apply: OpenRouter `:free` bills nothing and its budget is requests per
+      # day, not tokens, so a larger cap costs seconds and never money. Same
+      # reasoning as localgpu's 4,000.
+      #
+      # This buys **quality, not capacity**: it shares the provider's 1000/day
+      # pool with the two above rather than adding to it. Worth it only if it
+      # beats nemotron's 58, which is what the score will say.
+      - model: deepseek/deepseek-v4-flash-0731:free
+        # 0 = unscored, sorts last. A number here would be the *sibling's*
+        # number, and the sibling is the snapshot that worked.
+        quality: 0
+        max_output_tokens: 4000
       # openai/gpt-oss-20b:free removed 2026-09-05. Absent from OpenRouter's
       # public catalogue (431 models, 19 `:free`) and, unlike the recurring
       # open-mistral-nemo case, a real call agrees: HTTP 404 "This model is
