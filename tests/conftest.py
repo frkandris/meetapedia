@@ -55,3 +55,21 @@ def _reset_shared_search_client():
     _shared_clients.clear()
     yield
     _shared_clients.clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_shared_extract_client():
+    """Drop the extractor's pooled HTTP clients between tests.
+
+    The twin of `_reset_shared_search_client`, for the same pool one module
+    over. `scraper.extract` kept keying by `id(loop)` after `search.py` stopped
+    (2026-09-17), so it carried the same latent leak: a client built under a
+    monkeypatched `httpx.AsyncClient` could be served to a later test that never
+    patched anything. Belt and braces next to the WeakKeyDictionary — isolation
+    should not depend on when the garbage collector runs.
+    """
+    from scraper.extract import _http_clients
+
+    _http_clients.clear()
+    yield
+    _http_clients.clear()

@@ -4,6 +4,7 @@ import json
 import re
 import time
 import contextvars
+import weakref
 from datetime import datetime, timezone
 
 import httpx
@@ -26,20 +27,33 @@ _CALL_PROMPT_TOKENS: "contextvars.ContextVar[int]" = contextvars.ContextVar(
 _CALL_COMPLETION_TOKENS: "contextvars.ContextVar[int]" = contextvars.ContextVar(
     "extractor_call_completion_tokens", default=0)
 
-#: Keyed by (event loop, timeout): a client holds connections belonging to the
+#: Per event loop, then per timeout: a client holds connections belonging to the
 #: loop that created them, so one must never be shared across loops.
-_http_clients: "dict[tuple[int, float], httpx.AsyncClient]" = {}
+#:
+#: Keyed by the loop *object* in a WeakKeyDictionary, not by `id(loop)`. An id
+#: is unique only while its object is alive — CPython reuses the address once a
+#: loop is collected, so a fresh loop can be handed the dead one's client. The
+#: same defect was found and fixed in `search.py` on 2026-09-17 (`b263436`),
+#: where it had made two tests order-dependent; this copy was left behind, and
+#: is fixed here for the same reason rather than a new one. In production there
+#: is a single loop and neither ever fired. The weak key also releases the entry
+#: with its loop instead of pinning it for the life of the process.
+_http_clients: ("weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, "
+                "dict[float, httpx.AsyncClient]]") = weakref.WeakKeyDictionary()
 
 
 def _shared_client(timeout: float) -> "httpx.AsyncClient":
-    key = (id(asyncio.get_running_loop()), float(timeout))
-    client = _http_clients.get(key)
+    by_timeout = _http_clients.get(asyncio.get_running_loop())
+    if by_timeout is None:
+        by_timeout = {}
+        _http_clients[asyncio.get_running_loop()] = by_timeout
+    client = by_timeout.get(float(timeout))
     if client is None or client.is_closed:
         client = httpx.AsyncClient(
             timeout=timeout,
             limits=httpx.Limits(max_connections=64, max_keepalive_connections=16),
         )
-        _http_clients[key] = client
+        by_timeout[float(timeout)] = client
     return client
 
 

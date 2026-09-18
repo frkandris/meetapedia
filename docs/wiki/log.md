@@ -2,6 +2,39 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-18
+- **Fix**: `extract.py`'s pooled HTTP client is keyed by the loop object too. `b263436` found and
+  fixed exactly this in `search.py` the day before — `id(loop)` is unique only while the loop is
+  alive, CPython reuses the address once it is collected, and a fresh loop is handed the dead one's
+  client — but the identical copy one module over was left behind. Same `WeakKeyDictionary`, same
+  conftest fixture, nested one level deeper because this pool also keys by timeout. Production has
+  a single loop and neither copy ever fired there; the suite has one per test, which is where it
+  bites.
+  **Verified by mutation**, and the first attempt at that was wrong: mutating a *copy* of the pool
+  left `_http_clients` empty, so the test passed and appeared to prove nothing was caught. Restoring
+  the `id()` key on the real pool fails it immediately, with the defect in plain sight — the second
+  loop handed the same client object, at the same address. A mutation that does not reproduce the
+  original code path tests the mutation, not the code.
+- **Observed**: `localgpu` recovered without a config change. Five days at 100% failure (142 calls,
+  142 errors) became **1,519 calls with 239 errors** and 3.1M tokens — more than any other provider
+  — and `config/providers.yaml` is untouched, so it was the machine or the tunnel, possibly helped
+  back in by `0ff4cb6` ("a recovered provider rejoins within one pause, not one restart"). Output
+  followed: new communities 43 → **215**, pages 288 → **510**, people 129 → **291**.
+- **Observed**: Mistral has taken localgpu's place as the broken one — 453 calls, **415 refusals**,
+  38 served — with its config equally untouched, and it was healthy two days earlier (475 calls, 25
+  errors). It oscillates rather than being misconfigured, which is why the catalogue was left alone.
+- **Observed**: preflight is 746 of the day's 3,716 calls (20%), up from 214, and it is **not**
+  waste to reclaim cheaply. It costs one probe per model per run and the run count was unusually
+  high; `run_pipeline` already returns before the main preflight when there are no pairs to run
+  ("every path below this point has new work pending by definition"), so the obvious guard is in
+  place. Cutting it further means a process-level TTL on the probe result, traded against the
+  2026-07-24 window that produced 5 records from 1,368 pages because a dead model went unnoticed —
+  a decision, not a cleanup.
+- **Open**: the 20:59 UTC run on 2026-09-17 ended `run unfinished (still running, container
+  restart, or OOM)`. Deploy churn explains the day's five zero-pair runs (three land between
+  commits at 18:35/18:51 and right after 19:27) but **not** this one, which is 1.5 h after the last
+  deploy. Its three candidate causes cannot be told apart without the container log.
+
 ## 2026-09-17
 - **Update**: the funnel answers contactability for **people** and in **addresses**, not only in
   community rows — `persons`, `persons_with_email`, `persons_email_distinct` and
