@@ -401,6 +401,18 @@ Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
   prevent. **Twice now this provider has been judged from its documentation and twice the
   documentation was the wrong source** — first the per-model limits, now the tier itself. That is the
   free-models skill's own rule, earned again: do not read docs, ask the API.
+
+  And no, linking a card without spending would not help — the obvious next question, asked and
+  closed the same day. `cloud.sambanova.ai/plans` says the Free plan needs "a payment method **and
+  purchase credits** to run your first requests", and the docs say a linked card is precisely what
+  moves an account *out* of the free tier into pay-as-you-go Developer. The only free allowance this
+  provider ever advertised was the $5 in their 2025-02-08 Developer Tier announcement, expiring in
+  three months — a trial, which is the same shape as [[2026-08-cerebras-free-tier-ended]] and
+  disqualified for the same reason. Priced out for completeness: at Llama-3.3-70B's $0.60/$1.20 per
+  million, one of our extractions (~4.1K in, ~1K out) is $0.0037, so $5 is ~1,350 calls — about half
+  a day of the current load, in exchange for admitting a paid provider the three switches exist to
+  keep out. `SAMBANOVA_API_KEY` should be deleted from Coolify rather than left looking like
+  capacity.
 - **Observed**: Gemini and Mistral **no longer publish free-tier limits at all**. Google's rate-limits
   page has no free table and defers to the AI Studio dashboard; Mistral's numbers sit behind
   `admin.mistral.ai`. Our `rpd` for both is therefore an estimate that cannot be re-verified from a
