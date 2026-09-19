@@ -13,8 +13,20 @@ Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
   there is roughly exact, not conservative). The tier is standing rather than credit-based and applies
   "when there is no payment method linked with your account", so criterion 4 holds too. Adding it
   needs **five provider entries sharing one key**, because `rpd` lives on `ProviderSpec` and not on
-  `ModelSpec` — the same shape the 2026-09-10 Gemini split took, and for the same reason. Pending an
-  account and a `POST /v1/score` run; nothing is configured yet.
+  `ModelSpec` — the same shape the 2026-09-10 Gemini split took, and for the same reason.
+- **Correction, next day, with a key in hand**: **SambaNova is declined again — and this time it is
+  measured, not read.** An account was created and `SAMBANOVA_API_KEY` set, and `GET /v1/models`
+  answers 200 with seven models. Every free-tier model then answers the *same* thing to a real chat
+  call: `PAYMENT_METHOD_REQUIRED — "A payment method is required. Add one at
+  cloud.sambanova.ai/plans/billing to continue."` All five, and three attempts on `DeepSeek-V3.1`,
+  whose first refusal was a transient "experiencing high demand" and therefore looked like the
+  exception. So the sentence the rate-limit page leads with — Free Tier applies "when there is no
+  payment method linked with your account" — defines the tier rather than granting access: without a
+  card the API serves nothing. Nothing is configured and the key in Coolify is inert. Adding a card
+  would make this a paid provider, which `allow_paid: false` and `daily_budget_usd: 0.00` exist to
+  prevent. **Twice now this provider has been judged from its documentation and twice the
+  documentation was the wrong source** — first the per-model limits, now the tier itself. That is the
+  free-models skill's own rule, earned again: do not read docs, ask the API.
 - **Observed**: Gemini and Mistral **no longer publish free-tier limits at all**. Google's rate-limits
   page has no free table and defers to the AI Studio dashboard; Mistral's numbers sit behind
   `admin.mistral.ai`. Our `rpd` for both is therefore an estimate that cannot be re-verified from a
