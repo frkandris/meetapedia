@@ -153,6 +153,13 @@ providers:
   # paid plan, and then move it behind `router.allow_paid` where paid providers
   # belong. The ledger now blocks a 402 provider for the rest of the UTC day,
   # so this line saves one wasted first-choice call a day, not the whole loss.
+  # Re-checked 2026-09-19 against Cerebras's own FAQ, because "the free tier
+  # ended" and "there is no free tier" are different facts and only the second
+  # closes the question: "Is there a permanently free tier? **No.**… $5 in
+  # credits that expire 30 days after they're granted", with a verified payment
+  # method required to receive them. So `rpd: 1000` below is not a budget, and
+  # `gemma-4-31b`'s quality of 80 — still the highest number in this file — is
+  # not an argument for re-enabling it. See [[2026-08-cerebras-free-tier-ended]].
   - name: cerebras
     enabled: false
     api_key_env: CEREBRAS_API_KEY
@@ -198,6 +205,14 @@ providers:
     # Flash-Lite carries the work: 500 a day against Flash's 20. `rpm: 15` is
     # its real limit — the old 10 was a compromise with Flash and left a third
     # of this model's throughput unused.
+    #
+    # These numbers can no longer be re-checked against Google. As of
+    # 2026-09-19 the rate-limits page carries no free-tier table at all and
+    # points at the AI Studio dashboard instead, and the pricing page says only
+    # "Free of charge". What keeps the 500 honest is observation, not the
+    # vendor: 485 calls on 2026-09-17 and 313 by 20:00 on 2026-09-19, both
+    # against a ledger budget of 475 — the day ends where it is supposed to.
+    # Treat a future edit here as a measurement, not a documentation lookup.
     rpm: 15
     rpd: 500
     models:
@@ -222,6 +237,18 @@ providers:
   # errors on 2026-09-11, against 1,102 errors the day before the split.
 
   # ── Mistral ───────────────────────────────────────────────────────────────
+  # `rpd: 500` is an estimate and has never been anything else. Mistral moved
+  # its free-tier limits behind a login (admin.mistral.ai/plateforme/limits) and
+  # publishes no number anywhere public — checked 2026-09-19 — so the widely
+  # quoted figures are third-party. The ledger is what makes this safe: it
+  # learned 406 on 2026-09-17 from a 429 and 382 on 2026-09-19, both well under
+  # the 500 planned here, and a learned ceiling expires so a quiet day cannot
+  # pin us low forever.
+  #
+  # Deliberately not hand-corrected to the observed number. A figure typed from
+  # yesterday's observation goes stale exactly the way Groq's `rpd: 14400` did
+  # (wrong by 14x for eighteen days); the learned ceiling re-measures every day
+  # and costs one refused call to do it.
   - name: mistral
     enabled: true
     api_key_env: MISTRAL_API_KEY
@@ -472,6 +499,13 @@ providers:
   # DISABLED 2026-08-16: the API answers 410 with
   # {"code":"github_models_retirement_brownout"} — the service is being retired,
   # not rate limited. Kept here rather than deleted so the decision is visible.
+  #
+  # Confirmed finished 2026-09-19 against GitHub's own documentation: "As of
+  # July 30, 2026, GitHub Models has been fully retired… the playground, model
+  # catalog, inference API, and bring your own key (BYOK) are no longer
+  # available to any customer." So the 410 is not a brownout to wait out, and
+  # `rpd: 150` below describes an allowance that no longer exists. Nothing to
+  # re-enable; the entry is a headstone.
   - name: github
     enabled: false
     api_key_env: GITHUB_MODELS_TOKEN

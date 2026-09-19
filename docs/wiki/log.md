@@ -3,6 +3,35 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-19
+- **Correction**: **SambaNova was declined on a misreading.** The 2026-09-05 entry recorded "20 RPM /
+  **20 RPD** / 200K TPD on its own rate-limit page, i.e. half of OpenRouter's already-tightest
+  allowance". Read again at the source (docs.sambanova.ai/docs/en/models/rate-limits, 2026-09-19):
+  **RPM and RPD are per model**, and the free tier lists five — `DeepSeek-V3.1`,
+  `Meta-Llama-3.3-70B-Instruct`, `gpt-oss-120b`, and the preview `DeepSeek-V3.2` and `gemma-4-31B-it`
+  — at 20 RPD and 200K TPD each. That is **~100 requests a day**, which is not half of anything: it is
+  about what Cloudflare actually contributes (95/day, and the neuron arithmetic says our `rpd: 100`
+  there is roughly exact, not conservative). The tier is standing rather than credit-based and applies
+  "when there is no payment method linked with your account", so criterion 4 holds too. Adding it
+  needs **five provider entries sharing one key**, because `rpd` lives on `ProviderSpec` and not on
+  `ModelSpec` — the same shape the 2026-09-10 Gemini split took, and for the same reason. Pending an
+  account and a `POST /v1/score` run; nothing is configured yet.
+- **Observed**: Gemini and Mistral **no longer publish free-tier limits at all**. Google's rate-limits
+  page has no free table and defers to the AI Studio dashboard; Mistral's numbers sit behind
+  `admin.mistral.ai`. Our `rpd` for both is therefore an estimate that cannot be re-verified from a
+  vendor page, and the only thing keeping it honest is the ledger's learned ceiling — 406 on
+  2026-09-17 and 382 on 2026-09-19 for Mistral, against 500 configured. Recorded in
+  `providers.yaml` beside both numbers, and deliberately *not* hand-corrected: a figure typed from
+  one day's observation goes stale the way Groq's `rpd: 14400` did, while the learned ceiling
+  re-measures daily for the price of one refused call. Groq's own table still matches our config
+  exactly (30 RPM / 1,000 RPD / 200K TPD), and OpenRouter's $10-lifetime rule that lifts `:free` from
+  50 to 1,000 a day is confirmed — the ~$10.80 purchase is doing what it was bought for.
+- **Observed**: GitHub Models is **fully retired**, not browning out — "As of July 30, 2026… the
+  playground, model catalog, inference API, and bring your own key (BYOK) are no longer available to
+  any customer." And Cerebras has no free tier to return to: "Is there a permanently free tier?
+  **No.**… $5 in credits that expire 30 days after they're granted", with a verified payment method
+  required. Both entries stay in the catalogue as headstones, now with the primary-source sentence
+  that closes the question — `gemma-4-31b`'s quality of 80, still the highest number in the file, is
+  not an argument for re-enabling an account that cannot be free.
 - **Fix**: scoring charges the quota ledger. `score_model` drives an `_ApiExtractor` directly
   rather than through `FallbackExtractor`, so nothing recorded its calls — a 20-page run over three
   models is **60 real requests** the router never learned about, after which it planned the rest of
