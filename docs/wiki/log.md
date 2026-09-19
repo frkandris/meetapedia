@@ -2,6 +2,38 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-19
+- **Decision**: `deepseek/deepseek-v4-flash-0731:free` scores **76** and its cap goes to **8,000**.
+  Measured on 20 pages against its OpenRouter stablemates: 76 answering 14/20, versus nemotron's 68
+  answering 10/20 and gemma's nothing. It is the fleet's second-best model now, behind only
+  `mistral-small` — which has been blocked most of the week.
+  The number also settles why it was worth adding. At the global 1,500-token cap this same snapshot
+  answered **4 of 14** on 2026-08-27; at 4,000 it answers **14 of 20**. The model was never the
+  problem, the cap was. And the run said where the rest went: all **six** remaining failures were
+  `llm_output_truncated` — the same wall, further along — so the cap doubled again. The trade is
+  one-sided on this provider only: OpenRouter budgets in *requests per day*, so a truncated call
+  spends a request and returns nothing, and room to finish the JSON costs seconds while buying back
+  whole requests. On Groq the same change would reserve tokens against an 8,000-per-minute window
+  before generating.
+- **Fix**: `groq/qwen/qwen3.6-27b` removed — retired at Groq, and this time the UNLISTED hint is a
+  verdict: a real call returns HTTP 404, "The model `qwen/qwen3.6-27b` does not exist or you do not
+  have access to it". Groq serves `qwen3.8-27b` in its place. **Deliberately not replaced**: it
+  scored 55, below both gpt-oss models already there, so its successor would occupy a slot the
+  router reaches only when the better two are spent — while costing one preflight probe per run,
+  which is what the dead entry was costing. Roughly **80 guaranteed 404s a day**, part of the 746
+  preflight calls on 2026-09-17 that looked like an unavoidable design cost.
+- **Observed**: gemma's 0/20 is **not** a quality result. Every failure was `api_rate_limited` with
+  a 60-second wait — Google AI Studio refusing upstream, which is what OpenRouter's `:free` gemma
+  sits behind, and the same refusal a manual call hit on 2026-09-05. Left at 52; a provider that
+  will not answer has not been measured.
+- **Observed**: `scoring.py` calls `_ApiExtractor.extract` directly and never touches the ledger —
+  no `note_call`, no `reserve_call`. A scoring run spends the provider's real daily allowance and
+  the router never learns of it, which is the same class of under-counting the 2026-09-12 enrichment
+  fix removed. **Correction to the 2026-09-05 entry**: the claim that scoring "cost 86 of the day's
+  95 Cloudflare calls" was wrong — those 42 scoring calls were never charged, so the crawler spent
+  that budget. Not fixed here: whether an operator's measurement should eat the crawl's allowance is
+  a decision, and the silent part is what makes it wrong either way.
+
 ## 2026-09-18
 - **Creation**: `deepseek/deepseek-v4-flash-0731:free` added to the OpenRouter entry, unscored,
   with a per-model `max_output_tokens: 4000`. It is new in OpenRouter's free catalogue since

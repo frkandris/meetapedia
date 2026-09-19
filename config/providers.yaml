@@ -128,8 +128,18 @@ providers:
     models:
       - model: openai/gpt-oss-120b
         quality: 62
-      - model: qwen/qwen3.6-27b
-        quality: 55
+      # qwen/qwen3.6-27b removed 2026-09-18. Absent from Groq's own list, and a
+      # real call through the gateway settles it: HTTP 404, "The model
+      # `qwen/qwen3.6-27b` does not exist or you do not have access to it".
+      # Groq now serves qwen3.8-27b in its place.
+      #
+      # Deliberately not replaced. It scored 55, below both gpt-oss models
+      # already here (62 and 67), so its successor would sit in a slot the
+      # router reaches only when the better two are spent — while costing one
+      # preflight probe per run, which is what the dead entry was costing:
+      # roughly 80 guaranteed 404s a day out of the 746 preflight calls on
+      # 2026-09-17. Adding a model needs a reason beyond the shape of the gap
+      # left by the one that died.
       - model: openai/gpt-oss-20b
         quality: 67
 
@@ -250,6 +260,12 @@ providers:
       - model: nvidia/nemotron-3-super-120b-a12b:free
         quality: 58
       - model: google/gemma-4-31b-it:free
+        # Left at 52 despite answering 0 of 20 on 2026-09-18. That run is void
+        # for this model, not damning: every failure was `api_rate_limited` with
+        # a 60-second wait — Google AI Studio refusing upstream, which is what
+        # OpenRouter's `:free` gemma sits behind, and the same refusal a manual
+        # call hit on 2026-09-05. A provider that will not answer has not been
+        # measured. Re-score it when it will.
         quality: 52
       # Added 2026-09-18. Appeared in OpenRouter's free catalogue since
       # 2026-09-05, and it is a model we have already measured — as the *paid*
@@ -271,10 +287,26 @@ providers:
       # pool with the two above rather than adding to it. Worth it only if it
       # beats nemotron's 58, which is what the score will say.
       - model: deepseek/deepseek-v4-flash-0731:free
-        # 0 = unscored, sorts last. A number here would be the *sibling's*
-        # number, and the sibling is the snapshot that worked.
-        quality: 0
-        max_output_tokens: 4000
+        # 76, measured 2026-09-18 on 20 pages — the best OpenRouter model we
+        # have on both axes that matter:
+        #
+        #     deepseek-v4-flash-0731   76   answered 14/20
+        #     nemotron-3-super-120b    68   answered 10/20
+        #     gemma-4-31b-it           --   answered  0/20  (see below)
+        #
+        # And it confirms why it was added. At the global 1,500-token cap this
+        # snapshot answered 4 of 14 (2026-08-27); at 4,000 it answers 14 of 20.
+        # The model was never the problem, the cap was.
+        quality: 76
+        # 8,000, raised from 4,000 the same evening on the evidence the run
+        # produced: all **six** remaining failures were `llm_output_truncated`,
+        # the same wall, just further along. The trade is one-sided here because
+        # OpenRouter budgets in *requests per day*, not tokens — a truncated
+        # call spends a request and returns nothing, so room to finish the JSON
+        # costs seconds and buys back whole requests. Not a number to copy
+        # elsewhere: on Groq the same change would reserve tokens against an
+        # 8,000-per-minute window before generating.
+        max_output_tokens: 8000
       # openai/gpt-oss-20b:free removed 2026-09-05. Absent from OpenRouter's
       # public catalogue (431 models, 19 `:free`) and, unlike the recurring
       # open-mistral-nemo case, a real call agrees: HTTP 404 "This model is
