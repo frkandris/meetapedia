@@ -359,9 +359,40 @@ def golden_set(db_path: Path, limit: int = 12,
     return out
 
 
+def _charge_ledger(router, extractor, exc: Exception | None = None) -> None:
+    """Attribute one scoring call to the provider's daily budget.
+
+    Scoring calls a provider exactly as extraction does, and the provider
+    charges them the same way — but `score_model` drives an `_ApiExtractor`
+    directly rather than through `FallbackExtractor`, so until 2026-09-19
+    nothing recorded them. A 20-page run over three models is 60 real requests
+    the router never learned about, and it then planned the day against an
+    allowance that much too large. That is the same under-counting the 2026-09-12
+    enrichment fix removed, in the one place still doing it.
+
+    Never raises: a ledger problem must not take down a measurement, which is
+    the same rule `FallbackExtractor._note_router` follows.
+    """
+    if router is None:
+        return
+    kwargs: dict = {"reserved": True}
+    if exc is None:
+        kwargs |= {"ok": True, "tokens": int(getattr(extractor, "last_tokens", 0) or 0)}
+    else:
+        wait = getattr(exc, "wait_seconds", None)
+        kwargs |= {"ok": False, "error": f"scoring: {type(exc).__name__}"}
+        if wait is not None:
+            kwargs |= {"rate_limited": True, "retry_after": wait}
+    try:
+        router.note(extractor, **kwargs)
+    except Exception as note_exc:      # noqa: BLE001 - never fail a scoring run
+        log.warning("scoring_ledger_write_failed", error=str(note_exc))
+
+
 async def score_model(extractor, pages: list[dict],
                       generic: frozenset[str] = frozenset(),
-                      places: frozenset[str] = frozenset()) -> dict:
+                      places: frozenset[str] = frozenset(),
+                      router=None) -> dict:
     """Run one model over the golden set.
 
     The score is the mean over pages the model *answered*, with `coverage`
@@ -371,16 +402,26 @@ async def score_model(extractor, pages: list[dict],
     """
     total, answered, failed, errors = 0.0, 0, 0, []
     for page in pages:
+        # Claimed before the call, released by `_charge_ledger` after it — the
+        # same order `FallbackExtractor` uses, so concurrent work sees the slot
+        # taken while the request is in flight rather than after it returns.
+        if router is not None:
+            try:
+                router.reserve(extractor)
+            except Exception as exc:   # noqa: BLE001 - see _charge_ledger
+                log.warning("scoring_ledger_reserve_failed", error=str(exc))
         try:
             records = await extractor.extract(
                 text=page["text"], city=page["city"], topic=page["topic"],
                 locale="hu", source_url=page["url"],
             )
         except Exception as exc:
+            _charge_ledger(router, extractor, exc)
             failed += 1
             if len(errors) < 3:
                 errors.append(f"{type(exc).__name__}: {str(exc)[:120]}")
             continue
+        _charge_ledger(router, extractor)
         got = [r.name for r in records if r.name]
         total += score_page(page["expected"], got, generic, places)
         answered += 1
@@ -405,7 +446,8 @@ async def score_model(extractor, pages: list[dict],
 
 async def score_fleet(db_path: Path, extractors: list, pages: int = 8,
                       locale: str | None = None,
-                      golden: "list[dict] | None" = None) -> dict:
+                      golden: "list[dict] | None" = None,
+                      router=None) -> dict:
     """Score every extractor over one shared golden set.
 
     Pass `locale` to measure a single market. A fleet ranked without it is
@@ -438,7 +480,7 @@ async def score_fleet(db_path: Path, extractors: list, pages: int = 8,
              generic_tokens=len(generic))
     results = []
     for ex in extractors:
-        r = await score_model(ex, gs, generic, places)
+        r = await score_model(ex, gs, generic, places, router=router)
         log.info("scoring_model_done", **{k: r[k] for k in
                                           ("provider", "model", "score", "answered", "failed")})
         results.append(r)

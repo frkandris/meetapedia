@@ -525,8 +525,12 @@ async def score(
 
     async def _run_scoring() -> None:
         try:
+            # `mr` so the calls are charged: scoring spends the provider's
+            # real daily allowance, and a router that does not know has a
+            # budget number that is simply wrong for the rest of the day.
             out = await score_fleet(app_state.db_path, fleet,
-                                    locale=_locale, pages=_pages, golden=_golden)
+                                    locale=_locale, pages=_pages, golden=_golden,
+                                    router=mr)
         except Exception as exc:
             log.error("fleet_score_failed", error=str(exc), locale=_locale)
             return

@@ -623,7 +623,6 @@ class ModelRouter:
 
     def note(self, extractor, **kwargs) -> None:
         """Attribute one call — and what it cost — to the provider's bucket."""
-        """Attribute one call to the extractor's provider bucket."""
         provider = getattr(extractor, "provider", None)
         if provider:
             # The spec lets the ledger tell a per-minute 429 from a spent daily

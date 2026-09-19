@@ -3,6 +3,25 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-19
+- **Fix**: scoring charges the quota ledger. `score_model` drives an `_ApiExtractor` directly
+  rather than through `FallbackExtractor`, so nothing recorded its calls — a 20-page run over three
+  models is **60 real requests** the router never learned about, after which it planned the rest of
+  the day against an allowance that much too large. The provider charges them either way; only our
+  books disagreed. Same under-counting the 2026-09-12 enrichment fix removed, in the one place still
+  doing it, and it is why the 2026-09-18 evening's `openrouter used=337` never moved while 40 calls
+  went out.
+  Reserved before the call and settled after, the order `FallbackExtractor` already uses, so a slot
+  is taken while the request is in flight rather than after it returns. Failures count too, for the
+  reason they count everywhere else. Never raises: losing a ledger write costs one number, losing
+  the run costs the minutes of LLM calls that produced it — the rule `_note_router` follows.
+  **Not changed, deliberately**: scoring still runs when a provider is out of budget. Gating it on
+  `has_capacity` would be a second decision — whether an operator's measurement may spend the
+  crawl's allowance — and the defect here was that the spending was *invisible*, not that it
+  happened.
+  Verified by mutation: removing the success-path charge fails the new test, which then names what
+  is missing (1 of 3 calls settled). Also removes a duplicated docstring on `ModelRouter.note`,
+  where the second string literal was a silent no-op expression.
+
 - **Decision**: `deepseek/deepseek-v4-flash-0731:free` scores **76** and its cap goes to **8,000**.
   Measured on 20 pages against its OpenRouter stablemates: 76 answering 14/20, versus nemotron's 68
   answering 10/20 and gemma's nothing. It is the fleet's second-best model now, behind only
