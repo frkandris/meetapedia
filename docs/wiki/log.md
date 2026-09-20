@@ -3,6 +3,14 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Measurement**: The calibrated local gate scores **98.9% positive recall while rejecting a third
+  of negatives** (406 held-out pages, 189 positive) — against 74.6% for the same model on the same
+  data before calibration, which confirms the first run measured the score rather than the corpus.
+  On the real 81.8%-negative corpus that is ~27% of all extraction work removed for ~1% of
+  communities lost, free and with no vendor. Jev's bar is now this, not zero. Two caveats on the
+  record: 98.9% rests on two false negatives, so a larger sample comes first, and the lowest-scored
+  positives include a Guardian article and a booking page — pages where the incumbent label is
+  itself suspect. [[jev-joinability-gate]].
 - **Measurement**: The local joinability gate scored **74.6% positive recall** on production, far
   under the 99% a gate needs — but the threshold column was inert (0.01 -> 0.50 moved recall half a
   point), which says the score was uncalibrated rather than the corpus inseparable. Naive Bayes sums

@@ -136,3 +136,50 @@ the decision. `tests/test_cost_audit_scripts.py` holds that property.
 This also makes the local baseline comparable to Jev on the axis Jev is sold
 on. A calibrated probability is what a recall target is expressed in, and
 until this change the local runner did not produce one.
+
+## Second measurement, 2026-09-20: the calibrated local baseline
+
+Same sample, same seed, same model — only the score changed. Held out by
+hostname: **406 pages, 189 of them positive.**
+
+```
+threshold  skipped  neg_skipped  false_neg  positive_recall
+0.01        39       37           2          98.942%
+0.05        73       71           2          98.942%
+0.10        79       76           3          98.413%
+0.20        95       91           4          97.884%
+0.30       115      106           9          95.238%
+0.40       166      139          27          85.714%
+0.50       204      155          49          74.074%
+```
+
+**74.6% became 98.9% on the same data with the same model.** That settles what
+the first run actually measured: the score, not the corpus. It also means the
+threshold is now a control — the column spans 99% to 74% instead of moving half
+a point end to end.
+
+Translated onto the real corpus, where 81.8% of extracted pages are negative:
+
+| threshold | recall | negatives rejected | share of all pages skipped |
+|---|---|---|---|
+| 0.05 | 98.94% | 32.7% | **26.8%** |
+| 0.10 | 98.41% | 35.0% | 28.7% |
+| 0.20 | 97.88% | 41.9% | 34.3% |
+| 0.30 | 95.24% | 48.8% | 40.0% |
+
+So a free, dependency-free local model at threshold 0.05 removes about **a
+quarter of all extraction work** for roughly **1% of communities lost**. That is
+the bar Jev now has to beat — not "is a gate viable", which is answered, but
+"is a paid gate enough better than a free one to be worth the money and the
+vendor".
+
+Two cautions before anyone ships this:
+
+- **The sample is small where it matters.** 98.94% rests on **two** false
+  negatives out of 189 positives. The confidence interval on that is wide; a
+  `--per-class 3000` run costs nothing but time and should come first.
+- **The label is weak, and visibly so.** The lowest-scored positives include a
+  `theguardian.com` article, a `szallas.hu` booking page and an Instagram post.
+  Those are pages where the incumbent extractor claims a community and may
+  itself be wrong — so some of the "false negatives" are the gate being right.
+  Manual review of that list is not optional.
