@@ -1532,6 +1532,16 @@ def get_data_guides(db_path: Path, site: str = "kozossegek", *,
     return [_decode_guide_row(r) for r in rows]
 
 
+def get_data_guides_for_day(db_path: Path, day: str) -> list[dict]:
+    """All guides published on one UTC date, in publication order."""
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM data_guides WHERE substr(published_at,1,10)=? ORDER BY id",
+            (day,),
+        ).fetchall()
+    return [_decode_guide_row(r) for r in rows]
+
+
 def count_data_guides(db_path: Path, site: str = "kozossegek") -> int:
     with _connect(db_path) as conn:
         return int(conn.execute(

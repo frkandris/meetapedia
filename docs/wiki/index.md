@@ -29,7 +29,7 @@ vocabulary), [faq.md](faq.md) (recurring questions).
 - [[web-app]] — One FastAPI app with a public router and an /admin router gated by pure-ASGI Basic auth; Hungarian paths are canonical and English paths redirect.
 - [[public-listing-widgets]] — One dependency-free script gives every public listing page the same accent-insensitive autocomplete, A-Z jump bar, and free-text filter.
 - [[i18n-and-site-detection]] — _detect_site reads the Host header; lang_context injects an i18n + nav bundle into every template. English is the translation base; missing keys render as themselves.
-- [[daily-report]] — report.py builds one email per UTC day — GA4 visitors, per-site diffs, run outcomes, and current stock totals — sent via Resend at 04:30 UTC or on demand.
+- [[daily-report]] — report.py builds one email per UTC day — traffic, per-site diffs, new data guides, run outcomes, and current stock totals — sent via Resend at 04:30 UTC or on demand.
 
 ## Integrations
 
