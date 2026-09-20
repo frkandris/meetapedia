@@ -208,10 +208,16 @@ def test_the_cloudflare_route_sends_and_reads_that_wire_format(tmp_path, monkeyp
         def raise_for_status(self): ...
 
         def json(self):
-            # Workers AI wraps model output in `result`.
-            return {"result": {"answers": {"has_joinable_community":
-                                           {"type": "noul", "noul": 0.87}},
-                               "usage": {"input_tokens": 1234}}}
+            # The real shape, captured from the live service on 2026-09-20:
+            # the gateway envelope wraps the model envelope, so `answers` is
+            # two levels down, not one.
+            return {"result": {"state": "Completed",
+                               "result": {"model": "jev-1.13.0",
+                                          "answers": {"has_joinable_community":
+                                                      {"type": "noul", "noul": 0.87}},
+                                          "usage": {"input_tokens": 311}},
+                               "gatewayMetadata": {"keySource": "Unified"}},
+                    "success": True}
 
     class _Client:
         def __init__(self, **kw): self.kw = kw

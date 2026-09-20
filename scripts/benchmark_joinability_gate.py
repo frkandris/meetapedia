@@ -377,7 +377,15 @@ async def jev_scores(
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
                 body = response.json()
-                if isinstance(body.get("result"), dict):
+                # Workers AI nests twice, not once: the gateway envelope
+                # `{result: {state, result: {answers}, gatewayMetadata}}` wraps
+                # the model envelope. Measured 2026-09-20 against the live
+                # service — a single unwrap left `answers` missing, which the
+                # guard below would have reported as a wire-format change.
+                # Unwrap until `answers` appears rather than counting levels.
+                for _ in range(3):
+                    if "answers" in body or not isinstance(body.get("result"), dict):
+                        break
                     body = body["result"]
                 answers = body.get("answers") or {}
                 if not answers:
