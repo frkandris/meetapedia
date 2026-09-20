@@ -77,7 +77,7 @@ async def main() -> int:
           f"({empty} of them found nothing — {empty / len(pages):.1%})",
           flush=True)
 
-    cities, topics, config = load_config()
+    _cities, topics, config = load_config(args.db)
     extractor = build_extractor(config)
     if extractor.exhausted:
         raise SystemExit("no LLM provider is configured — nothing to measure")

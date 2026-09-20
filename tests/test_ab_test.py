@@ -143,3 +143,75 @@ def test_extract_all_returns_three_lists_not_a_traced_tuple():
     body = source[start:start + 1200]
     assert 'self._call(\n            "extract_all"' in body, (
         "extract_all must go through _call, which strips the provenance tuple")
+
+
+def _ab_db(path, pages: int = 6):
+    """A cache_pages table shaped like production's, with cached extractions."""
+    import json as _json
+    import sqlite3 as _sq
+    with _sq.connect(path) as conn:
+        conn.execute("""CREATE TABLE cache_pages (
+            url_hash TEXT PRIMARY KEY, url TEXT, city TEXT, topic TEXT,
+            data TEXT, records_count INTEGER, extracted_at TEXT, scraped_at TEXT
+        )""")
+        for i in range(pages):
+            has = i % 3 == 0
+            records = [{"name": f"Kör {i}"}] if has else []
+            conn.execute(
+                "INSERT INTO cache_pages VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (f"h{i:03d}", f"https://s{i}.example/p", "Budapest", "choir",
+                 _json.dumps({"raw_text": f"oldal {i} szövege", "records": records,
+                              "venues_data": [{"name": "Hely"}] if has else [],
+                              "persons_data": {"Budapest/choir": [{"name": "A B"}]} if has else {}}),
+                 len(records), "now", "now"),
+            )
+    return path
+
+
+def test_the_sampler_and_loader_work_against_a_production_shaped_table(tmp_path):
+    """The CLI path was never exercised until this test — the first production
+    run died on `load_config()` missing an argument."""
+    import importlib.util
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    db = _ab_db(tmp_path / "ab.db")
+    spec = importlib.util.spec_from_file_location(
+        "run_ab_test", _Path("scripts/run_ab_test.py"))
+    mod = importlib.util.module_from_spec(spec)
+    _sys.modules["run_ab_test"] = mod
+    spec.loader.exec_module(mod)
+
+    hashes = mod.sample_hashes(db, 4, "seed")
+    assert len(hashes) == 4 and len(set(hashes)) == 4
+    assert hashes == mod.sample_hashes(db, 4, "seed"), "must be deterministic"
+    assert hashes != mod.sample_hashes(db, 4, "other-seed")
+
+    pages = ab_test.load_pages(db, hashes)
+    assert len(pages) == 4
+    assert all(p.get("raw_text") and p.get("records") is not None for p in pages)
+
+
+@pytest.mark.asyncio
+async def test_a_whole_run_produces_a_report(tmp_path, monkeypatch):
+    """End to end over a real table, with the two outbound calls faked."""
+    db = _ab_db(tmp_path / "ab.db", pages=9)
+    pages = ab_test.load_pages(db, [f"h{i:03d}" for i in range(9)])
+
+    async def _gate(client, url, text, city, topic, account, token):
+        # Reject the pages whose baseline found nothing, keep the rest.
+        return (0.9 if "0" in url[-3:] else 0.01), 300
+
+    class _Extractor:
+        async def extract_all(self, text, city, topic, locale, url, **kw):
+            return ([type("R", (), {"name": "Kör 0"})()], [], [])
+
+    monkeypatch.setattr(ab_test, "jev_gate", _gate)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "test-token")
+    report = await ab_test.run_ab_test(db, pages, _Extractor(), concurrency=2)
+
+    assert report["pages"] == 9
+    assert report["error_count"] == 0
+    assert report["gate"]["rejected"] + len([1 for r in [report] if True]) > 0
+    assert report["calls"]["experiment"] <= report["calls"]["baseline"]
+    assert report["gate"]["jev_cost_usd"] >= 0
