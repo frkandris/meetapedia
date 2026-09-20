@@ -3,6 +3,13 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Post-mortem**: [[2026-09-benchmark-materialized-the-corpus]] — the Jev gate benchmark's sampler
+  did one `fetchall()` over every extracted page's text (128,072 rows × ~30 KB) to keep 2,000 of
+  them, and was killed on production with 237 MB of RAM free. Selection now happens on keys, served
+  from the `idx_cache_pages_done` partial index, with `substr` truncating in SQL: 888 MB -> 86 MB on
+  a 739 MB corpus, and flat (100 MB) on a 2.6 GB one where the old shape was linear. Also measured
+  while there: **81.8% of extracted pages yield zero communities** (104,795 of 128,072) — the number
+  the gate question turns on, and one nothing in the repo had ever written down.
 - **Fix**: meetapedia.com now submits its venue and person pages. It listed 38,108 URLs and not one
   of them, because the branch that adds those pages was guarded `if not is_meetapedia` and carried
   prefixes — `/venue/`, `/person/` — for an English URL scheme that was never built:

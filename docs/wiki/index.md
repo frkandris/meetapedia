@@ -113,6 +113,7 @@ vocabulary), [faq.md](faq.md) (recurring questions).
 
 ## Post-mortems
 
+- [[2026-09-benchmark-materialized-the-corpus]] — A read-only measurement script loaded every cached page's text into memory on production, and was killed with 237 MB of RAM left on an 8 GB host.
 - [[2026-08-paid-fallback-burned-the-budget]] — allow_paid went on without a spend ceiling, the cheap provider it was switched on for had no account credit, and four days of extraction ran through a fallback costing four times as much — about $60 for pages that mostly failed.
 - [[2026-08-cerebras-free-tier-ended]] — Cerebras closed its free API tier on 2026-08-17; every call since answered HTTP 402, and because a 402 only retired the provider for one run the worker handed it 283 first-choice picks in a day.
 - [[2026-08-boilerplate-outweighed-the-content]] — Every community page shipped a 176 KB hidden city dropdown — 76% of the document, identical on all 42,091 pages — and /helyszinek rendered all 7,676 venues in 15.5 MB over 34 seconds on the event loop.

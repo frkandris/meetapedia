@@ -56,28 +56,90 @@ def _rank(seed: str, value: str) -> str:
     return hashlib.sha256(f"{seed}|{value}".encode()).hexdigest()
 
 
+#: How many candidates per class to resolve text for, as a multiple of the
+#: sample size. A candidate is dropped if its blob turns out to have no
+#: `raw_text`, so asking for exactly `per_class` would quietly return a short
+#: sample; asking for this many keeps the deterministic order intact and still
+#: reads a few thousand rows rather than the corpus.
+_CANDIDATE_FACTOR = 3
+
+
 def load_sample(db: Path, per_class: int, seed: str, max_chars: int) -> list[Page]:
+    """A deterministic, class-balanced sample — without materializing the corpus.
+
+    The first version of this selected in Python: it read every extracted
+    page's `raw_text` with one `fetchall()`, sorted the lot, and kept 2,000.
+    On the production database that is 128,072 rows whose `data` blob averages
+    ~30 KB — about 4 GB of page text resident, on an 8 GB host that is also
+    running the scraper and a 6 GB SQLite file. Killed on 2026-09-20 with
+    `free -m` reporting 237 MB free and climbing. CLAUDE.md forbids exactly
+    this shape for `ai_only`; a benchmark script is not an exception to it.
+
+    So selection happens on keys only. `records_count >= 0` is what "has been
+    extracted" means (-1 is the scraped-but-not-extracted sentinel, see
+    `db.py`), and `scraped_at IS NOT NULL` is repeated verbatim from the
+    partial index `idx_cache_pages_done` — a partial index is only eligible
+    when the query's WHERE matches its own clause, and with it this read is
+    served entirely from the index: the same change measured 11.03 s -> 0.31 s
+    in `done-pair-url-hash-not-city-topic`. Only the chosen keys then have
+    their text fetched, by primary key.
+
+    The ordering is unchanged, so a given `seed` selects the same pages it
+    always did.
+    """
     if not db.exists():
         raise SystemExit(f"database not found: {db}")
     with sqlite3.connect(db) as conn:
-        rows = conn.execute(
+        keys = conn.execute(
             """
-            SELECT url_hash, url, city, topic,
-                   json_extract(data, '$.raw_text'), records_count
+            SELECT url_hash, records_count
               FROM cache_pages
-             WHERE extracted_at IS NOT NULL
+             WHERE scraped_at IS NOT NULL
                AND records_count >= 0
-               AND json_extract(data, '$.raw_text') IS NOT NULL
             """
         ).fetchall()
+
+        ranked: dict[bool, list[str]] = {False: [], True: []}
+        for url_hash, count in keys:
+            ranked[count > 0].append(url_hash)
+        for value in ranked.values():
+            value.sort(key=lambda h: _rank(seed, h))
+
+        wanted = per_class * _CANDIDATE_FACTOR
+        candidates = ranked[False][:wanted] + ranked[True][:wanted]
+        if not candidates:
+            raise SystemExit("need both positive and zero-record extracted pages")
+
+        by_hash: dict[str, tuple] = {}
+        for chunk in range(0, len(candidates), 500):  # SQLite caps parameters
+            batch = candidates[chunk:chunk + 500]
+            placeholders = ",".join("?" * len(batch))
+            # `substr` in SQL, not `[:max_chars]` in Python: the blob holds a
+            # whole page (~30 KB on production) and the runners see at most
+            # `max_chars` of it. Truncating here is what keeps the resident
+            # set flat — it took the measured peak from 331 MB to 79 MB on a
+            # 739 MB synthetic corpus, and the difference grows with the blob.
+            for row in conn.execute(
+                f"""
+                SELECT url_hash, url, city, topic,
+                       substr(json_extract(data, '$.raw_text'), 1, ?), records_count
+                  FROM cache_pages
+                 WHERE url_hash IN ({placeholders})
+                """, (max_chars, *batch),
+            ):
+                by_hash[row[0]] = row
+
     classes: dict[bool, list[Page]] = {False: [], True: []}
-    for url_hash, url, city, topic, text, count in rows:
+    for url_hash in candidates:
+        row = by_hash.get(url_hash)
+        if row is None:
+            continue
+        _, url, city, topic, text, count = row
         if not text or not url:
             continue
         page = Page(url_hash, url, city or "", topic or "", text[:max_chars], count > 0)
         classes[page.positive].append(page)
-    for value in classes.values():
-        value.sort(key=lambda p: _rank(seed, p.url_hash))
+
     available = min(len(classes[False]), len(classes[True]), per_class)
     if available == 0:
         raise SystemExit("need both positive and zero-record extracted pages")

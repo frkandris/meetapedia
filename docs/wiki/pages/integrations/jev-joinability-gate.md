@@ -87,3 +87,13 @@ that contact enrichment has no value.
 - TypeSafe API quick start: <https://docs.typesafe.ai/introduction/quickstart>
 - Jev 1.13 documented jaggedness:
   <https://docs.typesafe.ai/model-jaggedness/jev-1.13>
+
+## Running the benchmark against production
+
+The sampler reads keys from the `idx_cache_pages_done` partial index and
+resolves text only for the pages it picked. That is not a detail: the first
+version loaded every extracted page's text to keep 2,000 of them and had to be
+killed on the production host with 237 MB of RAM free — see
+[[2026-09-benchmark-materialized-the-corpus]]. Measured on that corpus,
+**81.8% of extracted pages yield zero communities** (104,795 of 128,072), which
+is the number the whole gate question turns on.
