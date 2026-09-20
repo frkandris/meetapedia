@@ -38,6 +38,8 @@ from ..db import (
     get_data_guides,
     count_data_guides,
     get_data_guide_sitemap_rows,
+    is_known_community_url,
+    log_outclick,
     get_communities_for_city,
     search_communities_by_tag,
     save_not_community_report,
@@ -407,6 +409,33 @@ def _slugify(text: str) -> str:
 
 templates.env.filters["slugify"] = _slugify
 templates.env.filters["breadcrumb_jsonld"] = breadcrumb_jsonld
+
+
+@_fastapi.post("/api/outclick")
+async def record_outclick(request: Request):
+    """Best-effort JS analytics while the anchor keeps its direct destination."""
+    if not app_state.db_path:
+        return JSONResponse({"ok": True}, status_code=202)
+    try:
+        if int(request.headers.get("content-length") or 0) > 4096:
+            return JSONResponse({"ok": True}, status_code=202)
+        payload = await request.json()
+        community_id = str(payload.get("community_id") or "")
+        url = str(payload.get("url") or "")
+        link_type = str(payload.get("link_type") or "")
+        if (not re.fullmatch(r"[0-9a-f]{12}", community_id)
+                or len(url) > 2048
+                or not url.startswith(("http://", "https://"))
+                or link_type not in {"website", "source", "social"}):
+            return JSONResponse({"ok": True}, status_code=202)
+        if not await asyncio.to_thread(
+                is_known_community_url, app_state.db_path, community_id, url):
+            return JSONResponse({"ok": True}, status_code=202)
+        await asyncio.to_thread(
+            log_outclick, app_state.db_path, community_id, url, link_type)
+    except Exception:  # analytics must never interfere with navigation
+        pass
+    return JSONResponse({"ok": True}, status_code=202)
 
 _ROLE_HU = {
     "leader": "vezető",

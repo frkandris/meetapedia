@@ -3,7 +3,7 @@ type: Concept
 title: Acquisition Funnel
 description: The stages between a search result and a person who acts — visitors, outclicks, subscriptions, claims, submissions — where each is recorded and what may legally be done with the addresses collected.
 tags: [growth, acquisition, funnel, metrics, gdpr, email]
-timestamp: 2026-08-21
+timestamp: 2026-09-20
 resource: scraper/db.py
 ---
 
@@ -30,18 +30,17 @@ none was readable without the admin password, so "is anything converting?" was
 answered by guessing — the same blind spot that let a 90% index collapse pass
 unremarked for two months ([[2026-06-search-index-collapse]]).
 
-**The outclick is not being recorded.** `log_outclick` has no callers: the
-tracking was removed in `e7d373e` (2026-06-05), the revert that also removed the
-listing shuffle during the traffic-drop investigation. The 1,403 lifetime
-outclicks are historical, and the funnel block showed 0 in thirty days on the
-first morning it shipped — which is what it was for.
-
-The removal was right. The old implementation routed **every** outbound link
-through `/out?url=…`, a 302 on our own domain, so a crawler never saw a direct
-link to the community's own site; Search Console still lists 2,120 "Page with
-redirect". Restoring that shape would repeat the mistake. Measuring it without
-touching the link — a `sendBeacon` on click, `<a href>` pointing straight at
-the community — is the version worth building, and has not been built.
+**Outclicks are recorded without redirecting the reader.** The original tracker
+routed every outbound link through `/out?url=…`, a 302 on our own domain, so a
+crawler never saw a direct link to the community's site; it was removed in
+`e7d373e` (2026-06-05), and Search Console still lists thousands of “Page with
+redirect” URLs from that period. The replacement keeps the literal external URL
+in `<a href>` and marks only community-detail CTAs with `data-outclick`.
+`static/js/outclick.js` sends a same-origin beacon on click/auxclick and never
+prevents navigation. `POST /api/outclick` accepts only the three rendered link
+types and only a URL actually stored on the named visible community, then calls
+`log_outclick`; malformed analytics quietly disappear. No IP, cookie or visitor
+identifier is stored.
 
 **The outclick is the stage that would matter.** A pageview says Google sent someone;
 an outclick says the site did its job and they went on to the community. Traffic

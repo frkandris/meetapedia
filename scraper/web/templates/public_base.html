@@ -79,6 +79,7 @@
   {# Deferred: runs after parsing but before DOMContentLoaded, so page scripts
      may use MpAutocomplete / MpListFilter from a DOMContentLoaded handler. #}
   <script src="/static/js/listing.js" defer></script>
+  <script src="/static/js/outclick.js" defer></script>
   {% block head %}{% endblock %}
   {# Structured data, emitted here rather than per template: every page type
      that sets `schema_json` gets it, and a new one cannot forget the tag.
