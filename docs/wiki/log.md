@@ -3,6 +3,13 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Measurement**: **Jev on Cloudflare answers 402 Payment Required** — it is a third-party partner
+  model, outside the free neuron allowance. The smoke test established it and ruled out the
+  alternative explanation in the same minute: the same token in the same container got 200 from
+  `@cf/openai/gpt-oss-20b`, so the extraction fleet's daily quota was never the issue and was never
+  touched. Measuring Jev therefore costs money by every route (TypeSafe waitlist, Cloudflare Workers
+  Paid, or a gateway account). Not urgent: the free local gate already buys ~11% at 99.5% recall.
+  [[jev-joinability-gate]].
 - **Integration**: The gate benchmark can reach Jev through Cloudflare Workers AI
   (`--provider cloudflare`), because TypeSafe's console is waitlisted and the `CLOUDFLARE_API_TOKEN`
   is already configured. Same model and questions; the envelope nests under `input` and the answer

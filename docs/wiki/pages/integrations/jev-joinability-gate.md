@@ -241,10 +241,24 @@ that use credentials this project already holds, and the benchmark takes
   does not express typed questions. Not worth adapting while Cloudflare's
   native route exists.
 
-**The Cloudflare route is not free of consequence.** It spends the same daily
-neuron allowance that `@cf/openai/gpt-oss-20b` extraction runs on — 10,000
-neurons, which the catalogue budgets as 95 extraction calls a day (see
-`config/providers.yaml`). A full 6,000-page benchmark will exhaust it and cost
-the fleet a day of that provider. Run the 100-page smoke test first, read the
-reported `usage`, and decide the large run's timing deliberately — ideally
-after the day's free quota is spent anyway.
+**Measured 2026-09-20: the Cloudflare route answers 402 Payment Required.**
+Jev is a third-party partner model on Workers AI and is not covered by the
+free neuron allowance. The smoke test is what established this, and it also
+ruled out the obvious alternative explanation: the same token, in the same
+container, at the same minute, got **200** from `@cf/openai/gpt-oss-20b`. So
+it is the model that costs money, not the day's quota that ran out — and the
+extraction fleet's allowance was never touched.
+
+That leaves three ways to actually measure Jev, none of them free:
+
+1. **Wait for the TypeSafe waitlist.** Free, unknown latency; reports suggest
+   hours rather than weeks.
+2. **Put a payment method on Cloudflare** (Workers Paid, $5/month plus neuron
+   usage). The benchmark itself is a couple of dollars at most.
+3. **A gateway account** — Vercel AI Gateway, Netlify, AIMLAPI — each needs its
+   own signup and its own wire format.
+
+None is urgent. The free local gate already buys ~11% of extraction work at
+99.5% recall, and Jev only becomes interesting if it clears that by a wide
+margin. The measurement is worth a few dollars; it is not worth a rushed
+decision.
