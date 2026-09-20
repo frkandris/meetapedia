@@ -290,3 +290,20 @@ def person_jsonld(person: dict, communities: list | None = None,
         return ""
     return json.dumps({"@context": "https://schema.org", **obj},
                       ensure_ascii=False, indent=2).replace("</", "<\\/")
+
+
+def article_jsonld(title: str, summary: str, page_url: str,
+                   published_at: str, updated_at: str, site_name: str) -> str:
+    """Structured data for one materialized, data-derived guide."""
+    obj = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": title,
+        "description": summary,
+        "url": page_url,
+        "mainEntityOfPage": page_url,
+        "datePublished": published_at,
+        "dateModified": updated_at,
+        "publisher": {"@type": "Organization", "name": site_name},
+    }
+    return json.dumps(obj, ensure_ascii=False, indent=2).replace("</", "<\\/")

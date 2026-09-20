@@ -271,6 +271,29 @@ def init_db(db_path: Path, force: bool = False) -> None:
             conn.execute("ALTER TABLE communities ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
         except sqlite3.OperationalError:
             pass
+        # Materialized, data-derived editorial pages.  A row is a publication
+        # event, not a live query: its bounded record snapshot keeps the page
+        # reproducible even while the crawler continues changing the corpus.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS data_guides (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug         TEXT NOT NULL UNIQUE,
+                site         TEXT NOT NULL DEFAULT 'kozossegek',
+                city         TEXT NOT NULL,
+                topic        TEXT NOT NULL,
+                locale       TEXT NOT NULL DEFAULT 'hu',
+                title        TEXT NOT NULL,
+                summary      TEXT NOT NULL,
+                data         TEXT NOT NULL,
+                published_at TEXT NOT NULL,
+                updated_at   TEXT NOT NULL,
+                UNIQUE(site, city, topic)
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_data_guides_site_published
+            ON data_guides(site, published_at DESC)
+        """)
         # Cache pages — full JSON entry per scraped URL
         conn.execute("""
             CREATE TABLE IF NOT EXISTS cache_pages (
@@ -1408,6 +1431,131 @@ def get_communities_by_ids(db_path: Path, community_ids: list[str]) -> list[dict
             community_ids,
         ).fetchall()
     return [json.loads(r[0]) for r in rows]
+
+
+def get_guide_candidate_groups(db_path: Path) -> list[dict]:
+    """Return unpublished city/topic groups, richest first.
+
+    SQL only selects the bounded candidate inventory; editorial quality gates
+    stay in guides.py where they can be tested without knowing SQLite details.
+    """
+    if not db_path.exists():
+        return []
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT c.city, c.topic, COUNT(*) AS community_count,
+                   SUM(CASE WHEN LENGTH(TRIM(COALESCE(
+                       json_extract(c.data, '$.long_description'),
+                       json_extract(c.data, '$.description'),
+                       json_extract(c.data, '$.short_description'), ''))) >= 50
+                       THEN 1 ELSE 0 END) AS described_count
+            FROM communities c
+            WHERE c.hidden=0
+              AND NOT EXISTS (
+                  SELECT 1 FROM data_guides g
+                  WHERE g.city=c.city AND g.topic=c.topic
+              )
+            GROUP BY c.city, c.topic
+            ORDER BY community_count DESC, described_count DESC, c.city, c.topic
+            """,
+        ).fetchall()
+    return [
+        {"city": r[0], "topic": r[1], "community_count": r[2],
+         "described_count": r[3]}
+        for r in rows
+    ]
+
+
+def create_data_guide(db_path: Path, guide: dict) -> bool:
+    """Insert one publication idempotently; return whether a row was added."""
+    with _connect(db_path) as conn:
+        cur = conn.execute(
+            """
+            INSERT OR IGNORE INTO data_guides
+                (slug, site, city, topic, locale, title, summary, data,
+                 published_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (guide["slug"], guide["site"], guide["city"], guide["topic"],
+             guide["locale"], guide["title"], guide["summary"],
+             json.dumps(guide["data"], ensure_ascii=False),
+             guide["published_at"], guide["updated_at"]),
+        )
+        conn.commit()
+        return cur.rowcount == 1
+
+
+def count_data_guides_published_on(db_path: Path, day: str,
+                                   site: str | None = None) -> int:
+    with _connect(db_path) as conn:
+        if site:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM data_guides WHERE site=? AND substr(published_at,1,10)=?",
+                (site, day),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM data_guides WHERE substr(published_at,1,10)=?", (day,)
+            ).fetchone()
+    return int(row[0])
+
+
+_GUIDE_COLUMNS = ("id", "slug", "site", "city", "topic", "locale", "title",
+                  "summary", "data", "published_at", "updated_at")
+
+
+def _decode_guide_row(row) -> dict:
+    result = dict(zip(_GUIDE_COLUMNS, row))
+    result["data"] = json.loads(result["data"])
+    return result
+
+
+def get_data_guide(db_path: Path, slug: str,
+                   site: str = "kozossegek") -> dict | None:
+    with _connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM data_guides WHERE site=? AND slug=?", (site, slug)
+        ).fetchone()
+    if not row:
+        return None
+    return _decode_guide_row(row)
+
+
+def get_data_guides(db_path: Path, site: str = "kozossegek", *,
+                    limit: int = 24, offset: int = 0) -> list[dict]:
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM data_guides WHERE site=? ORDER BY published_at DESC, id DESC LIMIT ? OFFSET ?",
+            (site, limit, offset),
+        ).fetchall()
+    return [_decode_guide_row(r) for r in rows]
+
+
+def get_data_guides_for_day(db_path: Path, day: str) -> list[dict]:
+    """All guides published on one UTC date, in publication order."""
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM data_guides WHERE substr(published_at,1,10)=? ORDER BY id",
+            (day,),
+        ).fetchall()
+    return [_decode_guide_row(r) for r in rows]
+
+
+def count_data_guides(db_path: Path, site: str = "kozossegek") -> int:
+    with _connect(db_path) as conn:
+        return int(conn.execute(
+            "SELECT COUNT(*) FROM data_guides WHERE site=?", (site,)
+        ).fetchone()[0])
+
+
+def get_data_guide_sitemap_rows(db_path: Path,
+                                site: str = "kozossegek") -> list[tuple[str, str]]:
+    with _connect(db_path) as conn:
+        return [(r[0], r[1][:10]) for r in conn.execute(
+            "SELECT slug, updated_at FROM data_guides WHERE site=? ORDER BY id",
+            (site,),
+        )]
 
 
 def get_communities_for_venue(

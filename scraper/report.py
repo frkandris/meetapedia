@@ -14,7 +14,7 @@ from pathlib import Path
 
 import structlog
 
-from .db import get_daily_summary, get_traffic_for_day
+from .db import get_daily_summary, get_data_guides_for_day, get_traffic_for_day
 
 log = structlog.get_logger()
 
@@ -98,7 +98,8 @@ def fetch_ga4_traffic(day: str) -> dict | None:
 
 def build_report_html(day: str, summary: dict, traffic: dict,
                       ga4: dict | None = None,
-                      funnel: dict | None = None) -> tuple[str, str]:
+                      funnel: dict | None = None,
+                      guides: list[dict] | None = None) -> tuple[str, str]:
     """Returns (subject, html)."""
     hu, intl = summary["hu"], summary["intl"]
     totals = summary["totals"]
@@ -165,6 +166,29 @@ def build_report_html(day: str, summary: dict, traffic: dict,
         _ROW.format(label=label, hu=s_site("hu", k), intl=s_site("intl", k),
                     total=s_site("hu", k) + s_site("intl", k))
         for k, label in _STOCK_METRICS)
+
+    guide_rows = []
+    for guide in guides or []:
+        data = guide.get("data") or {}
+        domain = "kozossegek.com" if guide.get("site") == "kozossegek" else "meetapedia.com"
+        prefix = "utmutatok" if guide.get("site") == "kozossegek" else "guides"
+        url = f"https://{domain}/{prefix}/{guide['slug']}"
+        model = html_lib.escape(str(data.get("writer_model") or "ismeretlen modell"))
+        guide_rows.append(
+            "<li style='margin:5px 0'>"
+            f"<a href='{url}' style='color:#A8512F'>{html_lib.escape(guide['title'])}</a> "
+            f"<span style='color:#8C8478'>· {domain} · {model}</span></li>"
+        )
+    hu_guides = sum(1 for g in guides or [] if g.get("site") == "kozossegek")
+    intl_guides = len(guides or []) - hu_guides
+    guides_html = (
+        "<h3 style='margin:18px 0 6px'>Új adatútmutatók</h3>"
+        f"<p style='margin:0 0 6px;font-size:14px'><b>{len(guides or [])}</b> készült "
+        f"({hu_guides} magyar, {intl_guides} nemzetközi).</p>"
+        + (f"<ul style='margin:0;padding-left:18px'>{''.join(guide_rows)}</ul>"
+           if guide_rows else
+           "<p style='margin:0;color:#8C8478;font-size:13px'>Nem készült új útmutató ezen a napon — a napi keret már teljesült, nem volt megfelelő jelölt, vagy az AI-író későbbre halasztódott.</p>")
+    )
 
     # Free-tier AI usage for the day. Its own block because the whole point of
     # the router is that this number stays inside allowances nobody pays for —
@@ -377,6 +401,8 @@ def build_report_html(day: str, summary: dict, traffic: dict,
 
   {runs_html}
 
+  {guides_html}
+
   {ai_html}
 
   <h3 style="margin:18px 0 6px">Állomány (aktuális összesen)</h3>
@@ -464,7 +490,12 @@ async def send_daily_report(db_path: Path, hu_cities: set, day: str | None = Non
     except Exception as exc:
         log.warning("report_funnel_failed", error=str(exc))
         funnel = None
-    subject, html = build_report_html(day, summary, traffic, ga4, funnel)
+    try:
+        guides = get_data_guides_for_day(db_path, day)
+    except Exception as exc:
+        log.warning("report_guides_failed", error=str(exc))
+        guides = []
+    subject, html = build_report_html(day, summary, traffic, ga4, funnel, guides)
 
     import resend
     resend.api_key = api_key

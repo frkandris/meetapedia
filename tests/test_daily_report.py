@@ -2,8 +2,10 @@
 from pathlib import Path
 
 from scraper.db import (
+    create_data_guide,
     finish_run,
     get_daily_summary,
+    get_data_guides_for_day,
     get_traffic_for_day,
     init_db,
     record_pageview,
@@ -78,6 +80,31 @@ def test_report_html_contains_sections_and_numbers():
                  "Új közösség", ">5<", ">3<", ">8<", "search_only", "hibák: 2 keresés",
                  "futási hiba: DeepSeek failed &lt;hard&gt;", "11000", "13000"):
         assert frag in html, f"hiányzik: {frag}"
+
+
+def test_report_lists_daily_guides_and_writer_model(tmp_path):
+    db = _db(tmp_path)
+    create_data_guide(db, {
+        "slug": "budapest-futas", "site": "kozossegek", "city": "Budapest",
+        "topic": "running", "locale": "hu", "title": "Futóközösségek Budapesten",
+        "summary": "Összefoglaló", "published_at": "2026-09-20T01:00:00+00:00",
+        "updated_at": "2026-09-20T01:00:00+00:00",
+        "data": {"writer_model": "test-model"},
+    })
+    guides = get_data_guides_for_day(db, "2026-09-20")
+    zero = dict(new_communities=0, changed_communities=0, change_rows=0,
+                new_venues=0, new_persons=0, pages_scraped=0,
+                pages_extracted=0, searches=0)
+    summary = {"hu": zero, "intl": dict(zero), "runs": [],
+               "totals": {"hu": 0, "intl": 0,
+                          "covered_pairs_hu": 0, "covered_pairs_intl": 0}}
+
+    _, report = build_report_html("2026-09-20", summary, {}, guides=guides)
+
+    assert "Új adatútmutatók" in report
+    assert "<b>1</b> készült (1 magyar, 0 nemzetközi)" in report
+    assert "https://kozossegek.com/utmutatok/budapest-futas" in report
+    assert "test-model" in report
 
 
 def test_report_html_shows_original_search_error():

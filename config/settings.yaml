@@ -161,6 +161,15 @@ schedule:
   # false = run nothing at all. That is a maintenance switch now, not a
   # fallback to another scheduler: there is no other path.
   worker_enabled: true
+  # First job of every UTC day: materialize at most ten quality-gated guides
+  # from existing records. Hungary leads, then pipeline.country_priority, then
+  # all remaining countries. One routed LLM call writes each qualified article;
+  # no new search request is used.
+  guides_enabled: true
+  guides_daily_limit: 10
+  guides_min_communities: 8
+  guides_min_description_ratio: 0.6
+  guides_min_dimensions: 3
   # ── Description enrichment ────────────────────────────────────────────────
   # SEO short/long descriptions. Started by the worker, which also restarts it
   # if it ever stops; bounded per round and idempotent/resumable via the

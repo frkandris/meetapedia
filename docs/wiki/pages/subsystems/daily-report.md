@@ -1,9 +1,9 @@
 ---
 type: Subsystem
 title: Daily Report Email
-description: report.py builds one email per UTC day — GA4 visitors, per-site diffs, run outcomes, and current stock totals — sent via Resend at 04:30 UTC or on demand.
+description: report.py builds one email per UTC day — traffic, per-site diffs, new data guides, run outcomes, and current stock totals — sent via Resend at 04:30 UTC or on demand.
 tags: [subsystem, report, email, traffic, analytics]
-timestamp: 2026-07-24
+timestamp: 2026-09-20
 resource: scraper/report.py
 ---
 
@@ -28,7 +28,8 @@ stand" — visitors, diffs, runs, and totals, split Hungarian / international.*
    site); the server-side counter (`traffic_daily`/`traffic_visitors` tables, fed by a
    bot-filtering HTTP middleware hashing `day|ip|ua`) is the fallback and footnote.
 4. **Render**: `build_report_html()` — sections: Látogatók (GA4), Változások (diff
-   table), Futások (runs with failure notes), Állomány (current stock table). Labels
+   table), Futások (runs with failure notes), Új adatútmutatók (daily guide links,
+   site split and writer model), Állomány (current stock table). Labels
    are self-explanatory Hungarian ("város–téma páros", never bare "pár").
 5. **Send**: [[resend-email]] from `info@kozossegek.com` to `REPORT_EMAIL` (fallback
    `FEEDBACK_EMAIL`). Subject: `[közösségek] Napi összefoglaló {day} — {n} új
@@ -45,6 +46,10 @@ stand" — visitors, diffs, runs, and totals, split Hungarian / international.*
   assets, and utility paths are excluded.
 - Everything degrades silently: no Resend key → skip with log; no GA4 env → server
   counter; empty day → zeros, email still sent.
+- The guide block is always present. It links every guide published on the reported
+  UTC day to the correct domain and shows the writer model; zero is explicit because
+  it distinguishes a quiet guide day from a missing report section. See
+  [[daily-data-guides]].
 - Scheduled/startup exceptions are HTML-escaped and displayed as `futási hiba`; a
   zero-pair failed run therefore carries its actionable cause in the email.
 - A run row with `finished_at=NULL` and no stored error is conservatively rendered
