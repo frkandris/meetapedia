@@ -3,6 +3,12 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Correction**: The throughput figures for the gate were overstated — **a page is not a call**.
+  Venue and person extraction are skipped on community-less pages, so an empty page costs 1 call and
+  a useful one 3 (corpus average 1.363). Corrected: 1,540 pages/day with no gate, **2,040 with Jev at
+  0.06** (1.32x, backlog 83 → 63 days), not 2,100 → 3,153 at 1.50x. The gate discards the cheapest
+  pages, so skipping 33.4% of pages saves only 24.5% of calls. The comparison with the free local
+  gate is unchanged in shape: 1.32x against 1.09x. [[jev-joinability-gate]].
 - **Review**: The six false negatives at Jev threshold 0.06 were read one by one against what the
   extractor claimed on each page. **All six are incumbent errors** — a hotel spa, a social-services
   institution, two pages where the record is simply the village's own name, an invented fitness club

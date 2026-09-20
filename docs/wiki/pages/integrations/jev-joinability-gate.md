@@ -209,13 +209,23 @@ At **0.06 — 98.9% recall and a third of all extraction work removed** — the
 free model buys 11%. That is the margin the question was asked about, and it
 is wide enough to settle it: a paid gate is worth it here.
 
-What it means for throughput, at ~2,100 free fleet calls a day:
+What it means for throughput — and the arithmetic here is easy to get wrong,
+because **a page is not a call**. Venue and person extraction are skipped when
+a page yields no communities, so an empty page costs 1 call and a useful one
+costs 3. The corpus average is 1.363. At ~2,100 free fleet calls a day:
 
 ```
-no gate      2,100 pages/day   backlog 61.0 days
-local gate   2,362 pages/day   backlog 54.2 days   (1.12x)
-Jev @ 0.06   3,153 pages/day   backlog 40.6 days   (1.50x)
+                          calls/page   pages/day   backlog
+no gate                        1.363       1,540    83 days   1.00x
+local gate (13.6% rejected)    1.252       1,677    76 days   1.09x
+Jev @ 0.06 (40.8% rejected)    1.030       2,040    63 days   1.32x
+Jev @ 0.10 (65.5% rejected)    0.828       2,538    50 days   1.65x
 ```
+
+Note the gap between "33.4% of pages skipped" and "24.5% of calls saved": the
+gate discards the *cheapest* pages, and what remains is richer in the
+three-call kind. Any estimate that treats a skipped page as a saved call —
+including the first version of this table — overstates the gain by about half.
 
 ## Two things the numbers understate
 
