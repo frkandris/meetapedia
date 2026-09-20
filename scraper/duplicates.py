@@ -88,9 +88,9 @@ def detect_community_candidates(db_path: Path, city: str | None = None) -> int:
     Scan communities for duplicates within the same city across different topics.
     Returns the number of new candidates inserted.
     """
-    all_records = get_all_communities(db_path)
-    if city:
-        all_records = [r for r in all_records if r.get("city") == city]
+    # `city` goes to SQL, not to a list comprehension: the rows carry whole
+    # JSON blobs, and this runs once per processed pair (store.save_results).
+    all_records = get_all_communities(db_path, city=city or None)
 
     # Group by city
     by_city: dict[str, list[dict]] = {}

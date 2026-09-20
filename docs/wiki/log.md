@@ -3,6 +3,13 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Optimization**: Same-city duplicate detection filters in SQL instead of in Python.
+  `detect_community_candidates` runs once per processed pair, and it was reading every
+  visible community row — blob column included, ~45,785 of them in production — to keep one
+  city's few dozen. `get_all_communities` now takes an optional `city`, served by
+  `idx_comm_city_topic`; a test asserts the plan is a SEARCH, so dropping that index fails
+  loudly instead of silently returning to a scan. `wrong_city` deliberately still reads the
+  whole table: its question is global.
 - **Creation**: Added [[jev-joinability-gate]] and a recall-first shadow benchmark for the
   newly released Jev 1.13. The script measures Jev as a page gate, not an extractor — it cannot
   generate community names or fields — and compares it on the identical deterministic sample with

@@ -1296,13 +1296,27 @@ def search_communities_by_tag(db_path: Path, tag: str, city: str = "") -> list[d
     return [json.loads(r[0]) for r in rows]
 
 
-def get_all_communities(db_path: Path) -> list[dict]:
+def get_all_communities(db_path: Path, city: str | None = None) -> list[dict]:
+    """Every visible community, or only one city's when `city` is given.
+
+    The filter is in SQL rather than in the caller for a reason that only shows
+    at production size: every row carries the record's whole JSON blob, so
+    reading them all to keep one city's costs the full table — 45,785 blobs
+    parsed to answer a question about a few dozen. `detect_community_candidates`
+    runs on every `save_results`, i.e. once per processed pair, which is where
+    that bill was being paid. `idx_comm_city_topic` makes the filtered form a
+    SEARCH instead of a SCAN.
+    """
     if not db_path.exists():
         return []
+    sql = "SELECT data FROM communities WHERE hidden=0"
+    params: tuple = ()
+    if city is not None:
+        sql += " AND city=?"
+        params = (city,)
+    sql += " ORDER BY city, topic, id"
     with _connect(db_path) as conn:
-        rows = conn.execute(
-            "SELECT data FROM communities WHERE hidden=0 ORDER BY city, topic, id"
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [json.loads(r[0]) for r in rows]
 
 

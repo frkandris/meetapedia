@@ -289,3 +289,53 @@ def test_reorienting_never_deletes_an_admin_flag(tmp_path):
     manual = [p for p in pending if p["signal"] == "manual"]
     assert len(manual) == 1
     assert (manual[0]["winner_key"], manual[0]["loser_key"]) == ("key_b", "key_a")
+
+
+def test_city_filter_happens_in_sql_not_in_the_caller(tmp_path):
+    """One city's duplicate scan must not read the whole table.
+
+    Every row carries the record's entire JSON blob, so filtering in Python
+    parses 45K blobs in production to answer a question about a few dozen —
+    once per processed pair, because `store.save_results` calls this.
+    """
+    db = _db(tmp_path)
+    for city in ("Budapest", "Szentendre"):
+        save_results(city, "running", [CommunityRecord(
+            name=f"{city} Futók", topic="running", city=city, locale="hu",
+            source_url="https://a.test",
+            extracted_at="2026-01-01T00:00:00+00:00")], db)
+
+    assert [r["city"] for r in get_all_communities(db, city="Szentendre")] == ["Szentendre"]
+    assert len(get_all_communities(db)) == 2
+
+    seen: dict = {}
+    import scraper.duplicates as dup
+    original = dup.get_all_communities
+
+    def _spy(db_path, city=None):
+        seen["city"] = city
+        return original(db_path, city=city)
+
+    dup.get_all_communities = _spy
+    try:
+        dup.detect_community_candidates(db, city="Szentendre")
+    finally:
+        dup.get_all_communities = original
+    assert seen["city"] == "Szentendre"
+
+
+def test_city_filtered_scan_uses_the_city_index(tmp_path):
+    """The filtered query must SEARCH, not SCAN.
+
+    Asserting on the plan rather than on a timing keeps this honest if someone
+    drops `idx_comm_city_topic` — a scan would still return the right rows and
+    every other test would stay green.
+    """
+    db = _db(tmp_path)
+    with sqlite3.connect(db) as conn:
+        plan = conn.execute(
+            "EXPLAIN QUERY PLAN SELECT data FROM communities "
+            "WHERE hidden=0 AND city=? ORDER BY city, topic, id", ("Budapest",)
+        ).fetchall()
+    detail = " ".join(str(row[-1]) for row in plan)
+    assert "SEARCH" in detail and "idx_comm_city_topic" in detail, detail
