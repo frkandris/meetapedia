@@ -3,6 +3,15 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Finding**: The combined extraction prompt **locks `localgpu` out**: Qwen3-4B's 8,192-token
+  window cannot hold ~1,500 tokens of merged prompt plus 8,000 characters of Hungarian page text
+  plus the output reservation, which is charged against the window rather than added to it. It
+  answers "Context size has been exceeded" at both 3,000 and 2,000 reserved tokens. That is an
+  argument against the merge the call arithmetic cannot see — localgpu is the provider whose
+  allowance never runs out. [[jev-joinability-gate]].
+- **Creation**: Added [[daily-data-guides]]: the worker now publishes up to ten quality-gated,
+  AI-written city-topic guides from bounded fact packets before its daily pipeline work, walking
+  Hungary → Germany → Indonesia → Sweden → rest and splitting pages between the two domains.
 - **Correction**: The throughput figures for the gate were overstated — **a page is not a call**.
   Venue and person extraction are skipped on community-less pages, so an empty page costs 1 call and
   a useful one 3 (corpus average 1.363). Corrected: 1,540 pages/day with no gate, **2,040 with Jev at

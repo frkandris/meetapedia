@@ -276,3 +276,25 @@ One more, learned here: **the threshold belongs in config, not in code**, and
 0.06 is a starting point rather than a settled value. The band between 0.03
 and 0.06 is where recall trades hardest against saving, and it should be
 re-measured whenever the extraction prompt changes — the labels move with it.
+
+## The combined prompt locks our own GPU out of the fleet
+
+Measured while the A/B run started, 2026-09-20: `localgpu` (Qwen3-4B, an
+**8,192-token window** — see `providers.yaml`) answers *"Context size has been
+exceeded"* on real pages under the merged prompt, at a 2,000-token output
+reservation and again at 3,000. The arithmetic is why: ~1,500 tokens of merged
+prompt, plus 8,000 characters of Hungarian page text (which tokenizes worse
+than English), plus the reservation — which is charged *against* the window,
+not added to it.
+
+This is an argument against the merge that the call-count arithmetic cannot
+see. `localgpu` is the provider whose allowance never runs out
+([[our-own-gpu-in-the-fleet]]) — on 2026-09-05 it was the only one still
+answering at 22:30 UTC. A change that saves two calls per useful page but
+excludes the always-available provider may cost more capacity than it frees.
+
+Three ways out, in order of how much they give up: send less page text on the
+combined path (changes what is measured), merge only communities and venues
+and leave people separate (two calls, not one), or accept that the combined
+path runs on hosted providers only and `localgpu` keeps the three-call path.
+Decide after the A/B numbers, not before.
