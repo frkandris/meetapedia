@@ -862,7 +862,6 @@ _T: dict[str, dict[str, str]] = {
     "community_how_to_join": "How to join",
     "community_cta_website": "Go to the group's own page",
     "community_cta_source": "Go to the page we found it on",
-    "community_cta_hint": "We index public pages — joining is arranged on the group's own site, not here.",
     # Related listings at the foot of a detail page — content and crawl path
     # both, for pages Google fetched and declined to index.
     "related_same_topic": "More {topic} in {city}",
@@ -1084,7 +1083,6 @@ _T: dict[str, dict[str, str]] = {
     "community_how_to_join": "Hogyan csatlakozhatsz?",
     "community_cta_website": "Tovább a csoport saját oldalára",
     "community_cta_source": "Tovább az oldalra, ahol megtaláltuk",
-    "community_cta_hint": "Nyilvános oldalakat gyűjtünk — a jelentkezés mindig a csoport saját oldalán történik, nem itt.",
     "related_same_topic": "További {topic} {city} városában",
     "related_in_city": "Egyéb közösségek {city} városában",
     "related_see_all_topic": "Mind a(z) {count} megtekintése",

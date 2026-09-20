@@ -3,6 +3,15 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Fix**: meetapedia.com now submits its venue and person pages. It listed 38,108 URLs and not one
+  of them, because the branch that adds those pages was guarded `if not is_meetapedia` and carried
+  prefixes — `/venue/`, `/person/` — for an English URL scheme that was never built:
+  `/vienna/venue/x` answers 404, `/vienna/helyszin/x` answers 200 on the same domain. The fix uses
+  the routes that exist. HU cities are already excluded from that edition's set (they canonicalize
+  to kozossegek), so this adds the international corpus and no duplicates. kozossegek.com was
+  unaffected and already listed 9,282 venues and 11,554 people. `tests/test_sitemap_routes.py`
+  now seeds both entity types, so its existing "every submitted URL serves 200 and
+  self-canonicalizes" contract covers them.
 - **Creation**: [[structured-data]] — a structured-data audit and what it found. Only the community
   page and explore emitted JSON-LD; venue and person pages, the two shapes search engines read best,
   had none, and the community object carried eight properties out of the two dozen the record holds.

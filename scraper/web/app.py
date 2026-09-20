@@ -5444,12 +5444,8 @@ def _build_sitemap(ctx: dict) -> str:
         # About/explore still render at their HU paths on both domains; the
         # English aliases redirect and must not be submitted as canonicals.
         static_paths = ["/", "/rolunk", "/map", "/people", "/cities", "/felfedezes", "/submit-community"]
-        venue_prefix = "/venue/"
-        person_prefix = "/person/"
     else:
         static_paths = ["/", "/rolunk", "/terkep", "/varosok", "/felfedezes", "/helyszinek", "/emberek", "/kozosseg-bekuldes"]
-        venue_prefix = "/helyszin/"
-        person_prefix = "/ember/"
 
     locs: list[str] = [base + p for p in static_paths]
     lastmods: dict[str, str] = {}  # loc → YYYY-MM-DD (community pages only)
@@ -5502,24 +5498,34 @@ def _build_sitemap(ctx: dict) -> str:
                         if lm and len(lm) == 10:  # YYYY-MM-DD
                             lastmods.setdefault(loc, lm)
 
-        if not is_meetapedia:
-            for v in get_all_venues(app_state.db_path):
-                if v.get("city", "") not in site_city_names:
-                    continue
-                city_sl = _slugify(v.get("city", ""))
-                name_sl = _slugify(v.get("name", ""))
-                if city_sl and name_sl:
-                    locs.append(f"{base}/{city_sl}{venue_prefix}{name_sl}")
+        # Venue and person pages, on BOTH editions. They were kozossegek-only
+        # until 2026-09-20, and the reason was a pair of prefixes — "/venue/"
+        # and "/person/" — written for an English URL scheme that does not
+        # exist: /stockholm/venue/x answers 404 while /stockholm/helyszin/x
+        # answers 200 on the same domain. So meetapedia.com submitted 38,108
+        # URLs and not one of its 9,282 venues or 11,554 people, and the fix is
+        # to use the routes that exist rather than to add the ones that do not.
+        #
+        # HU cities are already out of `site_city_names` on meetapedia (they
+        # canonicalize to kozossegek), so this adds the international corpus
+        # there and nothing that would duplicate.
+        for v in get_all_venues(app_state.db_path):
+            if v.get("city", "") not in site_city_names:
+                continue
+            city_sl = _slugify(v.get("city", ""))
+            name_sl = _slugify(v.get("name", ""))
+            if city_sl and name_sl:
+                locs.append(f"{base}/{city_sl}/helyszin/{name_sl}")
 
-            seen_persons: set[tuple[str, str]] = set()
-            for p in get_all_persons(app_state.db_path):
-                if p.get("city", "") not in site_city_names:
-                    continue
-                city_sl = _slugify(p.get("city", ""))
-                name_sl = _slugify(p.get("name", ""))
-                if city_sl and name_sl and (city_sl, name_sl) not in seen_persons:
-                    seen_persons.add((city_sl, name_sl))
-                    locs.append(f"{base}/{city_sl}{person_prefix}{name_sl}")
+        seen_persons: set[tuple[str, str]] = set()
+        for p in get_all_persons(app_state.db_path):
+            if p.get("city", "") not in site_city_names:
+                continue
+            city_sl = _slugify(p.get("city", ""))
+            name_sl = _slugify(p.get("name", ""))
+            if city_sl and name_sl and (city_sl, name_sl) not in seen_persons:
+                seen_persons.add((city_sl, name_sl))
+                locs.append(f"{base}/{city_sl}/ember/{name_sl}")
 
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
