@@ -3,6 +3,13 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Fix**: Two defects in the new outclick tracking, both found by review before the data was
+  trusted. A `website` stored without a scheme is rendered as `https://…` by the template, so the
+  browser reports that URL while `is_known_community_url` compared the bare stored form — every
+  such event was rejected and lost silently, which is worse than not collecting it because the
+  remaining number still looks real. And `auxclick` counted the right button, so inspecting or
+  copying a link registered as an outbound click; only middle-click (new tab) and primary click
+  now count. [[acquisition-funnel]].
 - **Fix**: [[daily-data-guides]] now truly precede enrichment at process startup:
   the competing boot-time enrichment task was removed, leaving the worker as its
   single launcher after the guide step. Guide provider attempts, including failed

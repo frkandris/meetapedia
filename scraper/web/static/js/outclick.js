@@ -4,6 +4,14 @@
   const sentAt = new WeakMap();
 
   function record(event) {
+    // Only activations that actually follow the link. `auxclick` fires for
+    // every non-primary button, and button 2 is the context menu — inspecting
+    // or copying a link would otherwise count as an outbound click and inflate
+    // the very conversion number this exists to measure. Middle-click (1)
+    // opens the page in a new tab, so it counts.
+    if (event.type === "auxclick" && event.button !== 1) return;
+    if (event.type === "click" && event.button !== 0) return;
+
     const link = event.target.closest && event.target.closest("a[data-outclick]");
     if (!link || !link.href) return;
 

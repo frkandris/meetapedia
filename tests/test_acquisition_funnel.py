@@ -121,6 +121,50 @@ def test_js_outclick_endpoint_records_only_a_real_community_link(funnel_db):
     assert get_funnel_counts(funnel_db, days=365)["outclicks_total"] == 1
 
 
+def test_a_schemeless_website_still_matches_the_url_the_browser_followed(funnel_db):
+    """The defect review caught: analytics lost, silently.
+
+    A record may store `website` without a scheme. `public_community.html`
+    renders those as `https://…`, so the browser reports the URL it actually
+    followed — and comparing it against the bare stored form rejected the
+    event. Losing the number is worse than never collecting it, because what
+    remains still looks like a real measurement.
+    """
+    from scraper.db import is_known_community_url
+    from scraper.models import CommunityRecord
+    from scraper.store import save_results
+
+    save_results("Budapest", "dance", [CommunityRecord(
+        name="Séma Nélküli Kör", topic="dance", city="Budapest", locale="hu",
+        website="tancklub.example.test",          # no scheme, as stored
+        source_url="https://forras.example.test",
+        extracted_at="2026-01-01T00:00:00+00:00",
+    )], funnel_db)
+    community_id = next(
+        r["community_id"] for r in get_communities(funnel_db, "Budapest", "dance")
+        if r["name"] == "Séma Nélküli Kör")
+
+    assert is_known_community_url(
+        funnel_db, community_id, "https://tancklub.example.test")
+    assert is_known_community_url(
+        funnel_db, community_id, "https://tancklub.example.test/")
+    # Still not an open endpoint.
+    assert not is_known_community_url(
+        funnel_db, community_id, "https://spam.example.test")
+
+
+def test_the_click_tracker_ignores_the_context_menu():
+    """Right-click opens a menu; it does not follow the link.
+
+    Counting it inflates the conversion number this script exists to measure —
+    every reader who inspects or copies a link would read as an outbound
+    click. Middle-click opens the page in a new tab, so that one counts.
+    """
+    source = Path("scraper/web/static/js/outclick.js").read_text(encoding="utf-8")
+    assert 'event.type === "auxclick" && event.button !== 1' in source
+    assert 'event.type === "click" && event.button !== 0' in source
+
+
 def test_a_claim_survives_without_a_mail_provider(funnel_db):
     """The failure this test exists for: no RESEND_API_KEY, claim silently lost."""
     client = TestClient(web_app.app)

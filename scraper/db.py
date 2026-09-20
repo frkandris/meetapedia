@@ -3718,9 +3718,19 @@ def is_known_community_url(db_path: Path, community_id: str, url: str) -> bool:
         candidates = [record.get("website"), record.get("source_url")]
         candidates.extend(record.get("source_urls") or [])
         candidates.extend(record.get("social_links") or [])
-        if any(isinstance(value, str) and value.rstrip("/") == wanted
-               for value in candidates):
-            return True
+        for value in candidates:
+            if not isinstance(value, str) or not value:
+                continue
+            # The stored value may have no scheme — `public_community.html`
+            # renders those as `https://…`, and the browser reports the URL it
+            # actually followed. Comparing against the bare form would reject
+            # every such event and lose the analytics silently, which is worse
+            # than not collecting them: the number would look real.
+            if value.rstrip("/") == wanted:
+                return True
+            if not value.startswith(("http://", "https://")) and \
+                    f"https://{value}".rstrip("/") == wanted:
+                return True
     return False
 
 
