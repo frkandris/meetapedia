@@ -164,7 +164,91 @@ def _split(page: Page, seed: str) -> bool:
     return int(_rank(seed + "-split", host)[:8], 16) % 5 != 0
 
 
+def _sigmoid(x: float) -> float:
+    return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, x))))
+
+
+def _train_naive_bayes(train: list[Page], buckets: int) -> tuple:
+    totals = {False: [1] * buckets, True: [1] * buckets}
+    token_totals = {False: buckets, True: buckets}
+    class_counts = Counter(p.positive for p in train)
+    for page in train:
+        for idx, count in _features(page.text, buckets).items():
+            totals[page.positive][idx] += count
+            token_totals[page.positive] += count
+    return totals, token_totals, class_counts, len(train)
+
+
+def _log_odds_per_token(page: Page, model: tuple, buckets: int) -> float:
+    """Naive Bayes log-odds, divided by the number of n-grams that produced it.
+
+    The division is the whole point. Bayes adds one log-probability per feature
+    and a page has thousands, so the raw sum scales with page length: a long
+    page is automatically extreme, and the ±50 clamp the first version applied
+    is where nearly every page ended up. That is what made the 2026-09-20
+    measurement's threshold column inert — moving it from 0.01 to 0.50 changed
+    recall by half a point, because there was no probability mass in between.
+    Per token, the statistic is a rate rather than a total, and comparable
+    between a 400-character page and an 8,000-character one.
+    """
+    totals, token_totals, class_counts, n_train = model
+    feats = _features(page.text, buckets)
+    n_tokens = sum(feats.values())
+    if not n_tokens:
+        return 0.0
+    logs = {}
+    for label in (False, True):
+        logs[label] = math.log((class_counts[label] + 1) / (n_train + 2))
+        denom = token_totals[label]
+        logs[label] += sum(
+            count * math.log(totals[label][idx] / denom)
+            for idx, count in feats.items()
+        )
+    return (logs[True] - logs[False]) / n_tokens
+
+
+def _fit_platt(xs: list[float], ys: list[bool],
+               iterations: int = 4000, rate: float = 0.5) -> "tuple[float, float, float, float]":
+    """Platt scaling: turn a raw score into a calibrated probability.
+
+    Returns `(mean, stdev, a, b)` — the standardization the fit was done in,
+    plus the logistic coefficients, because applying them requires both.
+
+    A gate is only useful if its threshold means something, and a naive Bayes
+    score does not: it is monotone in the right direction but has no
+    probabilistic reading. Fitting a one-dimensional logistic on held-back data
+    gives back a number where "0.02" is a rate of being wrong, which is what a
+    recall target is expressed in. It is also what makes the local baseline
+    comparable to Jev, whose selling point is exactly this property.
+    """
+    if not xs:
+        return 0.0, 1.0, 1.0, 0.0
+    mean = sum(xs) / len(xs)
+    variance = sum((x - mean) ** 2 for x in xs) / max(1, len(xs) - 1)
+    stdev = math.sqrt(variance) or 1.0
+    zs = [(x - mean) / stdev for x in xs]
+
+    a, b = 1.0, 0.0
+    n = len(zs)
+    for _ in range(iterations):
+        grad_a = grad_b = 0.0
+        for z, y in zip(zs, ys):
+            error = _sigmoid(a * z + b) - (1.0 if y else 0.0)
+            grad_a += error * z
+            grad_b += error
+        a -= rate * grad_a / n
+        b -= rate * grad_b / n
+    return mean, stdev, a, b
+
+
 def local_scores(pages: list[Page], seed: str, buckets: int) -> dict[str, float]:
+    """Calibrated gate probabilities from a dependency-free local model.
+
+    Three disjoint parts, split by hostname so one site's template cannot leak
+    between them: fit (the Bayes counts), calibrate (the Platt coefficients),
+    and held-out (what the report scores). Calibrating on the fitting data
+    would report a confidence the model has not earned.
+    """
     train = [p for p in pages if _split(p, seed)]
     test = [p for p in pages if not _split(p, seed)]
     # A small sample can hash every host into one side. Fall back to a page split
@@ -173,29 +257,26 @@ def local_scores(pages: list[Page], seed: str, buckets: int) -> dict[str, float]
         train = [p for p in pages if int(_rank(seed, p.url_hash)[:8], 16) % 5 != 0]
         test = [p for p in pages if p not in train]
 
-    totals = {False: [1] * buckets, True: [1] * buckets}
-    token_totals = {False: buckets, True: buckets}
-    class_counts = Counter(p.positive for p in train)
-    for page in train:
-        for idx, count in _features(page.text, buckets).items():
-            totals[page.positive][idx] += count
-            token_totals[page.positive] += count
+    calib = [p for p in train if int(_rank(seed + "-calib", p.url_hash)[:8], 16) % 4 == 0]
+    fit = [p for p in train if p not in calib]
+    if len({p.positive for p in calib}) < 2 or len({p.positive for p in fit}) < 2:
+        # Too few pages to hold a calibration set back; fit on everything and
+        # say so, rather than reporting a probability nothing supports.
+        calib, fit = train, train
 
-    scores: dict[str, float] = {}
-    for page in test:
-        feats = _features(page.text, buckets)
-        logs = {}
-        for label in (False, True):
-            logs[label] = math.log((class_counts[label] + 1) / (len(train) + 2))
-            denom = token_totals[label]
-            logs[label] += sum(
-                count * math.log(totals[label][idx] / denom)
-                for idx, count in feats.items()
-            )
-        delta = max(-50.0, min(50.0, logs[True] - logs[False]))
-        scores[page.url_hash] = 1.0 / (1.0 + math.exp(-delta))
-    print(f"local split: train={len(train)}, held_out={len(test)}, "
-          f"held_out_positive={sum(p.positive for p in test)}")
+    model = _train_naive_bayes(fit, buckets)
+    mean, stdev, a, b = _fit_platt(
+        [_log_odds_per_token(p, model, buckets) for p in calib],
+        [p.positive for p in calib],
+    )
+
+    scores = {
+        page.url_hash: _sigmoid(
+            a * ((_log_odds_per_token(page, model, buckets) - mean) / stdev) + b)
+        for page in test
+    }
+    print(f"local split: fit={len(fit)}, calibrate={len(calib)}, "
+          f"held_out={len(test)}, held_out_positive={sum(p.positive for p in test)}")
     return scores
 
 

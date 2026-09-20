@@ -3,6 +3,14 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Measurement**: The local joinability gate scored **74.6% positive recall** on production, far
+  under the 99% a gate needs — but the threshold column was inert (0.01 -> 0.50 moved recall half a
+  point), which says the score was uncalibrated rather than the corpus inseparable. Naive Bayes sums
+  one log-probability per n-gram, so the total scaled with page length and every page sat on the ±50
+  clamp; each "worst positive" scored exactly 0.0000. The scorer now normalizes per n-gram and fits
+  Platt scaling on a calibration split held back by hostname. Measured on a mixed-difficulty
+  synthetic corpus: 0% of pages in the 0.02-0.98 band before, 27% after, and the threshold moves the
+  decision. [[jev-joinability-gate]].
 - **Post-mortem**: [[2026-09-benchmark-materialized-the-corpus]] — the Jev gate benchmark's sampler
   did one `fetchall()` over every extracted page's text (128,072 rows × ~30 KB) to keep 2,000 of
   them, and was killed on production with 237 MB of RAM free. Selection now happens on keys, served

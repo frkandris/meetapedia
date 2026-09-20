@@ -122,3 +122,65 @@ def test_pages_that_were_never_extracted_are_not_sampled(tmp_path):
     db = _gate_db(tmp_path / "unextracted.db", extracted=False)
     with pytest.raises(SystemExit):
         module.load_sample(db, per_class=5, seed="test", max_chars=8000)
+
+
+def _mixed_gate_db(path: Path, pages: int = 240) -> Path:
+    """Pages of varying difficulty, on many hosts.
+
+    The clean fixture cannot show a calibration problem: if every positive is
+    obviously positive, any monotone score separates them. Real pages sit on a
+    spectrum, and a third of these deliberately carry both vocabularies.
+    """
+    import random
+    rng = random.Random(11)
+    club = "kozosseg klub egyesulet heti proba tagfelvetel varjuk jelentkezes korus"
+    shop = "akcio arak webshop kosar szallitas hirek cikk kapcsolat impresszum"
+    with sqlite3.connect(path) as conn:
+        conn.execute("""CREATE TABLE cache_pages (
+            url_hash TEXT PRIMARY KEY, url TEXT, city TEXT, topic TEXT, data TEXT,
+            records_count INTEGER, extracted_at TEXT, scraped_at TEXT
+        )""")
+        for i in range(pages):
+            positive = i % 2
+            # Length varies by an order of magnitude: that is what made the
+            # unnormalized score scale with the page rather than its content.
+            length = rng.choice((40, 120, 400))
+            if i % 3 == 0:          # ambiguous: both vocabularies present
+                words = (club + " " + shop).split()
+            else:
+                words = (club if positive else shop).split()
+            text = " ".join(rng.choice(words) for _ in range(length))
+            conn.execute(
+                "INSERT INTO cache_pages VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (f"h{i:04d}", f"https://host{i % 40}.example/p{i}", "City", "choir",
+                 json.dumps({"raw_text": text}), positive, "now", "now"),
+            )
+    return path
+
+
+def test_the_gate_threshold_actually_moves_the_decision(tmp_path):
+    """The failure the 2026-09-20 production run exposed.
+
+    Naive Bayes adds one log-probability per n-gram, so the raw sum scales with
+    page length and every page lands on the ±50 clamp. The measured threshold
+    column was inert: 0.01 -> 0.50 moved recall by half a point, because no
+    page scored anywhere in between. A gate whose threshold does nothing cannot
+    be tuned to a recall target, which is the only thing a gate is for.
+    """
+    module = _load("benchmark_joinability_gate")
+    db = _mixed_gate_db(tmp_path / "mixed.db")
+    pages = module.load_sample(db, per_class=60, seed="cal", max_chars=8000)
+    scores = module.local_scores(pages, seed="cal", buckets=4096)
+    assert scores
+
+    values = sorted(scores.values())
+    strict = sum(v < 0.02 for v in values)
+    loose = sum(v < 0.50 for v in values)
+    assert loose > strict, (
+        "moving the threshold from 0.02 to 0.50 skipped the same pages — "
+        f"scores are stuck at the extremes: {values[:5]} … {values[-5:]}")
+
+    middle = sum(0.02 <= v <= 0.98 for v in values)
+    assert middle >= len(values) * 0.10, (
+        f"only {middle} of {len(values)} scores carry any uncertainty; a gate "
+        "needs a band it can trade recall against")
