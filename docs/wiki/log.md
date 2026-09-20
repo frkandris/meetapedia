@@ -3,6 +3,18 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Creation**: [[structured-data]] — a structured-data audit and what it found. Only the community
+  page and explore emitted JSON-LD; venue and person pages, the two shapes search engines read best,
+  had none, and the community object carried eight properties out of the two dozen the record holds.
+  Venue (`Place`, narrowed by `venue_type`), person (`Person` with `memberOf`) and home
+  (`WebSite` + `SearchAction` + `Organization`) are now generated, and the community object gained
+  email, telephone, foundingDate, keywords, knowsLanguage, member, a PostalAddress and
+  mainEntityOfPage. The tag moved into `public_base.html` so a new page type cannot forget it.
+  Listing pages still get no ItemList on purpose — that is a DB-proportional list in the document.
+- **Fix**: The community card ends with a button per destination — the group's own page, then each
+  source page — after a reader reported they could not work out how to join. The links were all
+  already on the page; none of them looked like the next step. The enriched `short_description` now
+  also appears on the page it describes, instead of only in the `<meta>` tag.
 - **Fix**: Topic labels now follow the page's language everywhere. The community page's report-form
   picker and the person page's community chips were built from `app.py:TOPIC_LABELS`, the English
   fallback, under context keys that `**lang_context(request)` does not override. A Hungarian reader

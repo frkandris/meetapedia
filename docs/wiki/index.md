@@ -106,6 +106,7 @@ vocabulary), [faq.md](faq.md) (recurring questions).
 ## SEO
 
 - [[search-console-2026-09-05]] — Fresh exports distinguish kozossegek's persistent indexing collapse from meetapedia's crawl backlog and weak search visibility, without proving a single algorithmic cause.
+- [[structured-data]] — Which public page types emit JSON-LD, what each object claims, and why the listing pages deliberately do not get an ItemList.
 - [[seo-cross-domain-canonical]] — HU-city pages on meetapedia.com canonicalize to kozossegek.com so Google stops consolidating the duplicate toward the traffic-less domain.
 - [[country-landing-pages]] — Path-based /cities/<slug> country pages replace the ?country= query form (301'd) — self-canonical, sitemap-listed, and reachable from home headings and the /cities country index.
 - [[sister-site-cross-links]] — The twin-record link between kozossegek.com and meetapedia.com — an icon on the community card only, same path, no redirect hop, suppressed where the twin would 302 home.

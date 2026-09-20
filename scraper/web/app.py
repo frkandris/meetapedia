@@ -104,7 +104,8 @@ from ..url_safety import (UnsafeURLError, assert_safe_public_url,
                           is_public_http_url)
 from .i18n import get_topic_labels, lang_context
 from .log_stream import broadcaster
-from .schema import breadcrumb_jsonld, records_to_jsonld
+from .schema import (breadcrumb_jsonld, person_jsonld, records_to_jsonld,
+                     site_jsonld, venue_jsonld)
 from .state import app_state
 
 log = structlog.get_logger()
@@ -4459,6 +4460,7 @@ async def public_home(request: Request, city: str = ""):
     # known. Alphabetical rather than popularity-ordered so the
     # accent-insensitive matcher has a stable base; the widget does its own
     # ranking.
+    _home_lang = lang_context(request)
     cities_json = json.dumps(
         [
             {"n": c["name"], "s": c["slug"], "c": c["count"],
@@ -4482,7 +4484,16 @@ async def public_home(request: Request, city: str = ""):
         "hu_city_list": city_list[:12],
         "country_city_groups": _home_stats_cache[site]["country_city_groups"],
         "cities_json": cities_json,
-        **lang_context(request),
+        # WebSite + SearchAction + Organization. The search action is the one
+        # part that can surface in a result — it is what a sitelinks search box
+        # is built from — so the path must be the real route, which is
+        # /kereses on both editions (see public_base.html's search form).
+        "schema_json": site_jsonld(
+            _home_lang["site_name"], _home_lang["site_url"], "/kereses",
+            _home_lang["t"]("home_og_desc",
+                            total=_home_stats_cache[site]["total_records"],
+                            cities=len(site_cities))),
+        **_home_lang,
     })
 
 
@@ -7662,8 +7673,14 @@ async def public_venue_detail(request: Request, city_slug: str, venue_slug: str)
     topic_url_slugs = {t.name: _topic_url_slug(t.name, city_locale) for t in (app_state.topics or [])}
     _city_records = await asyncio.to_thread(
         get_communities_for_city, app_state.db_path, city_name) if app_state.db_path else []
+    _venue_canonical = (f"{_canonical_base(request, city_name)}"
+                        f"/{city_slug}/helyszin/{venue_slug}")
     return templates.TemplateResponse(request, "public_venue_detail.html", {
         "v": venue,
+        # A named physical place in a named town is the shape local search
+        # understands best, and this page type carried no markup until
+        # 2026-09-20.
+        "schema_json": venue_jsonld(venue, _venue_canonical),
         "related": related_communities(_city_records, exclude_key="", topic=None,
                                        locale="hu"),
         "city": city_name,
@@ -7737,8 +7754,18 @@ async def public_person_detail(request: Request, city_slug: str, name_slug: str)
     ))
     _city_records = await asyncio.to_thread(
         get_communities_for_city, app_state.db_path, city_name) if app_state.db_path else []
+    _person_canonical = (f"{_canonical_base(request, city_name)}"
+                         f"/{city_slug}/ember/{name_slug}")
     return templates.TemplateResponse(request, "public_person_detail.html", {
         "person": person,
+        # memberOf is built from `community_entries`, the same list the page
+        # renders, so the markup cannot drift from what a reader sees.
+        "schema_json": person_jsonld(
+            {**person, "bio": bio, "website": website,
+             "social_links": social_links, "city": city_name},
+            [{"name": c["name"], "url": _canonical_base(request, city_name) + c["url"]}
+             for c in community_entries],
+            _person_canonical),
         "related": related_communities(_city_records, exclude_key="", topic=None,
                                        locale="hu"),
         "bio": bio,
@@ -7783,7 +7810,10 @@ async def public_city_segment(
     record = _find_community_by_slug(city_name, segment)
     if record:
         _page_lang = lang_context(request)
-        schema_json = records_to_jsonld([record])
+        schema_json = records_to_jsonld(
+            [record],
+            f"{_canonical_base(request, city_name)}/{city_slug}"
+            f"/{_slugify(record.get('name', ''))}")
         history = get_community_history(app_state.db_path, record.get("community_id", ""))
         rec_topic = record.get("topic", "")
         city_locale = _city_locale(city_name)

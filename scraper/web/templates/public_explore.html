@@ -1,6 +1,5 @@
 {% extends "public_base.html" %}
 {% import "_listing_filter.html" as lf %}
-{% block head %}{% if schema_json %}<script type="application/ld+json">{{ schema_json | safe }}</script>{% endif %}{% endblock %}
 {% block og_desc %}{% if city and total > 0 %}{{ t('explore_og_city_count', total=total, city=city) }}{% elif city %}{{ t('explore_og_city', city=city) }}{% else %}{{ t('explore_og_generic') }}{% endif %}{% endblock %}
 {% block title %}
   {% if city and selected_topics %}

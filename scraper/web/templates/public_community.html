@@ -1,6 +1,5 @@
 {% extends "public_base.html" %}
 {% set topic_label = topic_labels.get(topic, topic_labels.get('other', 'Other')) %}
-{% block head %}{% if schema_json %}<script type="application/ld+json">{{ schema_json | safe }}</script>{% endif %}{% endblock %}
 {% block title %}{{ r.name }}{% if topic %} – {{ topic_label }}{% if city %} {{ city }}{% endif %}{% elif city %} – {{ city }}{% endif %} | {{ site_name }}{% endblock %}
 {% block og_image_url %}/static/img/og/{{ topic or 'default' }}.png{% endblock %}
 {% block og_desc %}{{ r.short_description or (r.description | truncate(160, True, '...')) if (r.short_description or r.description) else t('community_og_fallback', name=r.name) }}{% endblock %}
@@ -80,8 +79,15 @@
       </div>
     </div>
 
-    {% if r.long_description or r.description %}
-    <p class="text-[#4A4441] leading-relaxed mb-6 text-base">{{ r.long_description or r.description }}</p>
+    {# The one-line summary enrichment writes for listing cards. It was only
+       ever used in the <meta> description, so the page it describes never
+       showed it. Suppressed when the body text below would repeat it. #}
+    {% set body_text = r.long_description or r.description %}
+    {% if r.short_description and r.short_description != body_text %}
+    <p class="text-[#4A4441] font-medium leading-relaxed mb-3 text-[15px]">{{ r.short_description }}</p>
+    {% endif %}
+    {% if body_text %}
+    <p class="text-[#4A4441] leading-relaxed mb-6 text-base">{{ body_text }}</p>
     {% endif %}
 
     <!-- Get involved CTA zone -->
@@ -269,6 +275,47 @@
       <div class="space-y-3">
         {{ detail_row('book-open', t('community_history_label'), r.history) }}
       </div>
+    </div>
+    {% endif %}
+
+    {# ── How to join ────────────────────────────────────────────────────────
+       A reader told us (2026-09-20) they could not work out how to join a
+       group. Everything needed was on the page: the group's own site in the
+       link list above, the page we found it on in small type below the card.
+       Neither looked like the next step, so neither was taken.
+
+       This is that next step, at the end of the card, as a button per
+       destination: the group's own site first when we have one, then every
+       source page. `link_meta` names each one, so a reader sees where the
+       button goes before pressing it. Social links stay in the list above —
+       they are contact, not a place to read about joining. #}
+    {% set cta_links = [] %}
+    {% if has_website %}{% set _ = cta_links.append(website_url) %}{% endif %}
+    {% for src in all_sources %}
+    {% if src and (src | valid_url) and src not in cta_links and src not in social_set %}
+    {% set _ = cta_links.append(src) %}
+    {% endif %}
+    {% endfor %}
+    {% if cta_links %}
+    <div class="mt-6 pt-6 border-t border-[#F5F2EC]">
+      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">{{ t('community_how_to_join') }}</p>
+      <div class="flex flex-col gap-2">
+        {% for link in cta_links %}
+        {% set cm = link | link_meta %}
+        <a href="{{ link }}" target="_blank" rel="noopener"
+           class="flex items-center gap-3 rounded-xl bg-[#C2613A] px-5 py-3.5 text-white hover:bg-[#A8512F] transition-colors">
+          <i class="ph ph-arrow-square-out text-lg shrink-0"></i>
+          <span class="flex flex-col min-w-0 text-left">
+            <span class="font-semibold text-sm leading-tight">
+              {% if loop.first and has_website %}{{ t('community_cta_website') }}{% else %}{{ t('community_cta_source') }}{% endif %}
+            </span>
+            <span class="text-xs text-white/75 truncate">{{ cm.label }}</span>
+          </span>
+          <i class="ph ph-arrow-right ml-auto shrink-0 text-white/70"></i>
+        </a>
+        {% endfor %}
+      </div>
+      <p class="text-[11px] text-[#B5ADA0] mt-2.5 leading-relaxed">{{ t('community_cta_hint') }}</p>
     </div>
     {% endif %}
 

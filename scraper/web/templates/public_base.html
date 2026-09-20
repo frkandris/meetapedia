@@ -80,6 +80,10 @@
      may use MpAutocomplete / MpListFilter from a DOMContentLoaded handler. #}
   <script src="/static/js/listing.js" defer></script>
   {% block head %}{% endblock %}
+  {# Structured data, emitted here rather than per template: every page type
+     that sets `schema_json` gets it, and a new one cannot forget the tag.
+     Community, explore, city, venue, person and home all set it. #}
+  {% if schema_json %}<script type="application/ld+json">{{ schema_json | safe }}</script>{% endif %}
   {% if breadcrumbs %}<script type="application/ld+json">{{ breadcrumbs | breadcrumb_jsonld | safe }}</script>{% endif %}
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-XD0Z4FE8LX"></script>
   <script>

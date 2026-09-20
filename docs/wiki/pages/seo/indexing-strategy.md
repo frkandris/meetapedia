@@ -85,3 +85,9 @@ country-specific and HU ones 301 to kozossegek) and the not-yet-URL-localized st
 pages (about/explore/cities/submit still share a single HU path or redirect EN→HU —
 listing them would emit wrong alternates). Extend the list once those URLs are fully
 localized.
+
+## Structured data
+
+Canonical tags tell Google which URL is the page; JSON-LD tells it what the
+page is about. Which page types emit what, and why the listings deliberately
+carry no `ItemList`, is in [[structured-data]].
