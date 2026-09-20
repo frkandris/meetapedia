@@ -237,6 +237,66 @@ EXTRACTION_SCHEMA = {
     "required": ["communities"],
 }
 
+# ── Combined extraction (A/B experiment, 2026-09-20) ─────────────────────────
+# One call instead of three. The production path asks for communities, then
+# venues, then persons — and the second and third only run when the first found
+# something, so a useful page costs three calls where an empty one costs one.
+# Measured that day: 5.82 calls per useful page once inline enrichment is
+# counted, against a free fleet that allows ~2,100 a day.
+#
+# This prompt is deliberately assembled from the three live ones rather than
+# rewritten, so the experiment measures the *merge* and not a new prompt's
+# wording. It is not wired into the pipeline: `scraper/ab_test.py` is the only
+# caller, and nothing it produces is cached or stored.
+COMBINED_SYSTEM_PROMPT = """\
+You extract three kinds of record from one web page, in a single answer.
+
+=== 1. COMMUNITIES ===
+{communities}
+
+=== 2. VENUES ===
+{venues}
+
+=== 3. PEOPLE ===
+{persons}
+
+=== OUTPUT ===
+Return ONE JSON object with exactly three keys: "communities", "venues" and
+"persons", each an array (use an empty array where there is nothing to report).
+Extract venues and people ONLY when you also found at least one community on
+the page; otherwise return empty arrays for both.
+"""
+
+
+COMBINED_USER_PROMPT_TEMPLATE = """\
+Extract {topic} community groups located in or near {city}, the venues that host
+them, and the named people who lead or instruct them, from the page below.
+The page was found at: {source_url}
+
+IMPORTANT: Only include communities actually based in {city} or its immediate
+surroundings. If the page is a national or regional directory listing clubs from
+many cities, skip the ones clearly located elsewhere.
+
+--- PAGE TEXT START ---
+{page_text}
+--- PAGE TEXT END ---
+"""
+
+
+def get_combined_prompt() -> str:
+    """The merged system prompt, built from the three live ones at call time.
+
+    Built rather than stored so an edit to any of the three — including a live
+    override from /admin/prompts — is reflected here too. The experiment is
+    about the merge, not about a frozen copy of yesterday's wording.
+    """
+    return COMBINED_SYSTEM_PROMPT.format(
+        communities=get_prompt("extraction_system"),
+        venues=get_prompt("venue_system"),
+        persons=get_prompt("person_system"),
+    )
+
+
 VENUE_SYSTEM_PROMPT = """\
 You are a data extraction assistant. Extract physical venues from web page text.
 
@@ -965,6 +1025,49 @@ class _ApiExtractor:
         return self._parsed(
             data, source_url,
             lambda: _parse_communities(raw, city, topic, locale, source_url))
+
+    async def extract_all(
+        self, text: str, city: str, topic: str, locale: str, source_url: str,
+        false_positive_examples: str = "", valid_topics: list[str] | None = None,
+        max_output_tokens: int | None = None,
+    ) -> "tuple[list[CommunityRecord], list[VenueRecord], list[PersonRecord]]":
+        """Communities, venues and people from one call. Experiment only.
+
+        Not used by the pipeline — `scraper/ab_test.py` is the sole caller, and
+        it stores nothing. `max_output_tokens` overrides the provider budget
+        because three lists in one answer need more room than one: the point of
+        the experiment is partly to find out how much.
+        """
+        truncated = text[: self.max_text_chars]
+        topics_hint = (f"\nValid topic slugs for 'welcomed_topics': "
+                       f"{', '.join(valid_topics)}\n" if valid_topics else "")
+        user_message = COMBINED_USER_PROMPT_TEMPLATE.format(
+            topic=topic, city=city, source_url=source_url, page_text=truncated,
+        ) + topics_hint
+        budget = ({"max_tokens": max_output_tokens} if max_output_tokens
+                  else self._budgeted())
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system",
+                 "content": get_combined_prompt() + false_positive_examples},
+                {"role": "user", "content": user_message},
+            ],
+            "temperature": self.temperature,
+            **self._json_format(),
+            **budget,
+        }
+        data = await self._post(payload, label=source_url)
+        raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+        def _parse():
+            return (
+                _parse_communities(raw, city, topic, locale, source_url),
+                _parse_venues(raw, city, locale, source_url),
+                _parse_persons(raw, city, topic, locale, source_url),
+            )
+
+        return self._parsed(data, source_url, _parse)
 
     async def extract_venues(
         self, text: str, city: str, locale: str, source_url: str,
@@ -1794,6 +1897,17 @@ class FallbackExtractor:
     async def enrich(self, record: CommunityRecord, page_text: str,
                      false_positive_examples: str = "") -> CommunityRecord:
         return await self._call("enrich", record.name, record, page_text, false_positive_examples)
+
+    async def extract_all(self, text: str, city: str, topic: str, locale: str,
+                          source_url: str, false_positive_examples: str = "",
+                          valid_topics: list[str] | None = None,
+                          max_output_tokens: int | None = None):
+        """Experiment path — same failure handling, circuit breaker and routing
+        as every other call, so a measurement cannot be flattered by a quieter
+        error path than production's."""
+        return await self._call_traced(
+            "extract_all", source_url, text, city, topic, locale, source_url,
+            false_positive_examples, valid_topics, max_output_tokens)
 
     async def extract_venues(self, text: str, city: str, locale: str,
                              source_url: str,
