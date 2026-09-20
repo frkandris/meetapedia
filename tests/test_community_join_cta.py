@@ -63,6 +63,10 @@ def test_the_source_page_gets_a_button_even_when_there_is_a_website(tmp_path):
     assert "Hogyan csatlakozhatsz?" in html
     assert "Tovább a csoport saját oldalára" in html
     assert "Tovább az oldalra, ahol megtaláltuk" in html
+    assert 'href="https://zeneikor.test"' in html
+    assert 'data-outclick data-community-id=' in html
+    assert 'data-link-type="website"' in html
+    assert "/out?" not in html
 
 
 def test_every_source_page_gets_its_own_button(tmp_path):

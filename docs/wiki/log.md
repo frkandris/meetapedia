@@ -3,6 +3,9 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Update**: [[acquisition-funnel]] outclicks are live again through a best-effort JS
+  beacon while every community CTA keeps its direct external `href`; the public endpoint
+  accepts only URLs already stored on that community and stores no visitor identifier.
 - **Finding**: The combined extraction prompt **locks `localgpu` out**: Qwen3-4B's 8,192-token
   window cannot hold ~1,500 tokens of merged prompt plus 8,000 characters of Hungarian page text
   plus the output reservation, which is charged against the window rather than added to it. It

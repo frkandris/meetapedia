@@ -3547,6 +3547,35 @@ def log_outclick(db_path: Path, community_id: str, url: str, link_type: str) -> 
         pass
 
 
+def is_known_community_url(db_path: Path, community_id: str, url: str) -> bool:
+    """Whether an outbound URL is actually rendered for this community.
+
+    The analytics endpoint is public, so accepting arbitrary URLs would make it
+    an unauthenticated database-growth primitive. Identity spans topics; inspect
+    every row carrying the community_id rather than whichever one sorts first.
+    """
+    if not db_path.exists() or not community_id or not url:
+        return False
+    wanted = url.rstrip("/")
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT data FROM communities WHERE community_id=? AND hidden=0",
+            (community_id,),
+        ).fetchall()
+    for row in rows:
+        try:
+            record = json.loads(row[0])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        candidates = [record.get("website"), record.get("source_url")]
+        candidates.extend(record.get("source_urls") or [])
+        candidates.extend(record.get("social_links") or [])
+        if any(isinstance(value, str) and value.rstrip("/") == wanted
+               for value in candidates):
+            return True
+    return False
+
+
 def get_outclick_stats(db_path: Path) -> dict:
     empty: dict = {"total": 0, "total_30d": 0, "top_communities": [], "by_type": []}
     if not db_path.exists():

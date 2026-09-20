@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from scraper.db import (get_funnel_counts, init_db, record_pageview, save_subscription,
-                        upsert_persons)
+from scraper.db import (get_communities, get_funnel_counts, init_db, record_pageview,
+                        save_subscription, upsert_persons)
 from scraper.models import CommunityRecord
 from scraper.pipeline import CityConfig
 from scraper.store import save_results
@@ -101,6 +101,24 @@ def test_the_funnel_counts_each_stage(funnel_db):
     assert counts["records_with_website"] == 1
     assert counts["persons"] == 4
     assert counts["persons_with_email"] == 3
+
+
+def test_js_outclick_endpoint_records_only_a_real_community_link(funnel_db):
+    client = TestClient(web_app.app)
+    community_id = next(
+        r["community_id"] for r in get_communities(funnel_db, "Budapest", "music")
+        if r.get("website") == "https://kor.example.test"
+    )
+    payload = {"community_id": community_id, "url": "https://kor.example.test",
+               "link_type": "website"}
+
+    assert client.post("/api/outclick", json=payload, headers=KOZ).status_code == 202
+    assert get_funnel_counts(funnel_db, days=365)["outclicks_total"] == 1
+
+    # Public analytics must not be an arbitrary database-growth endpoint.
+    payload["url"] = "https://spam.example.test"
+    assert client.post("/api/outclick", json=payload, headers=KOZ).status_code == 202
+    assert get_funnel_counts(funnel_db, days=365)["outclicks_total"] == 1
 
 
 def test_a_claim_survives_without_a_mail_provider(funnel_db):
