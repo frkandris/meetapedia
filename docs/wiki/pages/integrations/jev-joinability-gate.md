@@ -183,3 +183,45 @@ Two cautions before anyone ships this:
   Those are pages where the incumbent extractor claims a community and may
   itself be wrong — so some of the "false negatives" are the gate being right.
   Manual review of that list is not optional.
+
+## Third measurement: the larger sample, and why it matters
+
+`--per-class 3000`. Held out by hostname: **1,200 pages, 560 positive, 640
+negative** — three times the evidence of the run above.
+
+```
+threshold  skipped  neg_skipped  false_neg  positive_recall
+0.01        16       15           1          99.821%
+0.02        26       24           2          99.643%
+0.05        90       87           3          99.464%
+0.10       162      155           7          98.750%
+0.20       216      202          14          97.500%
+0.30       299      277          22          96.071%
+0.40       465      389          76          86.429%
+```
+
+| threshold | recall | negatives rejected | share of all pages skipped |
+|---|---|---|---|
+| 0.05 | 99.46% | 13.6% | **11.1%** |
+| 0.10 | 98.75% | 24.2% | 19.8% |
+| 0.20 | 97.50% | 31.6% | 25.8% |
+| 0.30 | 96.07% | 43.3% | 35.4% |
+
+**The larger sample halved the answer, and then halved it again.** At the
+recall a gate actually needs, the 406-page run put the saving at 26.8%; on
+1,200 pages it is **11.1%**. Both numbers are from the same model on the same
+corpus. The first was two false negatives away from a different conclusion,
+which is what a sample that small buys.
+
+This is the run to quote. It is also the one that makes the Jev question
+sharp rather than academic:
+
+- The free local gate buys **~11% of extraction work at 99.5% recall**, or
+  ~20% if 98.75% is acceptable.
+- For Jev to be worth money and a vendor dependency it has to clear that by a
+  wide margin — 40-50% of pages at the same recall would be three to four
+  times the free option and obviously worth a few dollars. Matching 11% would
+  not be.
+
+The measurement to run next is therefore Jev on this exact sample: same seed,
+same `--per-class 3000`, so the two tables are read side by side.

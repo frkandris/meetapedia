@@ -3,6 +3,12 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Correction**: The local gate's saving is **11.1%, not 26.8%**. Re-run at `--per-class 3000`
+  (1,200 held-out pages against 406), the same model on the same corpus gives 99.46% recall while
+  rejecting 13.6% of negatives — the earlier figure rested on two false negatives and was optimistic
+  by more than double. 98.75% recall buys ~20%. Quote the larger run. It also sharpens the Jev
+  question: the free gate's bar is now 11% at 99.5% recall, and a paid one has to clear that by a
+  wide margin, not match it. [[jev-joinability-gate]].
 - **Measurement**: The calibrated local gate scores **98.9% positive recall while rejecting a third
   of negatives** (406 held-out pages, 189 positive) — against 74.6% for the same model on the same
   data before calibration, which confirms the first run measured the score rather than the corpus.
