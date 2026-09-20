@@ -1905,7 +1905,11 @@ class FallbackExtractor:
         """Experiment path — same failure handling, circuit breaker and routing
         as every other call, so a measurement cannot be flattered by a quieter
         error path than production's."""
-        return await self._call_traced(
+        # `_call`, not `_call_traced`: the latter returns
+        # `(result, (model, quality))`, and the caller unpacks three lists.
+        # Caught in review before the first run — the fake extractor in the
+        # tests returns the bare triple, so nothing local would have noticed.
+        return await self._call(
             "extract_all", source_url, text, city, topic, locale, source_url,
             false_positive_examples, valid_topics, max_output_tokens)
 

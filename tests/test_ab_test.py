@@ -48,13 +48,28 @@ def test_the_summary_prices_the_control_arm_the_way_the_pipeline_does():
 
 def test_a_gated_page_that_had_communities_is_reported_as_a_loss():
     """The number the gate stands or falls on, and it must be impossible to
-    read the report without seeing it."""
-    results = [ab_test.PageResult(url="https://a.test/p", city="X", topic="t",
-                                  baseline_names=["Valódi Kör"], gated_out=True,
-                                  gate_score=0.02)]
+    read the report without seeing it.
+
+    It must also reach the headline recall. Scoring only the pages that ran
+    would report 100% for a path that threw a real community away — which is
+    the difference between measuring the gate and excusing it.
+    """
+    results = [
+        ab_test.PageResult(url="https://a.test/p", city="X", topic="t",
+                           baseline_names=["Valódi Kör"], baseline_venues=1,
+                           gated_out=True, gate_score=0.02),
+        ab_test.PageResult(url="https://b.test/p", city="X", topic="t",
+                           baseline_names=["Másik Kör"],
+                           combined_names=["Másik Kör"], llm_calls=1),
+    ]
     s = ab_test.summarize(results, 0.06)
     assert s["gate"]["rejected_with_baseline_communities"] == 1
     assert s["gate"]["lost_urls"] == ["https://a.test/p"]
+    # End to end one of two survived; the extraction alone kept everything it
+    # was given. Both numbers are reported, and they are not the same number.
+    assert s["communities"]["recall"] == 0.5
+    assert s["communities"]["recall_extraction_only"] == 1.0
+    assert s["venues"]["baseline"] == 1 and s["venues"]["found"] == 0
 
 
 def test_recall_is_none_rather_than_one_when_there_is_nothing_to_recall():
@@ -110,3 +125,21 @@ def test_the_module_never_writes_to_the_database(tmp_path: Path):
     for writer in ("save_results", "update_cache_page", "save_extracted",
                    "bulk_upsert", "start_run", "INSERT", "UPDATE", "DELETE"):
         assert writer not in source, f"the experiment must not {writer}"
+
+
+def test_extract_all_returns_three_lists_not_a_traced_tuple():
+    """The bug review caught before the first run.
+
+    `FallbackExtractor._call_traced` returns `(result, (model, quality))` while
+    `_call` returns the result alone. `run_page` unpacks three lists, so the
+    traced form would have failed every page that passed the gate — and the
+    fake extractor in these tests returns the bare triple, so nothing here
+    would have noticed. Asserting on the source is crude but it is what the
+    defect actually was: the wrong helper by one word.
+    """
+    from pathlib import Path as _Path
+    source = _Path("scraper/extract.py").read_text(encoding="utf-8")
+    start = source.index("async def extract_all(self, text: str, city: str")
+    body = source[start:start + 1200]
+    assert 'self._call(\n            "extract_all"' in body, (
+        "extract_all must go through _call, which strips the provenance tuple")

@@ -204,10 +204,21 @@ def summarize(results: list[PageResult], threshold: float) -> dict:
     baseline_calls = sum(3 if r.baseline_names else 1 for r in done)
     experiment_calls = sum(r.llm_calls for r in done)
 
-    agreements = [compare(r.baseline_names, r.combined_names) for r in ran]
+    # Over EVERY page that was not an error, gated or not. A page the gate
+    # rejected contributes its baseline communities and finds none, which is
+    # exactly what happened to them — scoring only the pages that ran would
+    # report perfect recall for a path that threw real records away. Caught in
+    # review; it is the difference between measuring the gate and excusing it.
+    agreements = [compare(r.baseline_names, r.combined_names) for r in done]
     kept = sum(a["kept"] for a in agreements)
     baseline_total = sum(a["baseline"] for a in agreements)
     found_total = sum(a["found"] for a in agreements)
+
+    # The same question asked of the extraction alone, for telling a gate
+    # problem apart from a prompt problem.
+    ran_agreements = [compare(r.baseline_names, r.combined_names) for r in ran]
+    ran_kept = sum(a["kept"] for a in ran_agreements)
+    ran_baseline = sum(a["baseline"] for a in ran_agreements)
 
     # A gated-out page whose baseline found communities is a real loss — that
     # is the number the whole gate stands or falls on.
@@ -237,16 +248,23 @@ def summarize(results: list[PageResult], threshold: float) -> dict:
             "baseline": baseline_total,
             "found": found_total,
             "kept": kept,
+            # End to end: gate plus extraction, which is what production would
+            # actually do to these pages.
             "recall": round(kept / baseline_total, 4) if baseline_total else None,
+            # Extraction alone, over the pages the gate let through.
+            "recall_extraction_only": round(ran_kept / ran_baseline, 4)
+            if ran_baseline else None,
             "extra": found_total - kept,
         },
+        # Venues and people are counted over every non-error page too, so a
+        # gated-out page shows as baseline-without-found rather than vanishing.
         "venues": {
-            "baseline": sum(r.baseline_venues for r in ran),
-            "found": sum(r.combined_venues for r in ran),
+            "baseline": sum(r.baseline_venues for r in done),
+            "found": sum(r.combined_venues for r in done),
         },
         "persons": {
-            "baseline": sum(r.baseline_persons for r in ran),
-            "found": sum(r.combined_persons for r in ran),
+            "baseline": sum(r.baseline_persons for r in done),
+            "found": sum(r.combined_persons for r in done),
         },
         "lost_communities": [n for a in agreements for n in a["lost"]][:40],
         "new_communities": [n for a in agreements for n in a["new"]][:40],

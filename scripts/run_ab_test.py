@@ -67,6 +67,11 @@ async def main() -> int:
 
     hashes = sample_hashes(args.db, args.pages, args.seed)
     pages = load_pages(args.db, hashes)
+    if not pages:
+        raise SystemExit(
+            "no page in the sample has a cached extraction — nothing to "
+            "compare against. Check --pages, or that this database has been "
+            "through an extraction run.")
     empty = sum(1 for p in pages if not (p.get("records") or []))
     print(f"sample: {len(pages)} pages with a cached extraction "
           f"({empty} of them found nothing — {empty / len(pages):.1%})",
