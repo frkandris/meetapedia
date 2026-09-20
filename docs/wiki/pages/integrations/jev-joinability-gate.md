@@ -249,7 +249,32 @@ container, at the same minute, got **200** from `@cf/openai/gpt-oss-20b`. So
 it is the model that costs money, not the day's quota that ran out — and the
 extraction fleet's allowance was never touched.
 
-That leaves three ways to actually measure Jev, none of them free:
+**Resolved the same day: it is the AI Gateway's own prepaid balance.** The
+second 402 said so exactly — *"Insufficient balance; add money to your gateway
+or use BYOK"* (code 2021). Not the Workers Paid plan, not the neuron
+allowance: partner models bill through **AI Gateway Unified Billing**, topped
+up at AI → AI Gateway → Credits Available → Manage. With credit on the
+account the same call answers 200, and `gatewayMetadata.keySource: "Unified"`
+confirms which purse it came from. The BYOK alternative the error offers is
+closed to us — it wants the TypeSafe key the waitlist is withholding.
+
+Two things the live service taught that no amount of reading would have:
+
+- **Workers AI nests the answer twice**, not once:
+  `{result: {state, result: {answers}, gatewayMetadata}}`. A single unwrap
+  leaves `answers` missing, which is why the runner refuses an answerless
+  response loudly instead of scoring it as a zero.
+- **Concurrency 6 hits 429** on this gateway — it ended a 1,200-page run after
+  422 pages, because `asyncio.gather` takes every in-flight page down with the
+  first exception. The runner now retries 429 and 5xx with doubling backoff,
+  and 3 is the concurrency that has held.
+
+The measured cost, from real `usage` numbers (2,136 input tokens per page at
+`max_text_chars: 8000`): **$0.11** for the 1,200-page comparison, **$0.09** a
+day for ~1,000 new pages, **$11.49** to gate the whole 128,072-page corpus
+once. If the gate works, its price is not the question.
+
+Were credit not an option, the remaining routes would be:
 
 1. **Wait for the TypeSafe waitlist.** Free, unknown latency; reports suggest
    hours rather than weeks.

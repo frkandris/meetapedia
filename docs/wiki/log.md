@@ -3,6 +3,14 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Integration**: Jev runs on Cloudflare once the **AI Gateway prepaid balance** is topped up —
+  not the Workers Paid plan and not the neuron allowance (error 2021, "add money to your gateway or
+  use BYOK"). Two facts only the live service gave: Workers AI nests the answer twice
+  (`result.result.answers`), and concurrency 6 draws 429 — one rate limit ended a 1,200-page run at
+  page 422, since `asyncio.gather` loses every in-flight page with the first exception. The runner
+  now retries 429/5xx with doubling backoff and runs at concurrency 3. Measured price, from real
+  `usage`: 2,136 input tokens per page — $0.11 for the comparison run, $0.09/day for new pages,
+  $11.49 to gate the entire corpus once. [[jev-joinability-gate]].
 - **Measurement**: **Jev on Cloudflare answers 402 Payment Required** — it is a third-party partner
   model, outside the free neuron allowance. The smoke test established it and ruled out the
   alternative explanation in the same minute: the same token in the same container got 200 from
