@@ -112,6 +112,9 @@
       <a href="{{ map_url }}" class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap
         {% if _p.startswith('/terkep') or _p.startswith('/map') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
         {{ t('nav_map') }}</a>
+      <a href="{{ '/utmutatok' if site == 'kozossegek' else '/guides' }}" class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap
+        {% if _p.startswith('/utmutatok') or _p.startswith('/guides') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
+        {{ t('nav_guides') }}</a>
       <a href="{{ about_url }}" class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap
         {% if _p.startswith('/rolunk') or _p.startswith('/about') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
         {{ t('nav_about') }}</a>
@@ -160,6 +163,9 @@
       <a href="{{ map_url }}" class="px-3 py-2.5 text-sm font-medium rounded-md transition-colors
         {% if _p.startswith('/terkep') or _p.startswith('/map') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
         {{ t('nav_map') }}</a>
+      <a href="{{ '/utmutatok' if site == 'kozossegek' else '/guides' }}" class="px-3 py-2.5 text-sm font-medium rounded-md transition-colors
+        {% if _p.startswith('/utmutatok') or _p.startswith('/guides') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
+        {{ t('nav_guides') }}</a>
       <a href="{{ about_url }}" class="px-3 py-2.5 text-sm font-medium rounded-md transition-colors
         {% if _p.startswith('/rolunk') or _p.startswith('/about') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
         {{ t('nav_about') }}</a>

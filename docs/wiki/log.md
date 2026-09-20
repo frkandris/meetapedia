@@ -3,6 +3,9 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Creation**: Added [[daily-data-guides]]: the worker now publishes up to ten quality-gated,
+  AI-written city-topic guides from bounded fact packets before its daily pipeline work, walking
+  Hungary → Germany → Indonesia → Sweden → rest and splitting pages between the two domains.
 - **Correction**: The throughput figures for the gate were overstated — **a page is not a call**.
   Venue and person extraction are skipped on community-less pages, so an empty page costs 1 call and
   a useful one 3 (corpus average 1.363). Corrected: 1,540 pages/day with no gate, **2,040 with Jev at

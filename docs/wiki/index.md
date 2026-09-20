@@ -105,6 +105,7 @@ vocabulary), [faq.md](faq.md) (recurring questions).
 
 ## SEO
 
+- [[daily-data-guides]] — The worker materializes at most ten AI-written, fact-grounded city-topic guides per UTC day, following country priority across both domains without new search spend.
 - [[search-console-2026-09-05]] — Fresh exports distinguish kozossegek's persistent indexing collapse from meetapedia's crawl backlog and weak search visibility, without proving a single algorithmic cause.
 - [[structured-data]] — Which public page types emit JSON-LD, what each object claims, and why the listing pages deliberately do not get an ItemList.
 - [[seo-cross-domain-canonical]] — HU-city pages on meetapedia.com canonicalize to kozossegek.com so Google stops consolidating the duplicate toward the traffic-less domain.

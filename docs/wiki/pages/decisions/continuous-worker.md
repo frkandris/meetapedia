@@ -146,3 +146,10 @@ true any more. A toggle that cannot change behaviour still teaches.
 `worker_enabled` stays, with a different meaning: `false` runs nothing. There is
 no second scheduler behind it. See [[scheduler-disabled-no-cron]] for the
 headstone.
+
+## First work of the UTC day
+
+Since 2026-09-20 the worker checks [[daily-data-guides]] before choosing either
+pipeline mode. That publication step shares the provider ledger but not the run
+coordinator: its small daily cap is deliberately completed before the open-ended
+extraction or collection backlog can occupy the day.

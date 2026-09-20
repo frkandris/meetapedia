@@ -34,6 +34,10 @@ from ..db import (
     get_city_totals,
     get_communities,
     get_communities_by_ids,
+    get_data_guide,
+    get_data_guides,
+    count_data_guides,
+    get_data_guide_sitemap_rows,
     get_communities_for_city,
     search_communities_by_tag,
     save_not_community_report,
@@ -104,7 +108,7 @@ from ..url_safety import (UnsafeURLError, assert_safe_public_url,
                           is_public_http_url)
 from .i18n import get_topic_labels, lang_context
 from .log_stream import broadcaster
-from .schema import (breadcrumb_jsonld, person_jsonld, records_to_jsonld,
+from .schema import (article_jsonld, breadcrumb_jsonld, person_jsonld, records_to_jsonld,
                      site_jsonld, venue_jsonld)
 from .state import app_state
 
@@ -5410,6 +5414,58 @@ _SITEMAP_CACHE: dict[str, tuple[float, str]] = {}
 _SITEMAP_TTL = 3600.0
 
 
+@_fastapi.get("/utmutatok", response_class=HTMLResponse)
+@_fastapi.get("/guides", response_class=HTMLResponse)
+async def public_guides(request: Request, page: int = Query(1, ge=1)):
+    """Bounded, paginated index of the daily data-derived guides."""
+    from .i18n import _detect_site
+    site = _detect_site(request)
+    canonical_path = "/utmutatok" if site == "kozossegek" else "/guides"
+    if request.url.path != canonical_path:
+        return RedirectResponse(canonical_path, status_code=301)
+    init_db(_db())
+    per_page = 24
+    total = count_data_guides(_db(), site)
+    guides = get_data_guides(_db(), site, limit=per_page, offset=(page - 1) * per_page)
+    return templates.TemplateResponse(request, "public_guides.html", {
+        "guides": guides, "page": page, "pages": max(1, (total + per_page - 1) // per_page),
+        "canonical_path": canonical_path, **lang_context(request),
+    })
+
+
+@_fastapi.get("/utmutatok/{slug}", response_class=HTMLResponse)
+@_fastapi.get("/guides/{slug}", response_class=HTMLResponse)
+async def public_guide(request: Request, slug: str):
+    from .i18n import _detect_site
+    site = _detect_site(request)
+    prefix = "/utmutatok" if site == "kozossegek" else "/guides"
+    if not request.url.path.startswith(prefix + "/"):
+        return RedirectResponse(f"{prefix}/{slug}", status_code=301)
+    init_db(_db())
+    guide = get_data_guide(_db(), slug, site)
+    if not guide:
+        return HTMLResponse("Not found", status_code=404)
+    data = guide["data"]
+    city_locale = _city_locale(guide["city"])
+    page_url = f"{lang_context(request)['site_url']}{prefix}/{slug}"
+    schema_json = article_jsonld(
+        guide["title"], guide["summary"], page_url,
+        guide["published_at"], guide["updated_at"], lang_context(request)["site_name"])
+    return templates.TemplateResponse(request, "public_guide.html", {
+        "guide": guide, "guide_data": data, "canonical_path": f"{prefix}/{slug}",
+        "guides_path": prefix,
+        "listing_url": f"/{_slugify(guide['city'])}/{_topic_url_slug(guide['topic'], city_locale)}",
+        "schema_json": schema_json,
+        "breadcrumbs": [
+            {"name": lang_context(request)["site_name"], "url": lang_context(request)["site_url"] + "/"},
+            {"name": "Útmutatók" if guide["locale"] == "hu" else "Guides",
+             "url": lang_context(request)["site_url"] + prefix},
+            {"name": guide["title"], "url": page_url},
+        ],
+        **lang_context(request),
+    })
+
+
 @_fastapi.get("/sitemap.xml")
 async def sitemap(request: Request):
     # Local import: other functions in this module already bind `_time`
@@ -5443,9 +5499,9 @@ def _build_sitemap(ctx: dict) -> str:
     if is_meetapedia:
         # About/explore still render at their HU paths on both domains; the
         # English aliases redirect and must not be submitted as canonicals.
-        static_paths = ["/", "/rolunk", "/map", "/people", "/cities", "/felfedezes", "/submit-community"]
+        static_paths = ["/", "/rolunk", "/map", "/people", "/cities", "/felfedezes", "/submit-community", "/guides"]
     else:
-        static_paths = ["/", "/rolunk", "/terkep", "/varosok", "/felfedezes", "/helyszinek", "/emberek", "/kozosseg-bekuldes"]
+        static_paths = ["/", "/rolunk", "/terkep", "/varosok", "/felfedezes", "/helyszinek", "/emberek", "/kozosseg-bekuldes", "/utmutatok"]
 
     locs: list[str] = [base + p for p in static_paths]
     lastmods: dict[str, str] = {}  # loc → YYYY-MM-DD (community pages only)
@@ -5453,6 +5509,12 @@ def _build_sitemap(ctx: dict) -> str:
     if app_state.db_path:
         init_db(app_state.db_path)
         lastmod_map = get_community_lastmods(_db())
+        guide_prefix = "/guides" if is_meetapedia else "/utmutatok"
+        for slug, lastmod in get_data_guide_sitemap_rows(
+                _db(), "meetapedia" if is_meetapedia else "kozossegek"):
+            loc = f"{base}{guide_prefix}/{slug}"
+            locs.append(loc)
+            lastmods[loc] = lastmod
 
         if is_meetapedia:
             # country landing pages (/cities/<slug>) — only countries with live

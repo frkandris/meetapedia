@@ -1,0 +1,58 @@
+{% extends "public_base.html" %}
+{% block title %}{{ guide.title }} – {{ site_name }}{% endblock %}
+{% block canonical_path %}{{ canonical_path }}{% endblock %}
+{% block og_desc %}{{ guide.summary }}{% endblock %}
+{% block content %}
+<main class="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+  <a href="{{ guides_path }}" class="text-sm font-semibold text-[#A8512F]">← {{ 'Minden útmutató' if guide.locale == 'hu' else 'All guides' }}</a>
+  <article class="mt-5">
+    <p class="text-sm font-semibold text-[#A8512F]">{{ guide.city }} · {{ guide_data.topic_label }}</p>
+    <h1 class="mt-2 text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">{{ guide.title }}</h1>
+    <p class="mt-5 text-lg leading-8 text-[#514B45]">{{ guide.summary }}</p>
+    <p class="mt-3 text-xs text-[#8C8478]">{{ 'Adatpillanat:' if guide.locale == 'hu' else 'Data snapshot:' }} {{ guide.published_at[:10] }}</p>
+
+    <section class="mt-10 space-y-5 text-[17px] leading-8 text-[#393532]">
+      <p>{{ guide_data.article.introduction }}</p>
+      <p>{{ guide_data.article.comparison }}</p>
+      <p>{{ guide_data.article.choosing_advice }}</p>
+      <p>{{ guide_data.article.conclusion }}</p>
+    </section>
+
+    <section class="mt-10">
+      <h2 class="text-2xl font-bold">{{ 'Miben különböznek?' if guide.locale == 'hu' else 'What can you compare?' }}</h2>
+      <p class="mt-2 leading-7 text-[#6A6259]">{{ 'Az alábbi mezők a közösségek saját nyilvános információiból származnak; a hiányzó adatot nem találgatjuk.' if guide.locale == 'hu' else 'The fields below come from the communities’ public information; missing details are never guessed.' }}</p>
+      <div class="mt-5 grid sm:grid-cols-2 gap-4">
+        {% for section in guide_data.dimensions %}
+        <div class="rounded-xl border border-[#EAE5DB] bg-white p-5">
+          <h3 class="font-bold">{{ section.label }}</h3>
+          <p class="mt-1 text-xs text-[#8C8478]">{{ section.covered }} {{ 'közösségnél ismert' if guide.locale == 'hu' else 'communities report this' }}</p>
+          <dl class="mt-3 space-y-2 text-sm">
+            {% for item in section.examples %}<div><dt class="font-semibold">{{ item.name }}</dt><dd class="text-[#6A6259]">{{ item.value }}</dd></div>{% endfor %}
+          </dl>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="mt-12">
+      <h2 class="text-2xl font-bold">{{ 'Közösségek röviden' if guide.locale == 'hu' else 'Communities at a glance' }}</h2>
+      <div class="mt-5 space-y-5">
+        {% for community in guide_data.communities %}
+        <div class="border-b border-[#EAE5DB] pb-5">
+          <h3 class="text-lg font-bold"><a class="hover:text-[#A8512F]" href="/{{ guide.city|slugify }}/{{ community.name|slugify }}">{{ community.name }}</a></h3>
+          {% if community.location %}<p class="mt-1 text-sm text-[#8C8478]">{{ community.location }}</p>{% endif %}
+          {% if community.description %}<p class="mt-2 leading-7 text-[#514B45]">{{ community.description }}</p>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="mt-12 rounded-xl bg-[#F5F2EC] p-6">
+      <h2 class="text-xl font-bold">{{ 'Nézd meg a teljes, friss listát' if guide.locale == 'hu' else 'Browse the complete, current list' }}</h2>
+      <p class="mt-2 text-sm leading-6 text-[#6A6259]">{{ 'Az útmutató egy publikáláskori pillanatkép. A katalógusoldalon az újonnan talált közösségek is megjelennek.' if guide.locale == 'hu' else 'This guide is a publication-time snapshot. The directory page also includes communities discovered later.' }}</p>
+      <a href="{{ listing_url }}" class="mt-4 inline-flex rounded-lg bg-[#A8512F] px-4 py-2 text-sm font-semibold text-white">{{ 'Teljes lista' if guide.locale == 'hu' else 'Full directory' }} →</a>
+    </section>
+    <p class="mt-6 text-xs leading-5 text-[#8C8478]">{{ 'Az útmutató szövegét mesterséges intelligencia állította össze a katalógus ellenőrizhető mezőiből; a számokat, neveket és összehasonlító adatokat a strukturált adatbázis adja.' if guide.locale == 'hu' else 'AI drafted this guide from verifiable directory fields; names, counts and comparison data come from the structured database.' }}</p>
+  </article>
+</main>
+{% endblock %}

@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import structlog
@@ -453,11 +454,14 @@ async def main() -> None:
         return value
 
     async def _worker_loop() -> None:
-        from .web.app import launch_pipeline_run
+        from .web.app import _build_extractor, launch_pipeline_run
+        from .guides import publish_daily_guides
         import time as _time
         extract_idle_until = 0.0
         empty_extractions = 0
         empty_collections = 0
+        guides_checked_day = ""
+        guides_retry_at = 0.0
         log.info("worker_started")
         while True:
             try:
@@ -465,6 +469,36 @@ async def main() -> None:
                     # A manual or control-API run owns the slot. Leave it alone.
                     await asyncio.sleep(_WORKER_IDLE_SECONDS)
                     continue
+                # Publication is deliberately first in the daily queue. It
+                # spends a small, bounded number of fleet calls on data we
+                # already own; the DB makes the cap restart-safe across sites.
+                utc_day = datetime.now(timezone.utc).date().isoformat()
+                if (schedule_cfg.get("guides_enabled")
+                        and guides_checked_day != utc_day
+                        and _time.monotonic() >= guides_retry_at
+                        and not getattr(app_state, "worker_paused", False)):
+                    try:
+                        writer = _build_extractor(app_state.pipeline_cfg)
+                        if writer.exhausted:
+                            raise RuntimeError("no model available for daily guides")
+                        published = await publish_daily_guides(
+                            app_state.db_path,
+                            app_state.cities or [],
+                            writer,
+                            limit=int(schedule_cfg.get("guides_daily_limit") or 10),
+                            min_communities=int(schedule_cfg.get("guides_min_communities") or 8),
+                            min_description_ratio=float(
+                                schedule_cfg.get("guides_min_description_ratio") or 0.6),
+                            min_dimensions=int(schedule_cfg.get("guides_min_dimensions") or 3),
+                            country_priority=_settings_country_priority(),
+                        )
+                        guides_checked_day = utc_day
+                        log.info("daily_guides_published", count=len(published),
+                                 slugs=[g["slug"] for g in published])
+                    except Exception as exc:  # fleet/quota failure: retry, do not block worker
+                        guides_retry_at = _time.monotonic() + _WORKER_EXTRACT_RETRY_S
+                        log.warning("daily_guides_deferred", error=str(exc),
+                                    retry_s=_WORKER_EXTRACT_RETRY_S)
                 if (schedule_cfg.get("enrich_enabled")
                         and not app_state._enrich_running
                         and not getattr(app_state, "worker_paused", False)):
