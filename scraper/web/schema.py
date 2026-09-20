@@ -55,14 +55,17 @@ def community_to_schema(record: Union["CommunityRecord", dict],
     if record.website:
         obj["url"] = record.website
 
-    loc: dict = {"@type": "Place", "addressLocality": record.city}
+    # `location` is whatever the extractor read off the page: a street
+    # address sometimes, but just as often a venue name, a district, or
+    # "online". It is the Place's *name*, never `streetAddress` — writing an
+    # unvalidated string into a postal field is the inference this module
+    # refuses to make everywhere else. The city is the only part we know to be
+    # an administrative locality, because it is the pair we searched for.
+    loc: dict = {"@type": "Place", "addressLocality": record.city,
+                 "address": {"@type": "PostalAddress",
+                             "addressLocality": record.city}}
     if record.location:
         loc["name"] = record.location
-        loc["address"] = {"@type": "PostalAddress",
-                          "streetAddress": record.location,
-                          "addressLocality": record.city}
-    else:
-        loc["address"] = {"@type": "PostalAddress", "addressLocality": record.city}
     obj["location"] = loc
     obj["areaServed"] = {"@type": "Place", "name": record.city}
 

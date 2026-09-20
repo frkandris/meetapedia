@@ -35,6 +35,13 @@ and a named person — had none.
 from a fact, so a confident wrong answer is worse than an absent one.
 `test_nothing_is_invented_for_a_bare_record` holds this.
 
+The rule is easier to state than to follow: the first draft of this work put
+`CommunityRecord.location` into `PostalAddress.streetAddress`, which a review
+caught the same day. That field is free text — a venue name, a district, or
+"online" as often as a street — so it names the `Place` and nothing more. The
+city is the only part known to be an administrative locality, because it is
+half of the pair we searched for.
+
 **`mainEntityOfPage` belongs to a page with one subject.** `records_to_jsonld`
 passes the page URL through only when it was given exactly one record;
 on a city listing it would assert that all forty communities are what the page

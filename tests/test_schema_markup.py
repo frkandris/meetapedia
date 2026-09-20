@@ -122,6 +122,10 @@ def test_the_community_object_carries_what_the_record_knows(client):
     assert "vegyeskar" in obj["keywords"]
     assert obj["member"]["name"] == "Kovács Anna, karnagy"
     assert obj["location"]["address"]["addressLocality"] == "Budapest"
+    # `location` is free text — a venue name or "online" as often as a street.
+    # It names the Place; it must never be claimed as a postal streetAddress.
+    assert obj["location"]["name"] == "Fő tér 1."
+    assert "streetAddress" not in obj["location"]["address"]
     assert obj["mainEntityOfPage"].endswith("/budapest/zenei-kor")
 
 
