@@ -287,3 +287,69 @@ None is urgent. The free local gate already buys ~11% of extraction work at
 99.5% recall, and Jev only becomes interesting if it clears that by a wide
 margin. The measurement is worth a few dollars; it is not worth a rushed
 decision.
+
+## The comparison, 2026-09-20: Jev wins, by 2-5x
+
+Both runners on the **same 1,200 held-out pages** (560 positive, 640 negative),
+same seed, same hostname split — that is what `--held-out-only` is for. Jev's
+thresholds below are recomputed from the cached responses, so the finer grid
+cost nothing extra.
+
+| threshold | recall | negatives rejected | share of all pages skipped |
+|---|---|---|---|
+| 0.030 | 100.00% | 5.5% | 4.5% |
+| 0.035 | 99.64% | 19.1% | 15.6% |
+| 0.045 | 98.93% | 31.1% | 25.4% |
+| 0.060 | 98.93% | 40.8% | **33.4%** |
+| 0.100 | 96.43% | 65.5% | 53.6% |
+| 0.200 | 92.50% | 80.8% | 66.1% |
+
+Against the local model at the same recall:
+
+| recall | local | Jev | |
+|---|---|---|---|
+| 99.64% | 3.1% | 15.6% | **5.0x** |
+| 98.93% | 11.1% | 33.4% | **3.0x** |
+| 96.43% | 25.8% | 53.6% | **2.1x** |
+
+At **0.06 — 98.9% recall and a third of all extraction work removed** — the
+free model buys 11%. That is the margin the question was asked about, and it
+is wide enough to settle it: a paid gate is worth it here.
+
+What it means for throughput, at ~2,100 free fleet calls a day:
+
+```
+no gate      2,100 pages/day   backlog 61.0 days
+local gate   2,362 pages/day   backlog 54.2 days   (1.12x)
+Jev @ 0.06   3,153 pages/day   backlog 40.6 days   (1.50x)
+```
+
+## Two things the numbers understate
+
+**The label is wrong more often than Jev is.** The lowest-scored "false
+negatives" are `szallas.hu/tornyospalca/wellness`, `utazzitthon.hu/latnivalo/…`
+(a sightseeing page), `filharmonia.hu/nyari-programok/…` (a concert series).
+These are pages where the incumbent extractor claimed a community and Jev says
+there is none — and on inspection Jev is right. So the measured recall is a
+floor, and the gate doubles as a quality signal: the same call that saves an
+extraction also flags a probable false positive already in the corpus.
+
+**Non-English held up.** TypeSafe's own documentation warns that accuracy is
+best in English and to test before relying on it elsewhere. This corpus is
+Hungarian, German and Swedish, and the results above are from it. The warning
+was worth heeding; it did not bite.
+
+## What a production gate still needs
+
+The preconditions listed earlier have not moved — a dedicated fingerprint, an
+auditable and reversible negative cache separate from the extraction cache,
+uncertain/error/429 always falling through to extraction, never writing a
+permanent empty extraction from a classifier result, per-market thresholds if
+calibration drifts, daily cost accounting against an explicit budget, an admin
+release path, and a regression test proving an outage cannot classify a page
+as empty.
+
+One more, learned here: **the threshold belongs in config, not in code**, and
+0.06 is a starting point rather than a settled value. The band between 0.03
+and 0.06 is where recall trades hardest against saving, and it should be
+re-measured whenever the extraction prompt changes — the labels move with it.

@@ -3,6 +3,15 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Measurement**: **Jev beats the free local gate by 2-5x** on the same 1,200 held-out pages. At
+  98.9% recall it removes **33.4% of all extraction work** where the local model removes 11.1%; at
+  99.6% recall, 15.6% against 3.1%. Throughput at ~2,100 free calls/day: 3,153 pages/day against
+  2,362, backlog 40.6 days against 54.2. Cost $0.11 for the run, $0.09/day in production, $11.49 to
+  gate the whole corpus once — so price is not the question. Two findings the table understates: the
+  lowest-scored "false negatives" are pages where the *incumbent* is wrong (a hotel wellness page, a
+  sightseeing listing, a concert series), making measured recall a floor and the gate a
+  false-positive detector as well; and the Hungarian/German/Swedish corpus did not trigger the
+  non-English weakness TypeSafe's own docs warn about. [[jev-joinability-gate]].
 - **Integration**: Jev runs on Cloudflare once the **AI Gateway prepaid balance** is topped up —
   not the Workers Paid plan and not the neuron allowance (error 2021, "add money to your gateway or
   use BYOK"). Two facts only the live service gave: Workers AI nests the answer twice
