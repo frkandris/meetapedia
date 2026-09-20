@@ -2,6 +2,26 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-20
+- **Creation**: Added [[jev-joinability-gate]] and a recall-first shadow benchmark for the
+  newly released Jev 1.13. The script measures Jev as a page gate, not an extractor — it cannot
+  generate community names or fields — and compares it on the identical deterministic sample with
+  a dependency-free local character n-gram classifier. Neither runner has production authority;
+  incumbent `records_count` is a weak label, and the lowest-scored positives are printed for manual
+  review before any threshold may drop work. A JSON response cache prevents repeated Jev spend.
+- **Creation**: Added `report_inline_enrichment.py`, which converts the already persisted
+  `enrich_log` into attempts/searches, approximate LLM calls, successful records, yield, and fields
+  added. Inline enrichment remains on until production evidence says its contact data is not worth
+  the extra search and call; description enrichment is not a substitute for that evidence.
+- **Optimization**: HTTP page fetches now share one `httpx` connection pool per event loop, matching
+  search and extraction. The old one-client-per-URL path threw away DNS, TLS, and keep-alive state
+  and recreated the socket pattern behind the earlier file-descriptor incident. Redirect targets
+  still receive the same per-hop SSRF and blocked-domain checks.
+- **Simplification**: Playwright is an optional `browser` dependency and Chromium is no longer
+  installed in the production image while `playwright_domains` is empty. The runtime already imports
+  it only when a domain is configured; paying the image, build, deploy, and dependency cost on every
+  release supplied no capability in the current configuration.
+
 ## 2026-09-19
 - **Correction**: **SambaNova was declined on a misreading.** The 2026-09-05 entry recorded "20 RPM /
   **20 RPD** / 200K TPD on its own rate-limit page, i.e. half of OpenRouter's already-tightest

@@ -49,7 +49,10 @@ class PlaywrightFetcher:
             self._browser = await self._pw.chromium.launch(headless=True)
             log.info("playwright_browser_started")
         except ImportError:
-            log.warning("playwright_not_installed", hint="pip install playwright && playwright install chromium")
+            log.warning(
+                "playwright_not_installed",
+                hint="pip install '.[browser]' && playwright install chromium",
+            )
 
     async def stop(self) -> None:
         try:

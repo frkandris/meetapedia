@@ -1,4 +1,5 @@
 import asyncio
+import weakref
 from urllib.parse import urljoin, urlparse
 
 import html2text
@@ -9,6 +10,27 @@ import trafilatura
 from .url_safety import UnsafeURLError, assert_safe_public_url
 
 log = structlog.get_logger()
+
+# One connection pool per event loop.  Search and extraction already use this
+# shape; fetch used to construct a client (and therefore a fresh DNS/TLS/socket
+# pool) for every URL.  A loop object is the key rather than id(loop): CPython
+# may reuse an id after a test loop is collected.
+_shared_clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def shared_client() -> "httpx.AsyncClient":
+    loop = asyncio.get_running_loop()
+    client = _shared_clients.get(loop)
+    if client is None or client.is_closed:
+        client = httpx.AsyncClient(
+            follow_redirects=False,
+            headers=_HEADERS,
+            trust_env=False,
+        )
+        _shared_clients[loop] = client
+    return client
 
 _HEADERS = {
     "User-Agent": (
@@ -82,38 +104,33 @@ async def fetch_and_clean(
 
     async def _fetch() -> str | None:
         try:
-            async with httpx.AsyncClient(
-                timeout=timeout_seconds,
-                follow_redirects=False,
-                headers=_HEADERS,
-                trust_env=False,
-            ) as client:
-                current_url = url
-                resp = None
-                for _redirect_count in range(6):
-                    await assert_safe_public_url(current_url)
-                    if _is_blocked(current_url, blocked_domains):
-                        log.debug("fetch_redirect_blocked", url=current_url)
-                        return None
-                    resp = await client.get(current_url)
-                    if resp.status_code not in {301, 302, 303, 307, 308}:
-                        break
-                    location = resp.headers.get("location")
-                    if not location:
-                        return None
-                    current_url = urljoin(str(resp.url), location)
-                else:
-                    log.warning("fetch_too_many_redirects", url=url)
+            client = shared_client()
+            current_url = url
+            resp = None
+            for _redirect_count in range(6):
+                await assert_safe_public_url(current_url)
+                if _is_blocked(current_url, blocked_domains):
+                    log.debug("fetch_redirect_blocked", url=current_url)
                     return None
+                resp = await client.get(current_url, timeout=timeout_seconds)
+                if resp.status_code not in {301, 302, 303, 307, 308}:
+                    break
+                location = resp.headers.get("location")
+                if not location:
+                    return None
+                current_url = urljoin(str(resp.url), location)
+            else:
+                log.warning("fetch_too_many_redirects", url=url)
+                return None
 
-                if resp is None:
-                    return None
-                if resp.status_code >= 400:
-                    log.warning("fetch_failed", url=current_url, status=resp.status_code)
-                    return None
-                if "text/html" not in resp.headers.get("content-type", ""):
-                    return None
-                return _extract_text(resp.text, min_text_length=min_text_length)
+            if resp is None:
+                return None
+            if resp.status_code >= 400:
+                log.warning("fetch_failed", url=current_url, status=resp.status_code)
+                return None
+            if "text/html" not in resp.headers.get("content-type", ""):
+                return None
+            return _extract_text(resp.text, min_text_length=min_text_length)
         except UnsafeURLError as exc:
             log.warning("fetch_unsafe_redirect_blocked", url=url, reason=str(exc))
             return None

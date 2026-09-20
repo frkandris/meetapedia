@@ -58,6 +58,16 @@ def _reset_shared_search_client():
 
 
 @pytest.fixture(autouse=True)
+def _reset_shared_fetch_client():
+    """Keep the fetch connection pool from leaking fakes between test loops."""
+    from scraper.fetch import _shared_clients
+
+    _shared_clients.clear()
+    yield
+    _shared_clients.clear()
+
+
+@pytest.fixture(autouse=True)
 def _reset_shared_extract_client():
     """Drop the extractor's pooled HTTP clients between tests.
 

@@ -17,8 +17,7 @@ COPY scripts/  ./scripts/
 COPY tailwind.config.js .
 
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir . && \
-    playwright install chromium --with-deps
+    pip install --no-cache-dir .
 
 # Build Tailwind CSS (pytailwindcss uses the standalone binary, no Node needed)
 RUN pip install --no-cache-dir pytailwindcss && \
