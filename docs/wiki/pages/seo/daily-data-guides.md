@@ -23,7 +23,7 @@ A city-topic pair needs at least eight visible communities, meaningful descripti
 
 Each row stores a bounded snapshot of at most twenty communities and its comparison facts. That prevents page weight from growing with the corpus and stops later crawler changes from silently rewriting an indexed article. The page links to the live city-topic listing for current results.
 
-The writing prompt separates trusted editorial rules from an explicitly delimited JSON fact packet. It defines the reader's task, language, evidence boundary, forbidden claims, output schema and length, then asks for a silent factual self-check. Code rejects malformed output and prose outside 300–800 words, allows at most twice the remaining publication quota in attempts, and keeps deterministic control of titles, summaries, counts, links and comparison cards. Pages disclose AI assistance.
+The writing prompt separates trusted editorial rules from an explicitly delimited JSON fact packet. It defines the reader's task, language, evidence boundary, forbidden claims, output schema and length, then asks for a silent factual self-check. Code rejects malformed output, prose outside 300–800 words, unknown evidence dimensions, model-written URLs and numeric claims absent from the packet. It stores writer model and prompt version, allows at most twice the remaining publication quota in attempts, and keeps deterministic control of titles, summaries, counts, links and comparison cards. Pages disclose AI assistance. The first 20 pages require manual sampling before unattended operation; thereafter the handoff prescribes a weekly random sample and golden-set eval before prompt changes.
 
 ## Persistence and indexing
 

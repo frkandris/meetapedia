@@ -15,6 +15,7 @@ Candidates follow `pipeline.country_priority`: Hungary first, then Germany, Indo
 - At least 3 structured comparison dimensions have data for 2+ communities.
 - The daily 10 is a ceiling, not a forced quota.
 - The writer sees a bounded JSON fact packet and cannot browse; invalid JSON or prose outside 300–800 words is rejected.
+- The row records writer model + prompt version; unknown evidence dimensions, model-written URLs and numeric claims absent from the fact packet are rejected.
 - Titles, summaries, counts, links, comparison cards and schema remain deterministic; the page discloses AI assistance.
 - Unique `(site, city, topic)` and per-day DB counting make restarts idempotent.
 - Each article snapshots at most 20 records; indexes paginate at 24 rows.
@@ -26,3 +27,5 @@ The prompt-design research and source links are in `docs/research/ai-article-bri
 ## Deployment check
 
 After Coolify deploy, verify `/utmutatok` and `/guides` on their respective domains. On the first worker iteration, logs should show `daily_guides_published` with a count and slugs. A zero count is valid when no pair passes the gates or the UTC-day cap is already full. Confirm new URLs appear in the matching `/sitemap.xml` and never in the other domain's sitemap.
+
+Before leaving the feature unattended, manually review the first 20 published pages for factual fidelity, useful local language and repetitive phrasing. Thereafter review a random weekly sample and keep the prompt version fixed until a small golden-set eval has compared the replacement.

@@ -5,7 +5,7 @@ import json
 from fastapi.testclient import TestClient
 
 from scraper.db import get_data_guides, init_db
-from scraper.guides import publish_daily_guides
+from scraper.guides import _decode_article, publish_daily_guides
 from scraper.models import CommunityRecord
 from scraper.pipeline import CityConfig, TopicConfig
 from scraper.store import save_results
@@ -26,6 +26,7 @@ class _Writer:
         article = {
             "introduction": body, "comparison": body,
             "choosing_advice": body, "conclusion": body,
+            "used_dimensions": ["location", "fee", "skill_level"],
         }
         return {"choices": [{"message": {"content": json.dumps(article)}}]}
 
@@ -74,6 +75,17 @@ def test_quality_gate_does_not_force_daily_quota(tmp_path):
     city = CityConfig("Budapest", "hu", [], "Hungary")
     _seed(db, city, count=7)
     assert asyncio.run(publish_daily_guides(db, [city], _Writer(), limit=10)) == []
+
+
+def test_article_validator_rejects_untraceable_numbers_and_dimensions():
+    body = "Grounded editorial sentence without unsupported claims. " * 20
+    base = {"introduction": body, "comparison": body, "choosing_advice": body,
+            "conclusion": body, "used_dimensions": ["fee"]}
+    assert _decode_article(json.dumps(base), {"fee"}, set())
+    assert _decode_article(json.dumps({**base, "conclusion": body + " 999 members"}),
+                           {"fee"}, {"8"}) is None
+    assert _decode_article(json.dumps({**base, "used_dimensions": ["popularity"]}),
+                           {"fee"}, set()) is None
 
 
 def test_guide_routes_and_sitemaps_are_site_scoped(tmp_path, monkeypatch):

@@ -19,6 +19,7 @@ _DIMENSION_LABELS = {
     "en": dict(zip(_DIMENSIONS, ("Meeting times", "Frequency", "Location",
         "Fees", "Experience level", "Age range", "Language", "How to join"))),
 }
+_PROMPT_VERSION = "guide-writer-v1"
 
 _WRITER_SYSTEM = """You are the careful editor of a community directory.
 Write a genuinely useful local guide for someone choosing a group to join.
@@ -33,12 +34,15 @@ Grounding rules:
 - Use the requested language naturally and make the article helpful without search traffic.
 
 Return one JSON object only, with string fields: introduction, comparison,
-choosing_advice, conclusion. The four body sections together must
+choosing_advice, conclusion, plus used_dimensions as an array containing only
+field names from FACT_PACKET.comparison_dimensions that you actually discussed.
+The four body sections together must
 be 350-700 words. Use plain text paragraphs, no Markdown headings or links.
 Before returning, silently verify every number and named-group claim against the packet."""
 
 
-def _decode_article(raw: str) -> dict | None:
+def _decode_article(raw: str, allowed_dimensions: set[str],
+                    allowed_numbers: set[str]) -> dict | None:
     raw = (raw or "").strip()
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.I)
@@ -49,8 +53,21 @@ def _decode_article(raw: str) -> dict | None:
     fields = ("introduction", "comparison", "choosing_advice", "conclusion")
     if not isinstance(obj, dict) or any(not isinstance(obj.get(k), str) for k in fields):
         return None
+    used = obj.get("used_dimensions")
+    if (not isinstance(used, list) or not used
+            or any(not isinstance(v, str) or v not in allowed_dimensions for v in used)):
+        return None
     word_count = len(" ".join(obj[k] for k in fields).split())
     if not 300 <= word_count <= 800:
+        return None
+    body = " ".join(obj[k] for k in fields)
+    # A professional draft must be auditable. Numbers are the easiest class of
+    # fabricated claim to reject deterministically: every digit sequence in the
+    # prose must already occur in the fact packet. Links belong to deterministic
+    # page chrome, never to model-written copy.
+    if set(re.findall(r"\d+", body)) - allowed_numbers:
+        return None
+    if re.search(r"https?://|www\.", body, flags=re.I):
         return None
     obj["word_count"] = word_count
     return obj
@@ -168,7 +185,11 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
         ], temperature=0.3, max_tokens=1400,
            response_format={"type": "json_object"})
         raw = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-        article = _decode_article(raw)
+        article = _decode_article(
+            raw,
+            {d["field"] for d in dimensions},
+            set(re.findall(r"\d+", json.dumps(packet, ensure_ascii=False))),
+        )
         if not article:
             continue
         guide = {
@@ -188,6 +209,7 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
                 "dimensions": dimensions,
                 "article": article,
                 "writer_model": getattr(writer, "last_model", ""),
+                "prompt_version": _PROMPT_VERSION,
                 # A bounded snapshot prevents both page-weight growth and later
                 # corpus edits from silently rewriting an already indexed article.
                 "communities": [
