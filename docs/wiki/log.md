@@ -3,6 +3,12 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Integration**: The gate benchmark can reach Jev through Cloudflare Workers AI
+  (`--provider cloudflare`), because TypeSafe's console is waitlisted and the `CLOUDFLARE_API_TOKEN`
+  is already configured. Same model and questions; the envelope nests under `input` and the answer
+  may nest under `result`, and tests assert both wire formats since neither can be checked live yet.
+  Noted with its cost: that route spends the same 10,000-neuron daily allowance gpt-oss-20b
+  extraction runs on, so a full benchmark costs the fleet a day of that provider.
 - **Correction**: The local gate's saving is **11.1%, not 26.8%**. Re-run at `--per-class 3000`
   (1,200 held-out pages against 406), the same model on the same corpus gives 99.46% recall while
   rejecting 13.6% of negatives — the earlier figure rested on two false negatives and was optimistic

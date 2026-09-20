@@ -41,6 +41,17 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = ROOT / "data" / "scraper.db"
 API_URL = "https://api.typesafe.ai/v1/systemone"
 
+#: Jev is also served by Cloudflare Workers AI, which matters because
+#: TypeSafe's own console is behind a waitlist while our Cloudflare token is
+#: already configured (`CLOUDFLARE_API_TOKEN`, see config/providers.yaml). Same
+#: model, same question types; the wire format differs only in the envelope.
+#: The account id is not a secret — it is in every dashboard URL — and is
+#: inlined for the same reason providers.yaml inlines it.
+CF_ACCOUNT_ID = os.environ.get(
+    "CLOUDFLARE_ACCOUNT_ID", "809bd7dcd8939fa5e520a96ab4923429")
+CF_URL = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run"
+CF_MODEL = "typesafe/jev"
+
 
 @dataclass(frozen=True)
 class Page:
@@ -326,10 +337,26 @@ def _jev_payload(page: Page, model: str) -> dict:
 
 async def jev_scores(
     pages: list[Page], model: str, concurrency: int, cache_path: Path | None,
+    provider: str = "typesafe",
 ) -> dict[str, float]:
-    key = os.environ.get("TYPESAFE_API_KEY", "")
-    if not key:
-        raise SystemExit("TYPESAFE_API_KEY is required for the jev runner")
+    """Score every page with Jev, through TypeSafe directly or via Cloudflare.
+
+    The two differ only in envelope. TypeSafe takes `{model, state, questions}`
+    and answers `{answers, usage}`; Cloudflare wraps the same payload in
+    `{model, input:{…}}` and may wrap the same answer in `{result:{…}}`. Both
+    shapes are accepted on the way back, because Workers AI is not consistent
+    about the wrapper across models.
+    """
+    if provider == "cloudflare":
+        key = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+        if not key:
+            raise SystemExit("CLOUDFLARE_API_TOKEN is required for --provider cloudflare")
+        url, model = CF_URL, CF_MODEL
+    else:
+        key = os.environ.get("TYPESAFE_API_KEY", "")
+        if not key:
+            raise SystemExit("TYPESAFE_API_KEY is required for the jev runner")
+        url = API_URL
     cache: dict = {}
     if cache_path and cache_path.exists():
         cache = json.loads(cache_path.read_text(encoding="utf-8"))
@@ -342,10 +369,21 @@ async def jev_scores(
             if cache_key in cache:
                 return
             async with sem:
-                response = await client.post(API_URL, json=_jev_payload(page, model))
+                payload = _jev_payload(page, model)
+                if provider == "cloudflare":
+                    payload = {"model": model,
+                               "input": {k: v for k, v in payload.items()
+                                         if k != "model"}}
+                response = await client.post(url, json=payload)
                 response.raise_for_status()
                 body = response.json()
+                if isinstance(body.get("result"), dict):
+                    body = body["result"]
                 answers = body.get("answers") or {}
+                if not answers:
+                    raise SystemExit(
+                        "no answers in the response — the wire format may have "
+                        f"changed: {json.dumps(body)[:400]}")
                 cache[cache_key] = {
                     "label": page.positive,
                     "url": page.url,
@@ -402,6 +440,12 @@ async def main() -> int:
     parser.add_argument("--model", default="jev-1.13.0")
     parser.add_argument("--concurrency", type=int, default=8)
     parser.add_argument("--cache", type=Path)
+    parser.add_argument(
+        "--provider", choices=("typesafe", "cloudflare"), default="typesafe",
+        help="Where to reach Jev. 'cloudflare' uses CLOUDFLARE_API_TOKEN and "
+             "the existing Workers AI account, which is the route that needs "
+             "no waitlist; it also spends the same daily neuron allowance the "
+             "extraction fleet's gpt-oss-20b runs on.")
     args = parser.parse_args()
 
     pages = load_sample(args.db, args.per_class, args.seed, args.max_chars)
@@ -409,7 +453,8 @@ async def main() -> int:
     if args.runner == "local":
         scores = local_scores(pages, args.seed, args.buckets)
     else:
-        scores = await jev_scores(pages, args.model, args.concurrency, args.cache)
+        scores = await jev_scores(pages, args.model, args.concurrency, args.cache,
+                                  args.provider)
     report(pages, scores)
     return 0
 

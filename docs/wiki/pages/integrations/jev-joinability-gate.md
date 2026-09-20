@@ -225,3 +225,26 @@ sharp rather than academic:
 
 The measurement to run next is therefore Jev on this exact sample: same seed,
 same `--per-class 3000`, so the two tables are read side by side.
+
+## Reaching Jev without the waitlist
+
+TypeSafe's own console put us on a waitlist on 2026-09-20. Two routes exist
+that use credentials this project already holds, and the benchmark takes
+`--provider` to choose:
+
+- **Cloudflare Workers AI** (`--provider cloudflare`) serves the same model as
+  `typesafe/jev` through `POST /accounts/{id}/ai/run`, authenticated with the
+  `CLOUDFLARE_API_TOKEN` the extraction fleet already uses. Same questions,
+  same answer fields; the envelope differs — the payload nests under `input`
+  and the answer may nest under `result`, and both shapes are handled.
+- **OpenRouter** also lists Jev, but through a chat-completions surface that
+  does not express typed questions. Not worth adapting while Cloudflare's
+  native route exists.
+
+**The Cloudflare route is not free of consequence.** It spends the same daily
+neuron allowance that `@cf/openai/gpt-oss-20b` extraction runs on — 10,000
+neurons, which the catalogue budgets as 95 extraction calls a day (see
+`config/providers.yaml`). A full 6,000-page benchmark will exhaust it and cost
+the fleet a day of that provider. Run the 100-page smoke test first, read the
+reported `usage`, and decide the large run's timing deliberately — ideally
+after the day's free quota is spent anyway.

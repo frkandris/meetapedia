@@ -184,3 +184,82 @@ def test_the_gate_threshold_actually_moves_the_decision(tmp_path):
     assert middle >= len(values) * 0.10, (
         f"only {middle} of {len(values)} scores carry any uncertainty; a gate "
         "needs a band it can trade recall against")
+
+
+def test_the_cloudflare_route_sends_and_reads_that_wire_format(tmp_path, monkeypatch):
+    """Jev on Workers AI, which is the route that needs no waitlist.
+
+    Same model and questions as the direct API; the envelope differs. TypeSafe
+    takes `{model, state, questions}` and answers `{answers}`; Cloudflare nests
+    the payload under `input` and may nest the answer under `result`. Both are
+    asserted here because neither can be checked against the live service
+    until a key exists, and a wrong envelope fails as an empty answer rather
+    than as an error.
+    """
+    import asyncio
+
+    module = _load("benchmark_joinability_gate")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "test-token")
+    sent: list[dict] = []
+
+    class _Response:
+        status_code = 200
+
+        def raise_for_status(self): ...
+
+        def json(self):
+            # Workers AI wraps model output in `result`.
+            return {"result": {"answers": {"has_joinable_community":
+                                           {"type": "noul", "noul": 0.87}},
+                               "usage": {"input_tokens": 1234}}}
+
+    class _Client:
+        def __init__(self, **kw): self.kw = kw
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, json=None):
+            sent.append({"url": url, "body": json})
+            return _Response()
+
+    monkeypatch.setattr(module.httpx, "AsyncClient", _Client)
+    page = module.Page("h1", "https://a.test/p", "Budapest", "choir", "szöveg", True)
+    scores = asyncio.run(module.jev_scores([page], "jev-1.13.0", 1, None, "cloudflare"))
+
+    assert scores == {"h1": 0.87}
+    assert len(sent) == 1
+    assert sent[0]["url"].endswith("/ai/run")
+    body = sent[0]["body"]
+    assert body["model"] == "typesafe/jev"
+    assert set(body["input"]) == {"state", "questions"}
+    assert "model" not in body["input"]
+    assert body["input"]["questions"]["has_joinable_community"]["type"] == "noul"
+
+
+def test_the_typesafe_route_keeps_its_flat_payload(tmp_path, monkeypatch):
+    import asyncio
+
+    module = _load("benchmark_joinability_gate")
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test-key")
+    sent: list[dict] = []
+
+    class _Response:
+        def raise_for_status(self): ...
+        def json(self):
+            return {"answers": {"has_joinable_community": {"noul": 0.2}}}
+
+    class _Client:
+        def __init__(self, **kw): ...
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, json=None):
+            sent.append({"url": url, "body": json})
+            return _Response()
+
+    monkeypatch.setattr(module.httpx, "AsyncClient", _Client)
+    page = module.Page("h1", "https://a.test/p", "Budapest", "choir", "szöveg", False)
+    scores = asyncio.run(module.jev_scores([page], "jev-1.13.0", 1, None, "typesafe"))
+
+    assert scores == {"h1": 0.2}
+    assert sent[0]["url"] == module.API_URL
+    assert "input" not in sent[0]["body"]
+    assert sent[0]["body"]["model"] == "jev-1.13.0"
