@@ -136,7 +136,7 @@ commit** as the code change that triggered them; validate with
 
 **Jinja2 macros**: macros must be defined **before** they are called in templates. Jinja2 does not hoist macro definitions. Defining a macro after its call site causes `UndefinedError` at render time — silently if the calling branch is never reached (e.g., inside `{% if records %}`).
 
-**Topic labels in templates**: `topic_labels` dict comes from `lang_context` (i18n-aware). `TOPIC_LABELS` in `app.py` is the English fallback. Both are compatible; `lang_context` overrides the explicit kwarg if passed last via `**lang_context(request)`.
+**Topic labels in templates**: `topic_labels` dict comes from `lang_context` (i18n-aware). `TOPIC_LABELS` in `app.py` is the English fallback. Both are compatible; `lang_context` overrides the explicit kwarg if passed last via `**lang_context(request)`. **That override only protects the key named `topic_labels`.** Any other context key built from `TOPIC_LABELS` — `all_topic_names` on the community page, `topic_label` on the person page — ships English to every language, and the two fallback dictionaries are not even the same: `app.py`'s leaves `hagyomanyorzes`, `baby` and `kisallat` in Hungarian, so the bug showed as a *mixed* list rather than an English one (reported 2026-09-20). Resolve `lang_context(request)` into a local once and build every label from `_lang["topic_labels"]`.
 
 **Extraction prompt overrides**: `extract.py:get_prompt(key)` checks `_PROMPT_OVERRIDES` first. Admins can edit prompts live from `/admin/prompts`. The fingerprint system means any prompt change triggers re-extraction on next run.
 

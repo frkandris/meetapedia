@@ -3,6 +3,13 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Fix**: Topic labels now follow the page's language everywhere. The community page's report-form
+  picker and the person page's community chips were built from `app.py:TOPIC_LABELS`, the English
+  fallback, under context keys that `**lang_context(request)` does not override. A Hungarian reader
+  chose between "Religion & Faith" and "Book Club" — with "Hagyományőrzés", "Baba & Szülő" and
+  "Kisállat" mixed in, because those three have no English label in that dictionary at all. The mix
+  is what identified it as the wrong dictionary rather than a missing translation. Reported with a
+  screenshot; `tests/test_topic_label_language.py` holds both directions.
 - **Simplification**: The twin cost-saver crons and the startup-recovery plan are deleted.
   Nothing had registered them since the worker shipped on 2026-08-18 — `_cron_run` was written
   and never called, `_startup_plan` was reachable only through a `_startup_run` that returns

@@ -7702,6 +7702,7 @@ async def public_person_detail(request: Request, city_slug: str, name_slug: str)
     merged = [p for p in all_persons if _slugify(p.get("name", "")) == name_slug]
     if not merged:
         return RedirectResponse("/emberek", status_code=302)
+    _person_lang = lang_context(request)
     community_entries = []
     seen: dict = {}
     for p in merged:
@@ -7719,7 +7720,11 @@ async def public_person_detail(request: Request, city_slug: str, name_slug: str)
             "url": f"/{city_slug}/{_slugify(community_name)}",
             "roles": [role] if role else [],
             "topic": topic,
-            "topic_label": TOPIC_LABELS.get(topic, topic.replace("_", " ").title()),
+            # Same trap as the community page's topic picker: this key is not
+            # `topic_labels`, so `**lang_context(request)` never corrected it
+            # and a Hungarian person page labelled its communities in English.
+            "topic_label": _person_lang["topic_labels"].get(
+                topic, topic.replace("_", " ").title()),
             "topic_icon": TOPIC_ICONS.get(topic, "circle"),
         }
         seen[key] = entry
@@ -7749,7 +7754,7 @@ async def public_person_detail(request: Request, city_slug: str, name_slug: str)
             request, (city_name, f"/{city_slug}"),
             (person.get("name", ""), f"/{city_slug}/ember/{name_slug}"),
         ),
-        **lang_context(request),
+        **_person_lang,
         "sister_url": _sister_url(request, city_name),
     })
 
@@ -7777,6 +7782,7 @@ async def public_city_segment(
         )
     record = _find_community_by_slug(city_name, segment)
     if record:
+        _page_lang = lang_context(request)
         schema_json = records_to_jsonld([record])
         history = get_community_history(app_state.db_path, record.get("community_id", ""))
         rec_topic = record.get("topic", "")
@@ -7831,8 +7837,19 @@ async def public_city_segment(
             # like to a crawler, and 23,461 of these pages are sitting in
             # "Crawled – currently not indexed". The picker now fetches
             # /api/cities.json the first time someone opens it.
-            "all_topic_names": [(t.name, TOPIC_LABELS.get(t.name, t.name.replace("_", " ").title()))
-                                for t in (app_state.topics or [])],
+            # i18n labels, not the English TOPIC_LABELS fallback. Every other
+            # label on this page is translated because `topic_labels` arrives
+            # through `**lang_context(request)` and overrides the explicit
+            # kwarg; this list is built under its own key, so nothing overrode
+            # it and a Hungarian reader picked from "Religion & Faith" and
+            # "Book Club" (reported 2026-09-20). The topics with no English
+            # label at all — Hagyományőrzés, Baba & Szülő, Kisállat — were the
+            # only Hungarian entries, which made it look like a partial
+            # translation rather than the wrong dictionary.
+            "all_topic_names": [
+                (t.name, _page_lang["topic_labels"].get(
+                    t.name, t.name.replace("_", " ").title()))
+                for t in (app_state.topics or [])],
             "canonical_base": _canonical_base(request, city_name),
             # Indexable whether or not it has a description. The guard was
             # added when a community page with no description really was
@@ -7848,7 +7865,7 @@ async def public_city_segment(
             # to make them substantive, not to hide them again.
             "page_noindex": False,
             "breadcrumbs": _crumbs(request, *breadcrumb_pairs),
-            **lang_context(request),
+            **_page_lang,
             "sister_url": _sister_url(request, city_name),
         })
     return RedirectResponse(f"/{city_slug}", status_code=302)
