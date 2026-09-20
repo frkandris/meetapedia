@@ -72,7 +72,7 @@ vocabulary), [faq.md](faq.md) (recurring questions).
 - [[search-ttl-3650-days]] — TTL set to ~10 years: index the world first, worry about freshness later.
 - [[sweden-pipeline-priority]] — Country order in the bounded saver windows lives in config, not code, so whichever market has the largest unprocessed backlog can lead.
 - [[hungary-sweden-intl-three-passes]] — main.py partitions Hungary, Sweden, and world into independent passes; bounded saver jobs are expansion-first while startup recovery is Hungary-first.
-- [[scheduler-disabled-no-cron]] — APScheduler registers the enabled twin cost-saver jobs and daily report; the legacy combined cron remains opt-in.
+- [[scheduler-disabled-no-cron]] — REMOVED 2026-09-20 — the twin cost-saver crons and the startup-recovery plan were deleted after 33 days in which no code registered them; one cron (the daily report) is left.
 - [[free-tier-model-router]] — Extraction routes across the free LLM fleet by measured quality under a persisted daily quota ledger; paid providers are permission-, budget- and enable-gated, all three off.
 - [[concurrent-extraction]] — Why a pair's pages are extracted several at a time, what had to be true first, and the config knob that turns it off.
 - [[continuous-worker]] — Why the twin time windows were deleted, what decides the work now, and the ten defects the reviews found in getting there.

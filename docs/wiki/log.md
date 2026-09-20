@@ -3,6 +3,15 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Simplification**: The twin cost-saver crons and the startup-recovery plan are deleted.
+  Nothing had registered them since the worker shipped on 2026-08-18 — `_cron_run` was written
+  and never called, `_startup_plan` was reachable only through a `_startup_run` that returns
+  immediately under `worker_enabled`, and eight `settings.yaml` keys were read on every boot
+  without being able to change what the process did. `main.py` 929 → 624 lines; four schedule
+  keys remain. What made this worth doing is not the lines: the config claimed extraction runs
+  00:30→10:00 and the startup plan claimed a deploy resumes a collection, and both were false.
+  `run_pipeline(stop_at=…)` survives, still tested, unused in production. [[continuous-worker]],
+  [[scheduler-disabled-no-cron]].
 - **Optimization**: Same-city duplicate detection filters in SQL instead of in Python.
   `detect_community_candidates` runs once per processed pair, and it was reading every
   visible community row — blob column included, ~45,785 of them in production — to keep one

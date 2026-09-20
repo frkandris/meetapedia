@@ -9,12 +9,11 @@ ignored until someone restarted the container. That rebuild is a `nonlocal`
 rebind inside a 130-line loop, which is exactly the kind of state mutation that
 needs a test rather than a careful reading.
 
-Every test drives the loop with `unbounded=True` and ends it by cancelling from
-the fake batch, because cancellation is how the real loop ends. Nothing here
-reads a wall clock — the pauses go through the `scraper.main._sleep` seam, and
-the only clock the loop consults (`_next_window_end`) belongs to the bounded
-path — so the substitute records the requested waits instead of advancing a
-fake clock. `extract.py`'s virtual clock exists because `pace_wait` subtracts
+Every test ends the loop by cancelling from the fake batch, because
+cancellation is how the real loop ends — since 2026-09-20 there is no window to
+close and no bounded path. Nothing here reads a wall clock: the pauses go
+through the `scraper.main._sleep` seam, so the substitute records the requested
+waits instead of advancing a fake clock. `extract.py`'s virtual clock exists because `pace_wait` subtracts
 `monotonic()`; there is no such arithmetic here, and pretending otherwise would
 be cargo cult.
 """
@@ -80,12 +79,11 @@ def loop_env(monkeypatch, tmp_path):
     return SimpleNamespace(waits=waits, built=built, build_extractor=build_extractor)
 
 
-async def _run(env, script, *, free_quota=True, unbounded=True,
-               build_extractor=None):
+async def _run(env, script, *, free_quota=True, build_extractor=None):
     """Drive the loop, answering each round from `script`.
 
     A `script` entry that is an exception is raised instead of returned, which
-    is how a test ends an unbounded loop.
+    is how a test ends the loop — the only other way out is cancellation.
     """
     rounds = iter(script)
     calls: list[set] = []
@@ -98,7 +96,7 @@ async def _run(env, script, *, free_quota=True, unbounded=True,
         return item
 
     await main_mod._enrich_body(
-        {"enrich_batch_limit": 5}, unbounded, None, None, enrich_batch,
+        {"enrich_batch_limit": 5}, enrich_batch,
         build_extractor or env.build_extractor, lambda: free_quota)
     return calls
 
@@ -150,14 +148,17 @@ async def test_productive_rounds_keep_their_chain(loop_env):
 
 
 @pytest.mark.asyncio
-async def test_empty_pool_ends_a_bounded_run_without_pausing(loop_env):
-    """Caught up with no lower-priority market left: a windowed run ends rather
-    than sleeping until its window closes."""
-    calls = await _run(loop_env, [_stats(enriched=1, pool=0)], unbounded=False)
+async def test_empty_pool_waits_for_extraction_to_make_more_work(loop_env):
+    """Caught up with no lower-priority market left.
 
-    assert len(calls) == 1
-    assert loop_env.waits == []
-    assert len(loop_env.built) == 1
+    Until 2026-09-20 a windowed run ended here. There is no window now, and
+    ending would mean enrichment stops for good — extraction keeps adding
+    communities, so the loop pauses and asks again on a fresh chain."""
+    with pytest.raises(asyncio.CancelledError):
+        await _run(loop_env, [_stats(enriched=1, pool=0)])
+
+    assert loop_env.waits == [_IDLE]
+    assert len(loop_env.built) == 2
 
 
 @pytest.mark.asyncio

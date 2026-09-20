@@ -1,6 +1,6 @@
 import pytest
 
-from scraper.main import DEFAULT_SCHEDULE_CRON, _cron_fields
+from scraper.main import _REPORT_CRON, _cron_fields
 
 
 def test_cron_fields_accepts_standard_five_field_cron():
@@ -8,7 +8,8 @@ def test_cron_fields_accepts_standard_five_field_cron():
 
 
 def test_cron_fields_falls_back_for_invalid_cron():
-    assert _cron_fields("not enough fields") == tuple(DEFAULT_SCHEDULE_CRON.split())
+    # The daily report is the only cron left, so its expression is the fallback.
+    assert _cron_fields("not enough fields") == tuple(_REPORT_CRON.split())
 
 
 def test_cron_fields_rejects_invalid_fallback():

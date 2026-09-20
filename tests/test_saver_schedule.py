@@ -1,10 +1,13 @@
-"""Cost-saver schedule: search_only mode, stop_at windows, transient-search safety."""
+"""search_only mode, stop_at boxing, country grouping, transient-search safety.
+
+The twin cron windows this file was named for were deleted on 2026-09-20; what
+it covers now is the collector itself, which the worker drives.
+"""
 import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from scraper.extract import FallbackExtractor, get_extract_fingerprint
-from scraper.main import _next_window_end
 from scraper.main import _saver_city_groups
 from scraper.models import SearchResult
 from scraper.pipeline import (
@@ -153,32 +156,6 @@ def test_stop_at_in_past_processes_zero_pairs(tmp_path):
             True, True, {}, None, stop_at=past,
         ))
     assert total == 0 and logs == []
-
-
-def test_enrich_window_gate():
-    from datetime import datetime, timezone
-    from scraper.main import _cron_start_hhmm, _within_window
-    assert _cron_start_hhmm("30 16 * * *") == "16:30"
-    assert _cron_start_hhmm("garbage") == "16:30"        # fallback
-    start, end = _cron_start_hhmm("30 16 * * *"), "00:30"
-    def at(h, m=0):
-        return datetime(2026, 7, 27, h, m, tzinfo=timezone.utc)
-    assert _within_window(at(16, 30), start, end) is True   # opens
-    assert _within_window(at(20), start, end) is True
-    assert _within_window(at(0, 10), start, end) is True    # after midnight, still in
-    assert _within_window(at(0, 30), start, end) is False   # closes
-    assert _within_window(at(6), start, end) is False       # peak
-    # an earlier configured cutoff (23:00) is honored — 00:10 is out of window
-    assert _within_window(at(0, 10), "16:30", "23:00") is False
-
-
-def test_next_window_end_same_day_and_midnight_cross():
-    start = datetime(2026, 7, 9, 1, 5, tzinfo=timezone.utc)
-    assert _next_window_end(start, "16:20") == datetime(2026, 7, 9, 16, 20, tzinfo=timezone.utc)
-    # extract window: starts 16:35, "00:20" must be the NEXT day
-    start2 = datetime(2026, 7, 9, 16, 35, tzinfo=timezone.utc)
-    assert _next_window_end(start2, "00:20") == datetime(2026, 7, 10, 0, 20, tzinfo=timezone.utc)
-    assert _next_window_end(start2, "garbage") is None
 
 
 def _priority_cities():

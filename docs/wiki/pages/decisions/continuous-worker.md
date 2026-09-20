@@ -3,7 +3,7 @@ type: Decision
 title: Continuous Worker
 description: Why the twin time windows were deleted, what decides the work now, and the ten defects the reviews found in getting there.
 tags: [schedule, pipeline, worker, operations, control-api]
-timestamp: 2026-08-18
+timestamp: 2026-09-20
 resource: scraper/main.py
 ---
 
@@ -129,3 +129,20 @@ A cancelled pass counts for nothing, in both halves. The old loop declined to
 interruptions — a quota running out mid-run, an operator pressing stop — parked
 extraction for a quarter of an hour on no evidence at all. Writing the rule
 down as a function is what made the contradiction with its own comment visible.
+
+## The losing side, deleted 2026-09-20
+
+Shipping the worker did not remove what it replaced. For 33 days both existed:
+`_cron_run` was fully written and never called, `_startup_plan` and its four
+window helpers were reachable only through a `_startup_run` that returns
+immediately under `worker_enabled`, and eight keys in `settings.yaml` were read
+on every boot without being able to change anything.
+
+The cost of leaving it was not the ~300 lines. It was that `settings.yaml` said
+extraction runs 00:30→10:00 and `_startup_plan` said a deploy resumes an
+interrupted collection, and an operator had no way to tell that neither was
+true any more. A toggle that cannot change behaviour still teaches.
+
+`worker_enabled` stays, with a different meaning: `false` runs nothing. There is
+no second scheduler behind it. See [[scheduler-disabled-no-cron]] for the
+headstone.
