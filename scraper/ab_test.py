@@ -50,10 +50,15 @@ JEV_MODEL = "typesafe/jev"
 #: communities start to fall out.
 DEFAULT_GATE_THRESHOLD = 0.06
 
-#: Three lists in one answer need more room than one. The production cap is
-#: 1,500; a truncated answer is a failed extraction, and this experiment must
-#: not fail for a reason it introduced itself.
-COMBINED_MAX_OUTPUT_TOKENS = 3000
+#: Three lists in one answer need more room than one (production caps at
+#: 1,500), but the reservation is charged against the model's context window,
+#: not added to it. Measured 2026-09-20: at 3,000 the local Qwen3-4B — an
+#: 8,192-token window, see `providers.yaml` — answered
+#: "Context size has been exceeded" on real pages, because 1,400 tokens of
+#: merged prompt plus ~2,500 of page text plus the reservation overflows it.
+#: 2,000 leaves that model usable; a truncated answer still surfaces as a
+#: content error and is counted, which is itself a result worth having.
+COMBINED_MAX_OUTPUT_TOKENS = 2000
 
 
 @dataclass
@@ -276,7 +281,9 @@ async def run_ab_test(db_path: Path, pages: list[dict], extractor,
                       threshold: float = DEFAULT_GATE_THRESHOLD,
                       concurrency: int = 3,
                       valid_topics: list[str] | None = None,
-                      account: str | None = None) -> dict:
+                      account: str | None = None,
+                      progress_path: Path | None = None,
+                      progress_every: int = 25) -> dict:
     token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
     account = account or CF_ACCOUNT_ID
     if not token:
@@ -290,6 +297,17 @@ async def run_ab_test(db_path: Path, pages: list[dict], extractor,
                 results.append(await run_page(
                     page, extractor, client, account, token, threshold,
                     valid_topics))
+                done = len(results)
+                if progress_every and done % progress_every == 0:
+                    log.info("ab_test_progress", done=done, total=len(pages))
+                    if progress_path:
+                        # A run this long must not be all-or-nothing: an
+                        # interim report is written as it goes, so a failure at
+                        # page 900 still leaves 900 pages of evidence.
+                        progress_path.write_text(
+                            json.dumps(summarize(results, threshold),
+                                       ensure_ascii=False, indent=2),
+                            encoding="utf-8")
 
         await asyncio.gather(*(one(p) for p in pages))
 

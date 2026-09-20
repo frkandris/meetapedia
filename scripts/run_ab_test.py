@@ -90,6 +90,7 @@ async def main() -> int:
         args.db, pages, extractor, threshold=args.threshold,
         concurrency=args.concurrency,
         valid_topics=[t.name for t in topics],
+        progress_path=args.out,
     )
     text = json.dumps(report, ensure_ascii=False, indent=2)
     print(text)
