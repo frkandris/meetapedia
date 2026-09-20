@@ -98,133 +98,26 @@ killed on the production host with 237 MB of RAM free — see
 **81.8% of extracted pages yield zero communities** (104,795 of 128,072), which
 is the number the whole gate question turns on.
 
-## First measurement, 2026-09-20: the local baseline
+## The local baseline, and what it took to measure it
 
-Run on production, 1,000 pages per class, held out by hostname:
+The free model is the bar Jev has to clear, and getting an honest number from
+it took three runs on the same corpus:
 
-```
-threshold  skipped  neg_skipped  false_neg  positive_recall
-0.01       189      141          48         74.603%
-0.50       202      153          49         74.074%
-```
+1. **74.6% recall** — and a threshold column that moved half a point end to
+   end. That second fact was the real finding: naive Bayes sums one
+   log-probability per n-gram, so the score scaled with page length and every
+   page sat on the ±50 clamp. It measured the scoring, not the corpus.
+2. **98.9%**, after dividing the log-odds per n-gram and fitting Platt scaling
+   on a calibration split held back by hostname. Same model, same data.
+3. **99.46% recall while rejecting 13.6% of negatives** on a 1,200-page
+   held-out set — where the 406-page run had said 26.8% of work saved. The
+   smaller number rested on two false negatives. Quote the larger run:
+   **11.1% of all extraction work, free.**
 
-Two things to read here, and the second matters more.
+The lesson worth keeping: a gate score has to be calibrated or its threshold is
+a decoration, and a held-out set of a few hundred pages will tell you whatever
+you hope to hear.
 
-**Recall is 74.6% at its best**, against a target of 99%. A gate at this
-quality would discard a quarter of the communities the extractor would have
-found — not a trade, a loss.
-
-**The threshold column is inert.** Moving it from 0.01 to 0.50 changes recall
-by half a point. That is not a property of the corpus; it is a property of the
-score. Naive Bayes adds one log-probability per n-gram and a page carries
-thousands, so the raw sum scales with page length and every page lands on the
-±50 clamp the scorer applied. Every page in the "worst positives" list scored
-exactly `0.0000`, which is the bottom of the clamp, not a probability.
-
-So the first number does not measure whether the corpus is separable. It
-measures an uncalibrated score. The scorer now divides the log-odds by the
-n-gram count — a rate rather than a total, comparable between a 400-character
-page and an 8,000-character one — and fits Platt scaling on a calibration
-split held back from the training data, disjoint by hostname from both the fit
-and the held-out sets.
-
-On a synthetic corpus of mixed-difficulty pages the difference is the whole
-question: the old scorer put **0%** of pages between 0.02 and 0.98 and the
-threshold moved nothing; the new one puts 27% there and the threshold moves
-the decision. `tests/test_cost_audit_scripts.py` holds that property.
-
-This also makes the local baseline comparable to Jev on the axis Jev is sold
-on. A calibrated probability is what a recall target is expressed in, and
-until this change the local runner did not produce one.
-
-## Second measurement, 2026-09-20: the calibrated local baseline
-
-Same sample, same seed, same model — only the score changed. Held out by
-hostname: **406 pages, 189 of them positive.**
-
-```
-threshold  skipped  neg_skipped  false_neg  positive_recall
-0.01        39       37           2          98.942%
-0.05        73       71           2          98.942%
-0.10        79       76           3          98.413%
-0.20        95       91           4          97.884%
-0.30       115      106           9          95.238%
-0.40       166      139          27          85.714%
-0.50       204      155          49          74.074%
-```
-
-**74.6% became 98.9% on the same data with the same model.** That settles what
-the first run actually measured: the score, not the corpus. It also means the
-threshold is now a control — the column spans 99% to 74% instead of moving half
-a point end to end.
-
-Translated onto the real corpus, where 81.8% of extracted pages are negative:
-
-| threshold | recall | negatives rejected | share of all pages skipped |
-|---|---|---|---|
-| 0.05 | 98.94% | 32.7% | **26.8%** |
-| 0.10 | 98.41% | 35.0% | 28.7% |
-| 0.20 | 97.88% | 41.9% | 34.3% |
-| 0.30 | 95.24% | 48.8% | 40.0% |
-
-So a free, dependency-free local model at threshold 0.05 removes about **a
-quarter of all extraction work** for roughly **1% of communities lost**. That is
-the bar Jev now has to beat — not "is a gate viable", which is answered, but
-"is a paid gate enough better than a free one to be worth the money and the
-vendor".
-
-Two cautions before anyone ships this:
-
-- **The sample is small where it matters.** 98.94% rests on **two** false
-  negatives out of 189 positives. The confidence interval on that is wide; a
-  `--per-class 3000` run costs nothing but time and should come first.
-- **The label is weak, and visibly so.** The lowest-scored positives include a
-  `theguardian.com` article, a `szallas.hu` booking page and an Instagram post.
-  Those are pages where the incumbent extractor claims a community and may
-  itself be wrong — so some of the "false negatives" are the gate being right.
-  Manual review of that list is not optional.
-
-## Third measurement: the larger sample, and why it matters
-
-`--per-class 3000`. Held out by hostname: **1,200 pages, 560 positive, 640
-negative** — three times the evidence of the run above.
-
-```
-threshold  skipped  neg_skipped  false_neg  positive_recall
-0.01        16       15           1          99.821%
-0.02        26       24           2          99.643%
-0.05        90       87           3          99.464%
-0.10       162      155           7          98.750%
-0.20       216      202          14          97.500%
-0.30       299      277          22          96.071%
-0.40       465      389          76          86.429%
-```
-
-| threshold | recall | negatives rejected | share of all pages skipped |
-|---|---|---|---|
-| 0.05 | 99.46% | 13.6% | **11.1%** |
-| 0.10 | 98.75% | 24.2% | 19.8% |
-| 0.20 | 97.50% | 31.6% | 25.8% |
-| 0.30 | 96.07% | 43.3% | 35.4% |
-
-**The larger sample halved the answer, and then halved it again.** At the
-recall a gate actually needs, the 406-page run put the saving at 26.8%; on
-1,200 pages it is **11.1%**. Both numbers are from the same model on the same
-corpus. The first was two false negatives away from a different conclusion,
-which is what a sample that small buys.
-
-This is the run to quote. It is also the one that makes the Jev question
-sharp rather than academic:
-
-- The free local gate buys **~11% of extraction work at 99.5% recall**, or
-  ~20% if 98.75% is acceptable.
-- For Jev to be worth money and a vendor dependency it has to clear that by a
-  wide margin — 40-50% of pages at the same recall would be three to four
-  times the free option and obviously worth a few dollars. Matching 11% would
-  not be.
-
-The measurement to run next is therefore Jev on this exact sample: same seed,
-same `--per-class 3000`, so the two tables are read side by side.
 
 ## Reaching Jev without the waitlist
 
