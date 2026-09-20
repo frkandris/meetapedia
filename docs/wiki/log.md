@@ -3,6 +3,13 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Review**: The six false negatives at Jev threshold 0.06 were read one by one against what the
+  extractor claimed on each page. **All six are incumbent errors** — a hotel spa, a social-services
+  institution, two pages where the record is simply the village's own name, an invented fitness club
+  on a sightseeing page, and a concert series. Jev's true recall at 0.06 on this sample is therefore
+  **100%**, and the measured 98.9% is an artifact of grading it against the extractor it corrects.
+  0.10 is where genuine associations start to fall out (Heves Megyei Fotóklub, Nagyrábé senior
+  association), so 33.4% saving is free and 53.6% is not. [[jev-joinability-gate]].
 - **Measurement**: **Jev beats the free local gate by 2-5x** on the same 1,200 held-out pages. At
   98.9% recall it removes **33.4% of all extraction work** where the local model removes 11.1%; at
   99.6% recall, 15.6% against 3.1%. Throughput at ~2,100 free calls/day: 3,153 pages/day against

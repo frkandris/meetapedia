@@ -219,13 +219,33 @@ Jev @ 0.06   3,153 pages/day   backlog 40.6 days   (1.50x)
 
 ## Two things the numbers understate
 
-**The label is wrong more often than Jev is.** The lowest-scored "false
-negatives" are `szallas.hu/tornyospalca/wellness`, `utazzitthon.hu/latnivalo/…`
-(a sightseeing page), `filharmonia.hu/nyari-programok/…` (a concert series).
-These are pages where the incumbent extractor claimed a community and Jev says
-there is none — and on inspection Jev is right. So the measured recall is a
-floor, and the gate doubles as a quality signal: the same call that saves an
-extraction also flags a probable false positive already in the corpus.
+**The label is wrong more often than Jev is — all six times, in fact.** The
+false negatives at threshold 0.06 were read one by one against what the
+extractor claimed to find on each page:
+
+| Jev | page | extractor's record | verdict |
+|---|---|---|---|
+| 0.03 | `szallas.hu/tornyospalca/wellness` | "Wellness Center Tornyospálca" | hotel spa, not a group |
+| 0.03 | `szabolcsveresmart.hu/…int_szocialis` | "Kisvárdai Család- és Gyermekjóléti Központ" | an institution, not joinable |
+| 0.04 | `funiq.hu/1494-nemesnadudvar` | **"Nemesnádudvar"** | the village's own name |
+| 0.04 | `utazzitthon.hu/latnivalo/nagyrecse` | "Nagyrecse Fitness Club" | sightseeing page; the club is invented |
+| 0.04 | `utazzitthon.hu/latnivalo/taszar` | **"Taszár"** | the settlement's name again |
+| 0.04 | `filharmonia.hu/…zenes-estek…` | "Zenés Estek a Kastélykertben" | a concert series |
+
+Six of six are incumbent errors. **Jev's true recall on this sample at 0.06 is
+100%**; the measured 98.9% is an artifact of grading it against the extractor
+it corrects.
+
+**0.06 is where the boundary actually is.** Above it the picture is mixed —
+"Belvárosi Jógastúdió" (0.09) and "AquAnett Úszóiskola" (0.07) are a studio and
+a paid school, which the `joinable` rule excludes anyway — but at **0.10 real
+communities start falling out**: "Heves Megyei Fotóklub" and "Nagyrábé Senior
+Citizens' Association" are genuine associations Jev scores too low. So the
+33.4% saving is available at no real cost, and the 53.6% at 0.10 is not.
+
+The corollary is that the gate is also a data-quality instrument: the same
+$0.0001 question that skips an extraction flags a false positive among the
+45,888 records already stored.
 
 **Non-English held up.** TypeSafe's own documentation warns that accuracy is
 best in English and to test before relying on it elsewhere. This corpus is
