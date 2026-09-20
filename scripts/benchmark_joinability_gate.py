@@ -441,6 +441,14 @@ async def main() -> int:
     parser.add_argument("--concurrency", type=int, default=8)
     parser.add_argument("--cache", type=Path)
     parser.add_argument(
+        "--held-out-only", action="store_true",
+        help="Score only the pages the local runner holds out, so the two "
+             "tables compare like with like — and so a paid run costs a fifth "
+             "of what the full sample would. The local model is trained on the "
+             "rest, so scoring Jev on all 6,000 would hand it pages its rival "
+             "had already learned; and the local numbers come from this subset "
+             "anyway. Uses the same hostname split and the same --seed.")
+    parser.add_argument(
         "--provider", choices=("typesafe", "cloudflare"), default="typesafe",
         help="Where to reach Jev. 'cloudflare' uses CLOUDFLARE_API_TOKEN and "
              "the existing Workers AI account, which is the route that needs "
@@ -450,6 +458,13 @@ async def main() -> int:
 
     pages = load_sample(args.db, args.per_class, args.seed, args.max_chars)
     print(f"sample: {len(pages)} pages ({len(pages) // 2} per class), seed={args.seed}")
+    if args.held_out_only:
+        pages = [page for page in pages if not _split(page, args.seed)]
+        positives = sum(page.positive for page in pages)
+        print(f"held-out only: {len(pages)} pages, {positives} positive "
+              f"({len(pages) - positives} negative)")
+        if not pages:
+            raise SystemExit("the hostname split left no held-out pages")
     if args.runner == "local":
         scores = local_scores(pages, args.seed, args.buckets)
     else:

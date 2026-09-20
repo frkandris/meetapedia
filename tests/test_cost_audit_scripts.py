@@ -263,3 +263,23 @@ def test_the_typesafe_route_keeps_its_flat_payload(tmp_path, monkeypatch):
     assert sent[0]["url"] == module.API_URL
     assert "input" not in sent[0]["body"]
     assert sent[0]["body"]["model"] == "jev-1.13.0"
+
+
+def test_held_out_only_scores_the_same_pages_the_local_runner_reports_on(tmp_path):
+    """A paid run must measure the set the free one was measured on.
+
+    Jev does not train, so scoring it on the whole sample would include the
+    pages the local model learned from — flattering Jev on a comparison it was
+    supposed to lose or win honestly. It is also five times the API bill for a
+    number that cannot be placed next to the local table.
+    """
+    module = _load("benchmark_joinability_gate")
+    db = _mixed_gate_db(tmp_path / "mixed.db", pages=240)
+    pages = module.load_sample(db, per_class=60, seed="cal", max_chars=8000)
+
+    held_out = [p for p in pages if not module._split(p, "cal")]
+    scored = module.local_scores(pages, seed="cal", buckets=4096)
+
+    assert held_out, "the fixture must produce a hostname split"
+    assert {p.url_hash for p in held_out} == set(scored), (
+        "--held-out-only selects by the same predicate local_scores reports on")
