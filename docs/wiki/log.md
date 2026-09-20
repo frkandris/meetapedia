@@ -3,6 +3,11 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-20
+- **Fix**: [[daily-data-guides]] now truly precede enrichment at process startup:
+  the competing boot-time enrichment task was removed, leaving the worker as its
+  single launcher after the guide step. Guide provider attempts, including failed
+  failover attempts, are persisted separately and named in [[daily-report]] instead
+  of being mislabelled as preflight/gateway traffic.
 - **Update**: The morning [[daily-report]] now lists every [[daily-data-guides|new data
   guide]] for the reported UTC day with domain, direct link and writer model, and states
   an explicit zero when none was published.

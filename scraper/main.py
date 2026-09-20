@@ -619,11 +619,9 @@ async def main() -> None:
         # twin crons, which were deleted on 2026-09-20 after 33 days in which
         # nothing registered them. martinfowler.com/articles/feature-toggles.html
         app_state._worker_task = asyncio.create_task(_worker_loop())
-        if schedule_cfg.get("enrich_enabled"):
-            # Enrichment coexists with extraction (it does not take the run
-            # slot) and has no window to wait for, so it simply runs. The worker
-            # restarts it if it ever stops.
-            app_state._enrich_boot_task = asyncio.create_task(_enrich_run())
+        # Do not also launch enrichment here. The worker starts it immediately
+        # after the once-per-day guide step, which makes "guides first" real at
+        # boot instead of racing two independently scheduled tasks for quota.
 
     if _settings_schedule().get("report_enabled"):
         async def _daily_report_job() -> None:

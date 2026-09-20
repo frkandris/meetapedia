@@ -3,8 +3,9 @@ import asyncio
 import json
 
 from fastapi.testclient import TestClient
+import pytest
 
-from scraper.db import get_data_guides, init_db
+from scraper.db import get_daily_counter, get_data_guides, init_db
 from scraper.guides import _decode_article, publish_daily_guides
 from scraper.models import CommunityRecord
 from scraper.pipeline import CityConfig, TopicConfig
@@ -16,7 +17,11 @@ from scraper.web.state import app_state
 class _Writer:
     last_model = "test-writer"
 
+    def __init__(self):
+        self.calls_made = 0
+
     async def completion(self, messages, **params):
+        self.calls_made += 1
         packet = json.loads(messages[-1]["content"].split("\n", 1)[1])
         language = packet["language"]
         filler = ("Ez az útmutató kizárólag a katalógusban rögzített adatokat értelmezi. "
@@ -67,6 +72,27 @@ def test_daily_limit_is_shared_and_country_priority_falls_through(tmp_path):
     assert asyncio.run(publish_daily_guides(db, cities, _Writer(), limit=2, now=now)) == []
     assert len(get_data_guides(db, "kozossegek")) == 1
     assert len(get_data_guides(db, "meetapedia")) == 1
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    assert get_daily_counter(db, day, "guide_attempts") == 2
+
+
+def test_failed_guide_call_still_records_provider_attempts(tmp_path):
+    class _FailingWriter:
+        calls_made = 0
+
+        async def completion(self, messages, **params):
+            self.calls_made += 2  # one routed call tried two providers
+            raise RuntimeError("fleet unavailable")
+
+    db = tmp_path / "failed-guide.db"
+    city = CityConfig("Budapest", "hu", [], "Hungary")
+    init_db(db)
+    _seed(db, city)
+    with pytest.raises(RuntimeError, match="fleet unavailable"):
+        asyncio.run(publish_daily_guides(db, [city], _FailingWriter(), limit=1))
+
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    assert get_daily_counter(db, day, "guide_attempts") == 2
 
 
 def test_quality_gate_does_not_force_daily_quota(tmp_path):

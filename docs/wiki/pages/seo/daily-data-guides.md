@@ -13,7 +13,7 @@ resource: scraper/guides.py
 
 ## Publication contract
 
-`main.py:_worker_loop()` runs `publish_daily_guides()` before enrichment and before choosing extraction or collection. The database counts publications by UTC date, so a restart fills only the remainder of the shared daily cap. Each article costs one call through the existing quota-aware free fleet; there is no new search request.
+`main.py:_worker_loop()` runs `publish_daily_guides()` before enrichment and before choosing extraction or collection. Enrichment has no separate boot task: the worker is its only launcher, after the guide attempt, so startup cannot race the two workloads for the first free quota. The database counts publications by UTC date, so a restart fills only the remainder of the shared daily cap. Each article uses one logical completion through the existing quota-aware free fleet; failover may spend multiple provider attempts, and those attempts are recorded as `guide_attempts`. There is no new search request.
 
 Candidates follow `pipeline.country_priority`: Hungary, Germany, Indonesia, Sweden, then every other configured country. Hungarian rows belong to `kozossegek` and render at `/utmutatok/{slug}`; all others belong to `meetapedia` and render in English at `/guides/{slug}`. Both indexes are paginated and each domain's sitemap includes only its own guide rows.
 

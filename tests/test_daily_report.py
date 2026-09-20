@@ -443,7 +443,7 @@ def test_the_spend_line_names_each_workload():
         "hu": hu, "intl": _blank(),
         "totals": {"hu": 0, "intl": 0, "covered_pairs_hu": 0, "covered_pairs_intl": 0},
         "runs": [],
-        "enrich_attempts": 384, "extract_attempts": 1200,
+        "enrich_attempts": 384, "extract_attempts": 1200, "guide_attempts": 10,
         # The 2026-08-23 fleet, verbatim: 1,794 attempts, 858 failures.
         "providers": [
             {"name": "mistral", "configured": True, "used": 485, "budget": 475,
@@ -461,7 +461,8 @@ def test_the_spend_line_names_each_workload():
     assert "1794 hívás" in html
     assert "1200 kinyerés" in html
     assert "384 leírás" in html
-    assert "210 egyéb" in html          # 1794 - 1200 - 384
+    assert "10 útmutató" in html
+    assert "200 egyéb" in html          # 1794 - 1200 - 384 - 10
     assert "105 feldolgozott oldal" in html
     # No derived capacity: the allowance is not one scalar (Groq is token-bound).
     assert "kapacitás" not in html

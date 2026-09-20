@@ -305,6 +305,7 @@ def build_report_html(day: str, summary: dict, traffic: dict,
             # observation across reports rather than a derivation inside one.
             _enrich = int(summary.get("enrich_attempts") or 0)
             _extract = int(summary.get("extract_attempts") or 0)
+            _guide = int(summary.get("guide_attempts") or 0)
             # `max(0, ...)` used to sit here, and on 2026-09-10 it printed
             # "2400 hívás (11 kinyerés 2641 leírás)" — a line whose own numbers
             # do not add up, with nothing said about it. The workload counters
@@ -314,11 +315,13 @@ def build_report_html(day: str, summary: dict, traffic: dict,
             # was charged for. Undercounting a budget is how a router walks into
             # a hard block, which makes this the one direction that must never
             # be rounded away. Reported, not clamped.
-            _unaccounted = _calls - _enrich - _extract
+            _unaccounted = _calls - _enrich - _extract - _guide
             _other = max(0, _unaccounted)
             ratio = f"{_fetched / _done:.1f}×" if _done else "—"
             refused = f"{_fails * 100 // _calls}%" if _calls else "0%"
             _split = f"{_extract} kinyerés, {_enrich} leírás"
+            if _guide:
+                _split += f", {_guide} útmutató"
             if _other:
                 # preflight() probes every provider once per run, and the /v1
                 # gateway is other software entirely. Named, not folded in.
@@ -437,16 +440,18 @@ async def send_daily_report(db_path: Path, hu_cities: set, day: str | None = Non
     end_iso = f"{end_day}T00:00:00"
 
     summary = get_daily_summary(db_path, start_iso, end_iso, hu_cities)
-    # Enrichment spends the same free budget as extraction; without this the
-    # report's per-page figure counts description calls against pages they
-    # never touched.
+    # Enrichment and guide writing spend the same free budget as extraction;
+    # keep all three in provider-attempt units so the remainder really is
+    # preflight/gateway traffic rather than an unnamed product feature.
     try:
         from .db import get_daily_counter
         summary["enrich_attempts"] = get_daily_counter(db_path, day, "enrich_attempts")
         summary["extract_attempts"] = get_daily_counter(db_path, day, "extract_attempts")
+        summary["guide_attempts"] = get_daily_counter(db_path, day, "guide_attempts")
     except Exception as exc:  # noqa: BLE001 — a counter must not stop the report
         log.warning("report_enrich_counter_failed", error=str(exc))
         summary["enrich_attempts"] = summary["extract_attempts"] = 0
+        summary["guide_attempts"] = 0
     # Free-tier AI spend for the reported day. Best-effort: a report must still
     # go out if the router config is unreadable.
     try:

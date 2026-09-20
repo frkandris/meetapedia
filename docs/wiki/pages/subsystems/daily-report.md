@@ -50,6 +50,10 @@ stand" — visitors, diffs, runs, and totals, split Hungarian / international.*
   UTC day to the correct domain and shows the writer model; zero is explicit because
   it distinguishes a quiet guide day from a missing report section. See
   [[daily-data-guides]].
+- The AI-spend line separates provider attempts into extraction, enrichment and
+  guide writing. Guide attempts are measured around every routed completion and
+  persisted even when the call fails; only the remainder is labelled
+  `egyéb (preflight, átjáró)`.
 - Scheduled/startup exceptions are HTML-escaped and displayed as `futási hiba`; a
   zero-pair failed run therefore carries its actionable cause in the email.
 - A run row with `finished_at=NULL` and no stored error is conservatively rendered

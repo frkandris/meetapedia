@@ -144,6 +144,16 @@ def test_the_worker_loop_uses_this_function():
     assert "empty_collections += 1" not in src
 
 
+def test_enrichment_has_no_competing_boot_task_before_daily_guides():
+    """Only the worker may launch enrichment, after its guide publication step."""
+    from pathlib import Path
+
+    src = Path("scraper/main.py").read_text(encoding="utf-8")
+    assert src.count("asyncio.create_task(_enrich_run())") == 1
+    assert src.index("publish_daily_guides(") < src.index(
+        "asyncio.create_task(_enrich_run())")
+
+
 def test_the_outcome_maps_each_measure_to_its_own_key():
     """The mapping is what has been wrong every time.
 

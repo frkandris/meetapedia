@@ -6,8 +6,9 @@ import json
 import re
 from pathlib import Path
 
-from .db import (count_data_guides_published_on, create_data_guide,
-                 get_communities, get_guide_candidate_groups, init_db)
+from .db import (bump_daily_counter, count_data_guides_published_on,
+                 create_data_guide, get_communities,
+                 get_guide_candidate_groups, init_db)
 from .identity import public_slug
 from .web.i18n import get_topic_labels
 
@@ -39,6 +40,15 @@ field names from FACT_PACKET.comparison_dimensions that you actually discussed.
 The four body sections together must
 be 350-700 words. Use plain text paragraphs, no Markdown headings or links.
 Before returning, silently verify every number and named-group claim against the packet."""
+
+
+def _record_writer_attempts(db_path: Path, writer, before: int) -> None:
+    """Persist the provider attempts spent by one routed guide completion."""
+    after = int(getattr(writer, "calls_made", 0) or 0)
+    spent = max(0, after - before)
+    if spent:
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        bump_daily_counter(db_path, day, "guide_attempts", spent)
 
 
 def _decode_article(raw: str, allowed_dimensions: set[str],
@@ -178,12 +188,18 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
             ],
         }
         attempts += 1
-        response = await writer.completion([
-            {"role": "system", "content": _WRITER_SYSTEM},
-            {"role": "user", "content": "FACT_PACKET:\n" + json.dumps(
-                packet, ensure_ascii=False, separators=(",", ":"))},
-        ], temperature=0.3, max_tokens=1400,
-           response_format={"type": "json_object"})
+        provider_attempts_before = int(getattr(writer, "calls_made", 0) or 0)
+        try:
+            response = await writer.completion([
+                {"role": "system", "content": _WRITER_SYSTEM},
+                {"role": "user", "content": "FACT_PACKET:\n" + json.dumps(
+                    packet, ensure_ascii=False, separators=(",", ":"))},
+            ], temperature=0.3, max_tokens=1400,
+               response_format={"type": "json_object"})
+        finally:
+            # Refused and failed calls spend allowance too, and one routed
+            # completion may try multiple providers before returning.
+            _record_writer_attempts(db_path, writer, provider_attempts_before)
         raw = response.get("choices", [{}])[0].get("message", {}).get("content", "")
         article = _decode_article(
             raw,
