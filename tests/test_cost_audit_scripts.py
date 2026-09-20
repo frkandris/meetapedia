@@ -249,6 +249,7 @@ def test_the_typesafe_route_keeps_its_flat_payload(tmp_path, monkeypatch):
     sent: list[dict] = []
 
     class _Response:
+        status_code = 200
         def raise_for_status(self): ...
         def json(self):
             return {"answers": {"has_joinable_community": {"noul": 0.2}}}
@@ -289,3 +290,44 @@ def test_held_out_only_scores_the_same_pages_the_local_runner_reports_on(tmp_pat
     assert held_out, "the fixture must produce a hostname split"
     assert {p.url_hash for p in held_out} == set(scored), (
         "--held-out-only selects by the same predicate local_scores reports on")
+
+
+def test_a_rate_limited_call_is_retried_rather_than_ending_the_run(tmp_path, monkeypatch):
+    """429 killed a 1,200-page run after 422 pages on 2026-09-20.
+
+    `asyncio.gather` propagates the first exception, so one rate limit loses
+    every page still in flight with it. The response cache makes a restart
+    free, but a run that needs babysitting does not finish overnight.
+    """
+    import asyncio
+
+    module = _load("benchmark_joinability_gate")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "test-token")
+    # Hold the real sleep first: the lambda would otherwise call the patched
+    # name and recurse forever.
+    real_sleep = asyncio.sleep
+    monkeypatch.setattr(module.asyncio, "sleep", lambda _s: real_sleep(0))
+    codes = [429, 503, 200]
+
+    class _Response:
+        def __init__(self, code): self.status_code = code
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise AssertionError(f"raise_for_status on {self.status_code}")
+        def json(self):
+            return {"result": {"result": {"answers": {
+                "has_joinable_community": {"noul": 0.42}}}}}
+
+    class _Client:
+        def __init__(self, **kw): ...
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, json=None):
+            return _Response(codes.pop(0))
+
+    monkeypatch.setattr(module.httpx, "AsyncClient", _Client)
+    page = module.Page("h1", "https://a.test/p", "Budapest", "choir", "szöveg", True)
+    scores = asyncio.run(module.jev_scores([page], "jev-1.13.0", 1, None, "cloudflare"))
+
+    assert scores == {"h1": 0.42}, "the third attempt's answer must be used"
+    assert not codes, "every queued status code should have been consumed"

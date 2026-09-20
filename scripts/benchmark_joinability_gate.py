@@ -41,6 +41,11 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = ROOT / "data" / "scraper.db"
 API_URL = "https://api.typesafe.ai/v1/systemone"
 
+#: Retries for a rate-limited or failing gateway call, and the first backoff
+#: in seconds (doubling each attempt: 5, 10, 20, 40, 80).
+_MAX_RETRIES = 5
+_RETRY_BASE_S = 5.0
+
 #: Jev is also served by Cloudflare Workers AI, which matters because
 #: TypeSafe's own console is behind a waitlist while our Cloudflare token is
 #: already configured (`CLOUDFLARE_API_TOKEN`, see config/providers.yaml). Same
@@ -374,7 +379,21 @@ async def jev_scores(
                     payload = {"model": model,
                                "input": {k: v for k, v in payload.items()
                                          if k != "model"}}
-                response = await client.post(url, json=payload)
+                # Retry 429 and 5xx with backoff. Without this a single rate
+                # limit ends the whole run: `asyncio.gather` propagates the
+                # first exception, and the pages still in flight are lost with
+                # it. Measured 2026-09-20 — concurrency 6 on the Cloudflare
+                # gateway hit 429 after 422 of 1,200 pages. The response cache
+                # means a restart costs nothing, but a run that needs
+                # babysitting is a run that does not finish overnight.
+                for attempt in range(_MAX_RETRIES):
+                    response = await client.post(url, json=payload)
+                    if response.status_code < 500 and response.status_code != 429:
+                        break
+                    wait = _RETRY_BASE_S * (2 ** attempt)
+                    print(f"  HTTP {response.status_code}, retrying in {wait:.0f}s "
+                          f"({attempt + 1}/{_MAX_RETRIES})", flush=True)
+                    await asyncio.sleep(wait)
                 response.raise_for_status()
                 body = response.json()
                 # Workers AI nests twice, not once: the gateway envelope
