@@ -14,6 +14,11 @@ resource: config/providers.yaml
 > Sharpened by [[free-model-catalogue-churn]]: a hosted free model can also be withdrawn
 > outright, and on 2026-09-21 the best-scoring one was, three days after it was added. This
 > provider cannot be — which is a second, quieter reason it earns its place.
+>
+> The `-c 8192` window has a second edge, found on 2026-09-21: llama.cpp trims an
+> over-long prompt instead of refusing it, and what it trims is the tail. See
+> [[2026-09-guides-named-nobody]] for what that silently removed, and what now
+> goes last in a prompt as a result.
 
 ## The question, and the number that actually mattered
 

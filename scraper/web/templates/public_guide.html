@@ -12,10 +12,14 @@
     <p class="mt-3 text-xs text-[#8C8478]">{{ 'Adatpillanat:' if guide.locale == 'hu' else 'Data snapshot:' }} {{ guide.published_at[:10] }}</p>
 
     <section class="mt-10 space-y-5 text-[17px] leading-8 text-[#393532]">
-      <p>{{ guide_data.article.introduction }}</p>
-      <p>{{ guide_data.article.comparison }}</p>
-      <p>{{ guide_data.article.choosing_advice }}</p>
-      <p>{{ guide_data.article.conclusion }}</p>
+      {# Section order travels with the article, so a guide written under an
+         older prompt version keeps rendering its own sections after the writer
+         changes. `paragraphs` exists from guide-writer-v2 onward. #}
+      {% for paragraph in guide_data.article.paragraphs or [
+           guide_data.article.introduction, guide_data.article.comparison,
+           guide_data.article.choosing_advice, guide_data.article.conclusion] %}
+      {% if paragraph %}<p>{{ paragraph }}</p>{% endif %}
+      {% endfor %}
     </section>
 
     <section class="mt-10">

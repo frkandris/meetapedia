@@ -1560,6 +1560,49 @@ def get_data_guides(db_path: Path, site: str = "kozossegek", *,
     return [_decode_guide_row(r) for r in rows]
 
 
+def get_stale_data_guides(db_path: Path, prompt_version: str,
+                          limit: int = 10) -> list[dict]:
+    """Published guides whose prose predates the current writer.
+
+    The prompt version is the whole staleness rule. An article is the output of
+    one prompt against one fact packet, so improving the prompt is exactly what
+    makes an already-published article out of date — and leaving it up means the
+    site keeps serving prose the current gate would refuse. Oldest first: those
+    have had the longest to be indexed and read.
+    """
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM data_guides
+            WHERE COALESCE(json_extract(data, '$.prompt_version'), '') != ?
+            ORDER BY published_at ASC, id ASC LIMIT ?
+            """,
+            (prompt_version, limit),
+        ).fetchall()
+    return [_decode_guide_row(r) for r in rows]
+
+
+def replace_data_guide(db_path: Path, slug: str, guide: dict) -> bool:
+    """Rewrite one guide in place, keeping its slug, URL and publication date.
+
+    `published_at` deliberately survives: the page is the same page about the
+    same groups, and back-dating or advancing it would misreport when this
+    directory first covered them. `updated_at` is what moves.
+    """
+    with _connect(db_path) as conn:
+        cur = conn.execute(
+            """
+            UPDATE data_guides SET title=?, summary=?, data=?, updated_at=?
+            WHERE slug=? AND site=?
+            """,
+            (guide["title"], guide["summary"],
+             json.dumps(guide["data"], ensure_ascii=False),
+             guide["updated_at"], slug, guide["site"]),
+        )
+        conn.commit()
+        return cur.rowcount == 1
+
+
 def get_data_guides_for_day(db_path: Path, day: str) -> list[dict]:
     """All guides published on one UTC date, in publication order."""
     with _connect(db_path) as conn:

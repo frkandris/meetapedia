@@ -3,6 +3,22 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-21
+- **Fix**: **The data guides are rewritten, and the first ten are being replaced.** The operator's
+  verdict on reading them was that they were bad; measuring them said how. Nine of ten named zero
+  groups, eight repeated whole sentences, one had a section that was 83% verbatim copy of another,
+  and the most repeated three-word phrase ran to 13 occurrences. The headline cause was not the
+  prompt: `communities` was the **last** key in a 9,400-character fact packet, `localgpu` runs
+  llama.cpp with `-c 8192`, Hungarian tokenizes at ~1.4 chars/token, and llama.cpp trims an
+  over-long prompt rather than failing — so the names were cut off the end and the model never saw
+  them. The packet now leads with the names, is capped at 6,000 characters, and sheds dimension
+  examples first (the page prints those in cards anyway). The four sections were given four
+  different verbs — name, interpret, advise, disclose — in place of an introduction and a conclusion
+  that are the same paragraph. A mechanical gate, calibrated to reject all ten v1 articles and
+  accept a hand-written draft, refuses repetition, anonymity, thin sections and wrong-language
+  drafts; refusals are counted per reason *and* per model. Guides whose `prompt_version` is stale
+  are rewritten in place before new ones publish. Measured on the live fleet: the same prompt that a
+  4B model answered with a 132-word stub produced 359 words naming seven groups on a 120B.
+  [[2026-09-guides-named-nobody]].
 - **Deprecation**: `deepseek/deepseek-v4-flash-0731:free` removed from the OpenRouter entry three
   days after it was added, and it was the fleet's best free model — quality 76, answering 14 of 20
   where nemotron managed 10. OpenRouter now answers HTTP 404, "This model is unavailable for free.
