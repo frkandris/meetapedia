@@ -439,6 +439,53 @@ def _unfenced(raw: str) -> str:
     return m.group("body") if m else raw
 
 
+def _message_text(data: dict) -> str:
+    """The answer, from wherever this provider put it.
+
+    A reasoning model that runs out of budget mid-thought returns an **empty**
+    `content` with the thinking in `reasoning` — and an empty string is the
+    parse failure "Expecting value: line 1 column 1 (char 0)", which on
+    2026-09-20 was most of OpenRouter's 331 failed calls. Reading the reasoning
+    is not elegant, but the JSON is often finished inside it, and the
+    alternative is throwing away a call we paid for.
+    """
+    message = (data.get("choices") or [{}])[0].get("message") or {}
+    content = message.get("content")
+    if content:
+        return content
+    for key in ("reasoning_content", "reasoning"):
+        text = message.get(key)
+        if text:
+            return text
+    return ""
+
+
+def _embedded_json_object(text: str) -> dict | None:
+    """The first complete JSON object anywhere in `text`.
+
+    Observed 2026-09-21 from a free OpenRouter model: `{\n{"communities": [...]}`
+    — a stray brace before an otherwise perfect answer naming a real
+    association. Strict parsing rejects the whole thing, and the page goes to
+    the quarantine counter as if the model had found nothing.
+
+    Scans for a `{` that begins a decodable object rather than slicing between
+    the outermost braces, so a prefix like the above is skipped and trailing
+    commentary after the object is ignored. Tried only after the strict parse
+    and the markdown-fence retry have both failed.
+    """
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            obj, _ = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            return obj
+    return None
+
+
 def _json_items(raw: str, key: str, kind: str, source_url: str) -> list:
     """Pull `key`'s list out of an LLM JSON response.
 
@@ -458,13 +505,19 @@ def _json_items(raw: str, key: str, kind: str, source_url: str) -> list:
         try:
             payload = json.loads(_unfenced(raw))
         except json.JSONDecodeError as exc:
-            log.warning("llm_json_parse_failed", kind=kind, source_url=source_url,
-                        error=str(exc), raw=raw[:200])
-            # Caching [] here would permanently record a failed call as an
-            # empty page under the current fingerprint — raise so the page is
-            # retried.
-            raise ExtractorContentError(
-                f"LLM returned invalid {kind} JSON: {exc}") from exc
+            # Third and last chance: a complete object embedded in whatever
+            # else the model emitted. See _embedded_json_object.
+            payload = _embedded_json_object(raw)
+            if payload is None:
+                log.warning("llm_json_parse_failed", kind=kind, source_url=source_url,
+                            error=str(exc), raw=raw[:200])
+                # Caching [] here would permanently record a failed call as an
+                # empty page under the current fingerprint — raise so the page
+                # is retried.
+                raise ExtractorContentError(
+                    f"LLM returned invalid {kind} JSON: {exc}") from exc
+            log.info("llm_json_recovered", kind=kind, source_url=source_url,
+                     error=str(exc))
     if not isinstance(payload, dict):
         log.warning("llm_json_not_an_object", kind=kind, source_url=source_url,
                     got=type(payload).__name__, raw=raw[:200])
@@ -961,7 +1014,7 @@ class _ApiExtractor:
             **self._budgeted(),
         }
         data = await self._post(payload, label=source_url)
-        raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        raw = _message_text(data)
         return self._parsed(
             data, source_url,
             lambda: _parse_communities(raw, city, topic, locale, source_url))
@@ -991,7 +1044,7 @@ class _ApiExtractor:
         }
         try:
             data = await self._post(payload, label=source_url)
-            raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            raw = _message_text(data)
             return self._parsed(data, source_url,
                                 lambda: _parse_venues(raw, city, locale, source_url))
         except (ExtractorQuotaError, ExtractorRateLimitError, ExtractorUnavailableError):
@@ -1023,7 +1076,7 @@ class _ApiExtractor:
         }
         try:
             data = await self._post(payload, label=source_url)
-            raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            raw = _message_text(data)
             return self._parsed(
                 data, source_url,
                 lambda: _parse_persons(raw, city, topic, locale, source_url))
@@ -1052,7 +1105,7 @@ class _ApiExtractor:
         }
         try:
             data = await self._post(payload, label=record.name)
-            raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            raw = _message_text(data)
             return _apply_enrich(record, json.loads(raw))
         except (ExtractorQuotaError, ExtractorRateLimitError, ExtractorUnavailableError):
             raise
@@ -1120,7 +1173,7 @@ class _ApiExtractor:
             **self._budgeted(),
         }
         data = await self._post(payload, label=f"describe:{name}")
-        raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        raw = _message_text(data)
         try:
             obj = json.loads(raw)
         except (TypeError, json.JSONDecodeError):

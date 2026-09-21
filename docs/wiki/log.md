@@ -3,6 +3,15 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-21
+- **Fix**: Two kinds of nearly-right answer are no longer thrown away. A free OpenRouter model
+  returned `{\n{"communities": [...]}` — a stray brace before an answer that correctly named
+  Városlődi Sport és Szabadidős Egyesület — and strict parsing rejected the lot; the parser now
+  makes a third attempt for a complete JSON object embedded anywhere in the text, after the strict
+  parse and the fence retry. And a reasoning model out of budget mid-thought returns an **empty**
+  `content` with the thinking in `reasoning`, which is the "Expecting value: line 1 column 1" that
+  accounted for most of that provider's 331 failed calls on 2026-09-20; the answer is now read from
+  whichever field carries it. A genuinely broken answer still raises, because a failed extraction is
+  never cached and raising is what gets the page retried.
 - **Fix**: A provider that refuses everything is now dropped for the day. Measured 2026-09-20:
   **Mistral took 470 calls and refused 469**, one a minute for most of the day — each 429 carried a
   60-second Retry-After, and sixty seconds later it came round again, spending its own daily
