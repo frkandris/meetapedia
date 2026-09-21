@@ -119,67 +119,24 @@ a decoration, and a held-out set of a few hundred pages will tell you whatever
 you hope to hear.
 
 
-## Reaching Jev without the waitlist
+## Reaching Jev
 
-TypeSafe's own console put us on a waitlist on 2026-09-20. Two routes exist
-that use credentials this project already holds, and the benchmark takes
-`--provider` to choose:
+TypeSafe's own console was waitlisted on 2026-09-20 and cleared the same night.
+Two routes exist; the benchmark takes `--provider`:
 
-- **Cloudflare Workers AI** (`--provider cloudflare`) serves the same model as
-  `typesafe/jev` through `POST /accounts/{id}/ai/run`, authenticated with the
-  `CLOUDFLARE_API_TOKEN` the extraction fleet already uses. Same questions,
-  same answer fields; the envelope differs — the payload nests under `input`
-  and the answer may nest under `result`, and both shapes are handled.
-- **OpenRouter** also lists Jev, but through a chat-completions surface that
-  does not express typed questions. Not worth adapting while Cloudflare's
-  native route exists.
+- **Cloudflare Workers AI** (`--provider cloudflare`), `typesafe/jev` through
+  `POST /accounts/{id}/ai/run`. Partner models bill from the **AI Gateway's
+  prepaid balance** — not the Workers Paid plan and not the neuron allowance
+  (error 2021, *"add money to your gateway or use BYOK"*). Two facts only the
+  live service gave: Workers AI nests the answer twice
+  (`result.result.answers`), and concurrency 6 draws 429 — one rate limit ended
+  a 1,200-page run at page 422, since `asyncio.gather` loses every in-flight
+  page with the first exception. Concurrency 3 holds.
+- **TypeSafe directly**, `TYPESAFE_API_KEY`, once off the waitlist.
 
-**Measured 2026-09-20: the Cloudflare route answers 402 Payment Required.**
-Jev is a third-party partner model on Workers AI and is not covered by the
-free neuron allowance. The smoke test is what established this, and it also
-ruled out the obvious alternative explanation: the same token, in the same
-container, at the same minute, got **200** from `@cf/openai/gpt-oss-20b`. So
-it is the model that costs money, not the day's quota that ran out — and the
-extraction fleet's allowance was never touched.
+Measured price, from real `usage`: 2,136 input tokens per page — $0.11 per
+1,000 pages, $0.09/day for new pages, $11.49 to gate the entire corpus once.
 
-**Resolved the same day: it is the AI Gateway's own prepaid balance.** The
-second 402 said so exactly — *"Insufficient balance; add money to your gateway
-or use BYOK"* (code 2021). Not the Workers Paid plan, not the neuron
-allowance: partner models bill through **AI Gateway Unified Billing**, topped
-up at AI → AI Gateway → Credits Available → Manage. With credit on the
-account the same call answers 200, and `gatewayMetadata.keySource: "Unified"`
-confirms which purse it came from. The BYOK alternative the error offers is
-closed to us — it wants the TypeSafe key the waitlist is withholding.
-
-Two things the live service taught that no amount of reading would have:
-
-- **Workers AI nests the answer twice**, not once:
-  `{result: {state, result: {answers}, gatewayMetadata}}`. A single unwrap
-  leaves `answers` missing, which is why the runner refuses an answerless
-  response loudly instead of scoring it as a zero.
-- **Concurrency 6 hits 429** on this gateway — it ended a 1,200-page run after
-  422 pages, because `asyncio.gather` takes every in-flight page down with the
-  first exception. The runner now retries 429 and 5xx with doubling backoff,
-  and 3 is the concurrency that has held.
-
-The measured cost, from real `usage` numbers (2,136 input tokens per page at
-`max_text_chars: 8000`): **$0.11** for the 1,200-page comparison, **$0.09** a
-day for ~1,000 new pages, **$11.49** to gate the whole 128,072-page corpus
-once. If the gate works, its price is not the question.
-
-Were credit not an option, the remaining routes would be:
-
-1. **Wait for the TypeSafe waitlist.** Free, unknown latency; reports suggest
-   hours rather than weeks.
-2. **Put a payment method on Cloudflare** (Workers Paid, $5/month plus neuron
-   usage). The benchmark itself is a couple of dollars at most.
-3. **A gateway account** — Vercel AI Gateway, Netlify, AIMLAPI — each needs its
-   own signup and its own wire format.
-
-None is urgent. The free local gate already buys ~11% of extraction work at
-99.5% recall, and Jev only becomes interesting if it clears that by a wide
-margin. The measurement is worth a few dollars; it is not worth a rushed
-decision.
 
 ## The comparison, 2026-09-20: Jev wins, by 2-5x
 
@@ -277,24 +234,56 @@ One more, learned here: **the threshold belongs in config, not in code**, and
 and 0.06 is where recall trades hardest against saving, and it should be
 re-measured whenever the extraction prompt changes — the labels move with it.
 
-## The combined prompt locks our own GPU out of the fleet
+## The A/B run, 2026-09-21: the gate ships, the merge does not
 
-Measured while the A/B run started, 2026-09-20: `localgpu` (Qwen3-4B, an
-**8,192-token window** — see `providers.yaml`) answers *"Context size has been
-exceeded"* on real pages under the merged prompt, at a 2,000-token output
-reservation and again at 3,000. The arithmetic is why: ~1,500 tokens of merged
-prompt, plus 8,000 characters of Hungarian page text (which tokenizes worse
-than English), plus the reservation — which is charged *against* the window,
-not added to it.
+525 pages of the production corpus, in its own proportions (80.6% with no
+communities), each one compared against the extraction already cached for it.
+Two changes measured together — a Jev gate at 0.06, then one combined call in
+place of three.
 
-This is an argument against the merge that the call-count arithmetic cannot
-see. `localgpu` is the provider whose allowance never runs out
-([[our-own-gpu-in-the-fleet]]) — on 2026-09-05 it was the only one still
-answering at 22:30 UTC. A change that saves two calls per useful page but
-excludes the always-available provider may cost more capacity than it frees.
+```
+gate:       84 pages rejected (16%) — one real loss
+calls:      709 -> 419              = 40.9% saved
+            1.360 -> 0.798 calls per page
+            1,544 -> 2,632 pages/day (1.71x), backlog 83 -> 49 days
+communities: 132 -> 235   (+78%)
+venues:       97 -> 216   (+123%)
+errors:     22 / 525 (4.2%) — rate limits and 5xx on the fleet
+Jev cost:   $0.115 per 1,000 pages
+```
 
-Three ways out, in order of how much they give up: send less page text on the
-combined path (changes what is measured), merge only communities and venues
-and leave people separate (two calls, not one), or accept that the combined
-path runs on hosted providers only and `localgpu` keeps the three-call path.
-Decide after the A/B numbers, not before.
+**The gate is confirmed.** One genuine loss in 84 rejections — 98.8% — which
+matches the 1,200-page measurement where every page below 0.06 turned out to be
+an incumbent error. Nothing here argues against shipping it.
+
+**The merge is refuted, and the counts are why it took 500 pages to see.** At
+25 pages the extra communities looked like better granularity: eight timetable
+rows of one German sports club replaced by the club itself. At 525 the pattern
+is different. What the combined call adds:
+
+    Kör · Senioren · Babykurse · Musikgarten · Könyvbemutató – Balatonfűzfő ·
+    A hívek imája Máriacellben · KolorFund innovációs fórum · kita-osaka-cc
+
+One-word fragments, a book launch, a prayer, a forum, course names — none of
+them a joinable group, and every one excluded by the three-condition rule in
+the standalone prompt. Meanwhile it loses real ones:
+
+    Vilnius Chess Club · Katholische Pfarrgemeinde St. Ulrich Geislingen ·
+    Seniorenclub (AWO Friedberg) · Freiwilligenagentur mit Herz & Hand ·
+    北大阪サイクリングクラブ
+
+So +78% is not sharper recognition. It is a looser filter. The standalone
+prompt spends its whole attention on what counts as a joinable group; merged,
+the same model divides that attention three ways, and the strict part is what
+dilutes first. Add the 8,192-token ceiling that excludes `localgpu` — the one
+provider whose allowance never runs out — and the merge costs more than the
+two calls it saves.
+
+**Decided 2026-09-21: implement the gate, revert the merge.** The combined
+prompt, `extract_all`, and the A/B harness are removed with this commit; the
+numbers above are the record of why, and re-deriving them would cost another
+$0.06 and six hours.
+
+If the merge is ever revisited, the experiment to run is not this one: split
+the prompt differently — communities alone, venues and people together — so
+the strict judgment keeps a call to itself.

@@ -2,6 +2,17 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-21
+- **Decision**: **The Jev gate ships; the combined extraction is reverted.** 525 corpus-proportioned
+  pages, each against its own cached extraction. The gate rejected 84 (16%) for one real loss —
+  98.8%, matching the earlier 1,200-page run. The merge saved 40.9% of calls but found +78%
+  communities and +123% venues, and the additions are one-word fragments, a book launch, a prayer
+  and course names, while real groups (Vilnius Chess Club, a German parish, a Japanese cycling club)
+  were lost. Not sharper recognition — a looser filter: the standalone prompt spends its whole
+  attention on the joinable rule, and merged, that strict part dilutes first. With the 8,192-token
+  ceiling that also excludes `localgpu`, the merge costs more than the two calls it saves.
+  [[jev-joinability-gate]].
+
 ## 2026-09-20
 - **Fix**: Two defects in the new outclick tracking, both found by review before the data was
   trusted. A `website` stored without a scheme is rendered as `https://…` by the template, so the
