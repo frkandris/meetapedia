@@ -298,6 +298,24 @@ class QuotaLedger:
     #: cost a provider's entire remaining allowance.
     _OBSERVED_LIMIT_TTL_S = 1800.0
 
+    #: A provider that has answered 429 this many times today, while almost
+    #: never succeeding, is not congested — it is shut. Measured 2026-09-20:
+    #: Mistral took **470 calls and refused 469 of them**, one a minute for
+    #: most of the day, because each 429 carried a 60-second Retry-After and
+    #: sixty seconds later it came round again. A minute-long Retry-After is
+    #: indistinguishable from ordinary congestion on its own; the four
+    #: hundredth one is not.
+    #:
+    #: Deliberately not a streak counter. The ledger already persists `calls`,
+    #: `failures` and `rate_limits` per provider per day, and a ratio over
+    #: those survives a restart, where an in-memory streak would not — and
+    #: restarts are exactly when this provider got another few hundred tries.
+    _DAILY_429_GIVE_UP_COUNT = 25
+    #: …and "almost never succeeding" means this share of the day's calls.
+    #: Mistral's success rate was 0.2%. OpenRouter, which really is congested,
+    #: ran at 59% with 78 rate limits — it must not be caught by this.
+    _DAILY_429_GIVE_UP_SUCCESS_RATE = 0.10
+
     def reserve_call(self, provider: str) -> None:
         """Take a request slot before issuing the call, not after it returns.
 
@@ -365,6 +383,24 @@ class QuotaLedger:
             wait = float(retry_after or 60)
             blocked_until = time.time() + wait
             row["blocked_until"] = blocked_until
+            # Give up on a provider that is refusing everything. A short
+            # Retry-After asks us back in a minute, and honouring that
+            # literally is how one provider spent a whole day being asked and
+            # saying no — 469 refusals out of 470 calls, each one a real
+            # request that consumed its own daily allowance. Past the
+            # thresholds above, the refusals stop being evidence about *this*
+            # minute and start being evidence about the day.
+            _calls = int(row.get("calls") or 0)
+            _successes = _calls - int(row.get("failures") or 0)
+            if (row["rate_limits"] >= self._DAILY_429_GIVE_UP_COUNT
+                    and _calls > 0
+                    and _successes <= _calls * self._DAILY_429_GIVE_UP_SUCCESS_RATE):
+                blocked_until = _next_utc_midnight()
+                row["blocked_until"] = blocked_until
+                log.warning("provider_refusing_everything", provider=provider,
+                            calls=_calls, successes=_successes,
+                            rate_limits=row["rate_limits"],
+                            until="next UTC midnight")
             # Only a *daily* refusal tells us anything about the daily ceiling.
             # Free tiers publish both rpm (10-30) and rpd (150-14400) and 429 on
             # the per-minute limit constantly; recording the day's call count on

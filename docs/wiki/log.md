@@ -3,6 +3,13 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-21
+- **Fix**: A provider that refuses everything is now dropped for the day. Measured 2026-09-20:
+  **Mistral took 470 calls and refused 469**, one a minute for most of the day — each 429 carried a
+  60-second Retry-After, and sixty seconds later it came round again, spending its own daily
+  allowance one refusal at a time. Past 25 rate limits with under 10% of calls succeeding, the block
+  runs to the next UTC midnight instead. A ratio over the ledger's persisted counters, not a streak,
+  so it survives the restarts during which this provider got another few hundred tries. OpenRouter
+  the same day — 78 rate limits, 817 calls, 59% succeeding — is deliberately not caught.
 - **Decision**: **The Jev gate ships; the combined extraction is reverted.** 525 corpus-proportioned
   pages, each against its own cached extraction. The gate rejected 84 (16%) for one real loss —
   98.8%, matching the earlier 1,200-page run. The merge saved 40.9% of calls but found +78%

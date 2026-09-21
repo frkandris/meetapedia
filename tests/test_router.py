@@ -1493,3 +1493,60 @@ def test_a_success_below_the_ceiling_leaves_it_alone(tmp_path):
     ledger._row("groq")["calls"] = 100
     ledger.note_call("groq", ok=True, spec=spec)
     assert ledger._row("groq")["observed_limit"] == 500
+
+
+def test_a_provider_refusing_everything_is_dropped_for_the_day(tmp_path):
+    """Measured 2026-09-20: Mistral took 470 calls and refused 469.
+
+    Each 429 carried a 60-second Retry-After, so a minute later it came round
+    again — all day, consuming its own daily allowance one refusal at a time.
+    A minute-long Retry-After is indistinguishable from congestion on its own;
+    the four hundredth one is not.
+    """
+    import time as _t
+
+    from scraper.db import init_db
+    from scraper.router import QuotaLedger
+
+    db = tmp_path / "ledger.db"
+    init_db(db)
+    ledger = QuotaLedger(db)
+    spec = _spec("mistral", rpd=500)
+
+    for i in range(QuotaLedger._DAILY_429_GIVE_UP_COUNT):
+        ledger.note_call(spec.name, ok=False, rate_limited=True,
+                           retry_after=60, spec=spec)
+        if i < QuotaLedger._DAILY_429_GIVE_UP_COUNT - 1:
+            # Still only a minute away, as before.
+            assert ledger.blocked(spec.name)
+            assert float(ledger._row(spec.name)["blocked_until"]) < _t.time() + 120
+
+    # The last one crosses the threshold: blocked to the end of the UTC day.
+    assert ledger.blocked(spec.name)
+    assert float(ledger._row(spec.name)["blocked_until"]) > _t.time() + 3600
+
+
+def test_a_busy_but_working_provider_is_not_dropped(tmp_path):
+    """OpenRouter on the same day: 78 rate limits, 817 calls, 59% succeeding.
+
+    That is congestion, and it must keep its place in the fleet — the rule
+    exists for a provider that answers nothing, not one that answers slowly.
+    """
+    import time as _t
+
+    from scraper.db import init_db
+    from scraper.router import QuotaLedger
+
+    db = tmp_path / "ledger.db"
+    init_db(db)
+    ledger = QuotaLedger(db)
+    spec = _spec("openrouter", rpd=950)
+
+    for _ in range(60):
+        ledger.note_call(spec.name, ok=True, spec=spec)
+    for _ in range(QuotaLedger._DAILY_429_GIVE_UP_COUNT + 10):
+        ledger.note_call(spec.name, ok=False, rate_limited=True,
+                           retry_after=60, spec=spec)
+
+    assert float(ledger._row(spec.name)["blocked_until"]) < _t.time() + 120, \
+        "a provider that is mostly succeeding must only wait out its window"
