@@ -11,6 +11,10 @@ resource: config/providers.yaml
 
 *Measured, not assumed: an 8B model on a 16 GB MacBook agrees with the incumbent extraction as often as the free fleet's middle, and has no daily limit to spend.*
 
+> Sharpened by [[free-model-catalogue-churn]]: a hosted free model can also be withdrawn
+> outright, and on 2026-09-21 the best-scoring one was, three days after it was added. This
+> provider cannot be — which is a second, quieter reason it earns its place.
+
 ## The question, and the number that actually mattered
 
 Not "is a local model as good as the cloud" but "is it good enough to be worth

@@ -57,6 +57,7 @@ vocabulary), [faq.md](faq.md) (recurring questions).
 - [[extraction-provider-fallback-chain]] — FallbackExtractor is the one failure path for every provider; since 2026-08 it carries a routed free-tier fleet instead of a single DeepSeek.
 - [[paid-spend-guard]] — A daily USD ceiling in the quota ledger that makes paid providers unavailable once the day's spend reaches it — the money equivalent of the free tier's 429, which nobody sends us.
 - [[extraction-quarantine]] — After three content failures at one fingerprint a page stops being re-extracted — the bound that the never-cache-a-failure rule was missing, and which only became expensive once retries cost money.
+- [[free-model-catalogue-churn]] — A free model is a loan, not an asset — three have now been withdrawn with the same 404 sentence, and a retired entry keeps costing one call per run until it is deleted.
 - [[measuring-extraction-quality]] — How model scores are computed, what they actually mean, and the three ways the measurement was wrong before it was right.
 - [[joinable-quality-gate]] — The primary quality filter — only records the LLM marks joinable=True survive; a 3-condition AND rule defines it.
 - [[false-positive-injection]] — Admin negatives feed both extraction paths and explicitly invalidate only the affected community-extraction cache.

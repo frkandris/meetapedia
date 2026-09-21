@@ -3,6 +3,15 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-21
+- **Deprecation**: `deepseek/deepseek-v4-flash-0731:free` removed from the OpenRouter entry three
+  days after it was added, and it was the fleet's best free model — quality 76, answering 14 of 20
+  where nemotron managed 10. OpenRouter now answers HTTP 404, "This model is unavailable for free.
+  The paid version is available now", the same sentence [[free-model-catalogue-churn]] recorded for
+  `gpt-oss-20b:free` a fortnight earlier. Not re-added as the paid slug: `allow_paid` is false and
+  the budget is 0.00. A deletion rather than `enabled: false`, because a retired entry costs one
+  wasted preflight call per run. The two evenings of cap measurement behind it (4,000 tokens, then
+  8,000, each justified by counting truncations) are not wasted — the reasoning-model truncation
+  rule they established outlived the model. Expect to measure the replacement too.
 - **Fix**: Two kinds of nearly-right answer are no longer thrown away. A free OpenRouter model
   returned `{\n{"communities": [...]}` — a stray brace before an answer that correctly named
   Városlődi Sport és Szabadidős Egyesület — and strict parsing rejected the lot; the parser now
