@@ -745,6 +745,55 @@ def get_venue_type_labels(lang: str) -> dict[str, str]:
     return {**base, **overrides}
 
 
+#: Hungarian attributive forms of the topic labels, for headlines that put the
+#: topic in front of a noun. A bare Hungarian noun cannot do that job: the guide
+#: titles read "Tánc közösségek", "Művészet közösségek" and — published on
+#: 2026-09-21 — "Nők közösségek", which is simply wrong. English needs no such
+#: table, because an English noun modifies a noun unchanged.
+TOPIC_ADJECTIVES_HU = {
+    "art": "művészeti", "baby": "baba-mama", "board_games": "társasjátékos",
+    "book_club": "könyvklub-", "chess": "sakk-", "choir": "kórus-",
+    "cooking": "főző", "crafts": "kézműves", "cycling": "kerékpáros",
+    "dance": "táncos", "film_club": "filmklub-", "fitness": "fitnesz-",
+    "fogyatekossag": "fogyatékkal élőket segítő", "gaming": "játékos",
+    "gardening": "kertészkedő", "hagyomanyorzes": "hagyományőrző",
+    "hiking": "túrázó", "kisallat": "kisállatos",
+    "language_exchange": "nyelvcserés", "martial_arts": "harcművészeti",
+    "meditation": "meditációs", "music": "zenei", "nok": "női",
+    "other": "egyéb", "photography": "fotós", "religion": "vallási",
+    "running": "futó", "senior": "nyugdíjas",
+    "sustainability": "fenntarthatósági", "swimming": "úszó",
+    "theater": "színházi", "volunteering": "önkéntes",
+    "community_general": "közösségi", "parenting": "szülői",
+    "startup": "startup-", "tech": "technológiai", "wellbeing": "jóllét-",
+    "writing": "írói", "yoga": "jóga-",
+    "trivia": "kvíz-", "vallalkozas": "vállalkozói",
+}
+
+
+def topic_phrase(topic: str, label: str, lang: str, noun: str) -> str:
+    """`noun` with the topic in front of it, grammatical in `lang`.
+
+    Hungarian cannot put a bare noun in front of another noun, which is how the
+    guides published on 2026-09-21 came to be headed "Nők közösségek". Some
+    topics take an adjective ("női közösségek"), others form a compound word
+    ("könyvklub-közösségek"); a trailing hyphen in the table means the latter.
+
+    A topic with no entry falls back to "<label> témájú <noun>", which is
+    grammatical for any Hungarian noun — formal, but never wrong. So adding a
+    topic without touching this table yields stiff prose rather than a headline
+    with an error in it, which is the whole point.
+    """
+    if lang != "hu":
+        return f"{label} {noun}"
+    adjective = TOPIC_ADJECTIVES_HU.get(topic)
+    if not adjective:
+        return f"{label} témájú {noun}"
+    if adjective.endswith("-"):
+        return f"{adjective}{noun}"
+    return f"{adjective} {noun}"
+
+
 def get_topic_labels(lang: str) -> dict[str, str]:
     base = TOPIC_LABELS_I18N.get("en", {})
     overrides = TOPIC_LABELS_I18N.get(lang, {})

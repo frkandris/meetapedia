@@ -391,3 +391,89 @@ def test_guide_writer_drops_models_that_keep_failing_the_prose_gate(tmp_path):
                 pipeline_mod.build_guide_writer(cfg).primaries] == ["tiny-4b", "big-120b"]
     finally:
         pipeline_mod.build_extractor = original
+
+
+def test_a_model_failing_every_draft_is_dropped_mid_pass(tmp_path):
+    """Measured in production 2026-09-21: twelve consecutive refusals from one
+    model in a single pass. `build_guide_writer` could not have stopped it —
+    the writer is built when the day's counters are still zero — so the pass
+    itself has to notice.
+    """
+    from types import SimpleNamespace
+
+    class _Chain:
+        """A two-model chain whose head always writes an unusable stub."""
+
+        def __init__(self, primaries, router=None):
+            self.primaries = primaries
+            self.router = router
+            self.calls_made = 0
+
+        @property
+        def last_model(self):
+            return self.primaries[0].model
+
+        async def completion(self, messages, **params):
+            self.calls_made += 1
+            packet = json.loads(messages[-1]["content"].split("\n", 1)[1])
+            if self.primaries[0].model == "stub-4b":
+                article = {k: "Túl rövid." for k in
+                           ("orientation", "practicalities", "choosing_advice", "gaps")}
+                article["used_dimensions"] = ["location"]
+            else:
+                article = _article([c["name"] for c in packet["communities"]],
+                                   packet["language"])
+            return {"choices": [{"message": {"content": json.dumps(article, ensure_ascii=False)}}]}
+
+    db = tmp_path / "drop.db"
+    init_db(db)
+    # Several candidates, because one pass makes one attempt per candidate —
+    # which is how production accumulated twelve refusals across twelve cities.
+    cities = [CityConfig(name, "hu", [], "Hungary")
+              for name in ("Budapest", "Debrecen", "Szeged")]
+    for city in cities:
+        _seed(db, city)
+    fleet = [SimpleNamespace(provider="local", model="stub-4b"),
+             SimpleNamespace(provider="cloud", model="able-120b")]
+    chain = _Chain(fleet)
+
+    published = asyncio.run(publish_daily_guides(
+        db, cities, chain, limit=5, give_up_at=2))
+
+    # The stub model is dropped after two refusals, and the pass then succeeds
+    # instead of spending the whole budget on a model that cannot do the work.
+    assert published, "the pass must recover once the failing model is dropped"
+    assert published[0]["data"]["writer_model"] == "able-120b"
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    assert get_daily_counter(db, day, "guide_rejected_by_stub-4b") == 2
+
+
+def test_hungarian_guide_titles_are_grammatical():
+    """Published 2026-09-21: "Nők közösségek Pécs városában". Hungarian cannot
+    put one bare noun in front of another, and the title is the page's H1.
+    """
+    from scraper.web.i18n import (TOPIC_ADJECTIVES_HU, get_topic_labels,
+                                  topic_phrase)
+
+    labels = get_topic_labels("hu")
+    assert not set(labels) - set(TOPIC_ADJECTIVES_HU), \
+        "every shipped topic needs an attributive form"
+
+    assert topic_phrase("nok", labels["nok"], "hu", "közösségek") == "női közösségek"
+    assert topic_phrase("book_club", labels["book_club"], "hu",
+                        "közösségek") == "könyvklub-közösségek"
+    # An unknown topic degrades to formal-but-correct, never to a broken headline.
+    assert topic_phrase("newly_added", "Sárkányrepülés", "hu",
+                        "közösségek") == "Sárkányrepülés témájú közösségek"
+    # English stacks nouns unchanged and must not be touched.
+    assert topic_phrase("dance", "Dance", "en", "communities") == "Dance communities"
+
+
+def test_published_hungarian_guide_uses_the_attributive_title(tmp_path):
+    db = tmp_path / "title.db"
+    init_db(db)
+    city = CityConfig("Pécs", "hu", [], "Hungary")
+    _seed(db, city, topic="dance")
+    published = asyncio.run(publish_daily_guides(db, [city], _Writer(), limit=1))
+    assert published and published[0]["title"].startswith("Táncos közösségek Pécs")
+    assert "Tánc közösségek" not in published[0]["title"]

@@ -3,6 +3,15 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-21
+- **Fix**: Two defects the first production pass after the guide rewrite exposed, both invisible in
+  testing. The learned model-skipping **never fired**: it reads the day's per-model counters, but the
+  writer is assembled at the start of the pass when those are still zero, so one model produced
+  twelve consecutive refusals and kept being asked — the pass now narrows its own chain after three.
+  And every Hungarian guide title was ungrammatical from the day the feature shipped: "Nők
+  közösségek Pécs városában", because Hungarian cannot stack two bare nouns. `i18n.topic_phrase()`
+  now supplies an attributive form per topic ("női", "táncos", "könyvklub-"), falling back to
+  "<label> témájú" so a new topic degrades to formal prose rather than a broken H1. Nobody had read
+  a title closely before, because the prose under it was worse. [[2026-09-guides-named-nobody]].
 - **Fix**: **The data guides are rewritten, and the first ten are being replaced.** The operator's
   verdict on reading them was that they were bad; measuring them said how. Nine of ten named zero
   groups, eight repeated whole sentences, one had a section that was 83% verbatim copy of another,

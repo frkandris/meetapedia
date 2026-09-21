@@ -89,6 +89,29 @@ current one is rewritten in place — same slug, same `published_at`, new body �
 before any new guide is published, because fixing a page people can already read
 beats adding an eleventh.
 
+## What the first day after the fix showed
+
+The ten articles were deleted and the writer re-ran against an empty table.
+Two things only production could say:
+
+**The learned model-skipping did not fire.** `build_guide_writer()` reads the
+day's per-model counters, but the chain is assembled at the *start* of the pass,
+when those counters are necessarily zero — so one model produced twelve
+consecutive refusals in a single pass and kept being asked. The pass itself now
+narrows the chain after three refusals from one model; the build-time filter
+still earns its place for a mid-day restart. Fixed the same day.
+
+**The titles were ungrammatical, and always had been.** `Nők közösségek Pécs
+városában` — Hungarian cannot put one bare noun in front of another, and the
+template had been doing exactly that for every topic since the feature shipped
+(`Tánc közösségek`, `Művészet közösségek`). Nobody had read a title closely
+because the prose below it was so much worse. See `i18n.topic_phrase()`.
+
+The first article accepted under the new rules was written by `gpt-oss-120b`:
+270 Hungarian words, four groups named, sorted into four kinds, with an honest
+account of what the directory does not know. The same packet, the same prompt,
+a different model — see the measurements above.
+
 ## What this generalizes to
 
 A silent trim is worse than an error, and you find it by measuring the output

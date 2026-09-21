@@ -13,7 +13,7 @@ from .db import (bump_daily_counter, count_data_guides_published_on,
                  get_guide_candidate_groups, get_stale_data_guides,
                  init_db, replace_data_guide)
 from .identity import public_slug
-from .web.i18n import get_topic_labels
+from .web.i18n import get_topic_labels, topic_phrase
 
 log = structlog.get_logger(__name__)
 
@@ -375,9 +375,13 @@ async def _draft_guide(db_path: Path, city: str, topic: str, meta, writer, *,
     labels = get_topic_labels(locale)
     topic_label = labels.get(topic, topic.replace("_", " ").title())
     if is_hu:
-        title = f"{topic_label} közösségek {city} városában: {count} lehetőség"
+        # Hungarian cannot stack two bare nouns, so the topic needs its
+        # attributive form here — see `topic_phrase`.
+        title = (f"{topic_phrase(topic, topic_label, locale, 'közösségek').capitalize()} "
+                 f"{city} városában: {count} lehetőség")
         summary = (
-            f"Adatainkban jelenleg {count} {topic_label.lower()} közösség szerepel "
+            f"Adatainkban jelenleg {count} "
+            f"{topic_phrase(topic, topic_label.lower(), locale, 'közösség')} szerepel "
             f"{city} területén. {described} közösségről részletes leírás is elérhető; "
             f"az útmutató {len(dimensions)} összehasonlítható szempontot mutat be."
         )
@@ -449,11 +453,37 @@ async def _draft_guide(db_path: Path, city: str, topic: str, meta, writer, *,
     }, ""
 
 
+def _without_model(writer, model: str):
+    """The same chain with one model removed, or unchanged if that empties it.
+
+    `build_guide_writer()` applies the day's evidence when the writer is built,
+    which covers a restart but not the pass now running: at the start of a pass
+    today's counters are necessarily near zero, so a model that fails every
+    draft of *this* pass would otherwise keep being asked. Narrowing in-run is
+    what actually stops it; the build-time filter is what remembers across a
+    restart. Both fail open, for the same reason — an attempt that might be
+    refused beats a day with no attempt.
+    """
+    primaries = getattr(writer, "primaries", None)
+    if not primaries:
+        return writer
+    keep = [e for e in primaries if getattr(e, "model", "") != model]
+    if not keep or len(keep) == len(primaries):
+        return writer
+    # The chain's own type, not a hard-coded one: whatever assembled this writer
+    # is what should assemble the narrowed one.
+    try:
+        return type(writer)(primaries=keep, router=getattr(writer, "router", None))
+    except TypeError:
+        return writer
+
+
 async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: int = 10,
                          min_communities: int = 8,
                          min_description_ratio: float = 0.6,
                          min_dimensions: int = 3,
                          country_priority: list[str] | None = None,
+                         give_up_at: int = 3,
                          now: datetime | None = None) -> list[dict]:
     """Spend today's guide budget: first rewriting stale pages, then publishing new.
 
@@ -476,6 +506,20 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
 
     city_meta = {c.name: c for c in cities}
     written: list[dict] = []
+    refused_by_model: Counter = Counter()
+
+    def _note_refusal(model: str):
+        """Stop asking a model that is failing every draft of this pass."""
+        nonlocal writer
+        if not model:
+            return
+        refused_by_model[model] += 1
+        if refused_by_model[model] == give_up_at:
+            narrowed = _without_model(writer, model)
+            if narrowed is not writer:
+                log.info("guide_writer_dropped_model", model=model,
+                         refusals=refused_by_model[model])
+                writer = narrowed
 
     # --- stale rewrites, oldest first -------------------------------------
     for stale in get_stale_data_guides(db_path, _PROMPT_VERSION, limit=remaining):
@@ -488,6 +532,7 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
             db_path, stale["city"], stale["topic"], meta, writer,
             stamp=stamp, day=day, min_dimensions=min_dimensions)
         if not guide:
+            _note_refusal(getattr(writer, "last_model", ""))
             continue
         # The rewrite keeps the original publication date and slug; only the
         # body, the counts and `updated_at` move.
@@ -524,6 +569,7 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
             min_communities=min_communities,
             min_description_ratio=min_description_ratio)
         if not guide:
+            _note_refusal(getattr(writer, "last_model", ""))
             continue
         if create_data_guide(db_path, guide):
             published.append(guide)
