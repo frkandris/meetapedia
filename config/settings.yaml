@@ -137,6 +137,41 @@ pipeline:
     - dance
     - fitness
 
+# ── Joinability gate ────────────────────────────────────────────────────────
+# One cheap typed question (TypeSafe Jev) before an expensive extraction:
+# "is there a joinable community on this page at all?". 81.8% of extracted
+# pages yield none, and each of those costs a full call from a free fleet that
+# allows ~2,100 a day.
+#
+# Measured 2026-09-21 on 525 corpus-proportioned pages: 16% rejected, **one**
+# genuine loss, 40.9% of calls saved. On 1,200 pages the day before, every page
+# scoring below 0.06 turned out to be a page where the *extractor* was wrong —
+# a hotel spa, a sightseeing listing, two records that were just a village's
+# name. See docs/wiki/pages/integrations/jev-joinability-gate.md.
+#
+# TWO LOCKS, like the paid extraction providers, and for the same reason: in
+# 2026-08 a permission without an amount burned ~$60 in four days. `enabled`
+# is the permission; `daily_budget_usd` is the amount, and **0 means no gate
+# calls at all**. Both must be set.
+#
+# The threshold is not a free parameter. 0.06 is where the boundary was
+# measured: below it every rejection was an incumbent error, and at 0.10 real
+# associations start falling out. Re-measure after any prompt change — the
+# labels move with it — and note that changing the threshold or the question
+# re-opens every held page automatically, because both are in the fingerprint.
+gate:
+  enabled: false
+  threshold: 0.06
+  model: typesafe/jev
+  # "cloudflare" bills from the AI Gateway's prepaid balance with the token the
+  # extraction fleet already uses; "typesafe" needs TYPESAFE_API_KEY.
+  provider: cloudflare
+  account_id: "809bd7dcd8939fa5e520a96ab4923429"
+  # ~$0.115 per 1,000 pages at 2,136 input tokens each. 0.50 covers a day of
+  # collection several times over; reaching it turns the gate off until
+  # midnight UTC and every page is extracted, which is how it worked before.
+  daily_budget_usd: 0.00
+
 cache:
   skip_scraped: true
   skip_extracted: true

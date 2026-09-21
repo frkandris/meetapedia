@@ -609,6 +609,34 @@ def init_db(db_path: Path, force: bool = False) -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_outclick_clicked_at ON outclick_events(clicked_at)"
         )
+        # ── The joinability gate's own memory ────────────────────────────────
+        # Deliberately NOT in cache_pages. A gate decision is a classifier's
+        # opinion, not an extraction result, and the two must never be
+        # confusable: writing "no communities" into the extraction cache from a
+        # classifier would record it permanently under the current fingerprint,
+        # which is the one thing CLAUDE.md forbids outright.
+        #
+        # `fingerprint` is half the key, so changing the model, the question or
+        # the threshold releases every held page automatically — the same
+        # mechanism the extraction quarantine uses. `score` is kept so a
+        # decision can be re-read at a different threshold without paying for
+        # the call again, and audited by eye.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS gate_decisions (
+                url_hash    TEXT NOT NULL,
+                fingerprint TEXT NOT NULL,
+                score       REAL NOT NULL,
+                model       TEXT NOT NULL DEFAULT '',
+                url         TEXT NOT NULL DEFAULT '',
+                decided_at  TEXT NOT NULL,
+                released_at TEXT,
+                PRIMARY KEY (url_hash, fingerprint)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_gate_fingerprint"
+            " ON gate_decisions(fingerprint, score)"
+        )
         # Per-day counters that belong to no run and no provider. The first is
         # enrichment: it spends the same free budget as extraction, and without
         # a number for it the report divided *every* successful call by the
@@ -3792,6 +3820,82 @@ def record_pageview(db_path: Path, day: str, site: str, visitor_hash: str) -> No
             "INSERT OR IGNORE INTO traffic_visitors(day, site, visitor_hash) VALUES(?,?,?)",
             (day, site, visitor_hash))
         conn.commit()
+
+
+# ── Joinability gate ─────────────────────────────────────────────────────────
+
+def save_gate_decision(db_path: Path, url_hash: str, fingerprint: str,
+                       score: float, model: str = "", url: str = "") -> None:
+    """Record one gate score. Best-effort: a gate that cannot write must not
+    stop a run — the page is simply re-scored next time."""
+    try:
+        with _connect(db_path) as conn:
+            conn.execute(
+                "INSERT INTO gate_decisions"
+                " (url_hash, fingerprint, score, model, url, decided_at)"
+                " VALUES (?,?,?,?,?,?)"
+                " ON CONFLICT(url_hash, fingerprint) DO UPDATE SET"
+                "   score=excluded.score, model=excluded.model,"
+                "   decided_at=excluded.decided_at, released_at=NULL",
+                (url_hash, fingerprint, float(score), model, url,
+                 datetime.now(timezone.utc).isoformat()))
+            conn.commit()
+    except Exception as exc:
+        log.warning("gate_decision_write_failed", url_hash=url_hash, error=str(exc))
+
+
+def get_gate_scores(db_path: Path, fingerprint: str) -> dict[str, float]:
+    """Every scored page at this fingerprint, as `{url_hash: score}`.
+
+    Released decisions are omitted, so an admin release is a re-scoring rather
+    than a permanent exemption: the page is asked again, and may be rejected
+    again if the answer has not changed.
+    """
+    if not db_path.exists():
+        return {}
+    try:
+        with _connect(db_path) as conn:
+            rows = conn.execute(
+                "SELECT url_hash, score FROM gate_decisions"
+                " WHERE fingerprint=? AND released_at IS NULL",
+                (fingerprint,)).fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    return {h: float(s) for h, s in rows}
+
+
+def release_gate_decision(db_path: Path, url_hash: str,
+                          fingerprint: str | None = None) -> int:
+    """Hand a page back to extraction. Returns how many rows were released."""
+    with _connect(db_path) as conn:
+        if fingerprint:
+            cur = conn.execute(
+                "UPDATE gate_decisions SET released_at=? WHERE url_hash=? AND fingerprint=?",
+                (datetime.now(timezone.utc).isoformat(), url_hash, fingerprint))
+        else:
+            cur = conn.execute(
+                "UPDATE gate_decisions SET released_at=? WHERE url_hash=?",
+                (datetime.now(timezone.utc).isoformat(), url_hash))
+        conn.commit()
+        return cur.rowcount
+
+
+def get_gate_rejections(db_path: Path, fingerprint: str, threshold: float,
+                        limit: int = 200) -> list[dict]:
+    """The pages this gate is currently holding back, lowest score first."""
+    if not db_path.exists():
+        return []
+    try:
+        with _connect(db_path) as conn:
+            rows = conn.execute(
+                "SELECT url_hash, url, score, model, decided_at FROM gate_decisions"
+                " WHERE fingerprint=? AND released_at IS NULL AND score < ?"
+                " ORDER BY score LIMIT ?",
+                (fingerprint, float(threshold), int(limit))).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    return [{"url_hash": h, "url": u, "score": s, "model": m, "decided_at": d}
+            for h, u, s, m, d in rows]
 
 
 def bump_daily_counter(db_path: Path, day: str, name: str, amount: int = 1) -> None:

@@ -23,6 +23,7 @@ from .store import save_results
 
 if TYPE_CHECKING:
     from .cache import CacheManager
+    from .gate import JoinabilityGate
     from .models import CommunityRecord
 
 log = structlog.get_logger()
@@ -246,6 +247,9 @@ def _new_pair_log(city_name: str, topic_name: str, queries: list[str]) -> dict:
         "search_error": None,
         "extract_failed": 0,
         "extract_error": None,
+        # Pages a joinability gate declined to extract. Not a failure: nothing
+        # went wrong, this run chose not to spend a call.
+        "gate_skipped": 0,
         # True only on the marker entry a provider-death abort leaves behind.
         # An ordinary per-pair failure sets search_failed/extract_failed and the
         # loop continues — see classify_run_outcome().
@@ -754,6 +758,47 @@ class PipelineConfig:
     #: paid providers were on, most of the bill. 0 disables the quarantine.
     extract_max_page_failures: int = 3
 
+    #: The joinability gate (scraper/gate.py). Off by default and with a zero
+    #: budget, because it spends real money — the same two-lock shape the paid
+    #: extraction providers have, for the same 2026-08 reason.
+    gate_enabled: bool = False
+    gate_threshold: float = 0.06
+    gate_model: str = "typesafe/jev"
+    gate_provider: str = "cloudflare"
+    gate_account_id: str = ""
+    gate_daily_budget_usd: float = 0.0
+
+
+def _url_hash(url: str) -> str:
+    """The one spelling of this hash the whole system shares.
+
+    CLAUDE.md names it as triplicated across cache, db, pipeline and web; this
+    delegates rather than adding a fourth copy that could drift by a byte.
+    """
+    from .cache import CacheManager
+    return CacheManager.url_hash(url)
+
+
+def build_gate(config: "PipelineConfig") -> "JoinabilityGate":
+    """The one place a gate is assembled, mirroring build_extractor.
+
+    Off unless both locks are open: `gate.enabled` is the permission and
+    `gate.daily_budget_usd` the amount, and the gate itself treats 0 as "no
+    calls at all". The 2026-08 paid-provider post-mortem is why it takes two.
+    """
+    from .gate import JoinabilityGate
+    return JoinabilityGate(
+        config.db_path,
+        enabled=config.gate_enabled,
+        threshold=config.gate_threshold,
+        model=config.gate_model,
+        provider=config.gate_provider,
+        account_id=config.gate_account_id,
+        max_text_chars=config.deepseek_max_text_chars,
+        daily_budget_usd=config.gate_daily_budget_usd,
+        timeout_seconds=config.deepseek_timeout,
+    )
+
 
 async def _extract_traced(extractor, **kwargs):
     """Extract one page and report which model served it, as one operation.
@@ -1169,6 +1214,7 @@ async def _run_full(
     enrich_fp_section = build_prompt_section(all_fps, fp_type="enrichment")
     quarantine = _Quarantine(cache, extractor.canonical_fingerprint,
                              config.extract_max_page_failures)
+    gate = build_gate(config)
     total_new = 0
     pair_logs: list[dict] = []
 
@@ -1417,6 +1463,19 @@ async def _run_full(
                         # pay for a failure already established.
                         pair_log["extract_quarantined"] = (
                             pair_log.get("extract_quarantined", 0) + 1)
+                        continue
+                    if not await gate.allows(_url_hash(url), url,
+                                             text, city.name, topic.name):
+                        # The gate said no, with a calibrated probability below
+                        # the configured threshold. Counted apart from every
+                        # kind of failure: nothing went wrong, this run
+                        # declined to spend an extraction on a page a $0.0001
+                        # question says has nothing on it. Nothing is written
+                        # to the extraction cache — the decision lives in
+                        # `gate_decisions`, keyed by a fingerprint that
+                        # re-opens it on any change, and is releasable by hand
+                        # at /admin/gate.
+                        pair_log["gate_skipped"] = pair_log.get("gate_skipped", 0) + 1
                         continue
                     if on_progress:
                         on_progress("extract", url)
@@ -1836,6 +1895,7 @@ async def _run_ai_only(
     # answer, and every attempt walks the fleet and is charged for it.
     quarantine = _Quarantine(cache, extractor.canonical_fingerprint,
                              config.extract_max_page_failures)
+    gate = build_gate(config)
     log.info("ai_only_start", load_strategy="pair_by_pair",
              run_communities=run_communities, run_venues=run_venues,
              run_persons=run_persons, quarantined_pages=quarantine.size)
@@ -1857,15 +1917,16 @@ async def _run_ai_only(
             pages = await asyncio.to_thread(
                 cache.get_scraped_for_pair, city.name, topic.name
             )
+            # Built from _new_pair_log, not by hand: run_detail.html iterates
+            # these keys with strict Undefined, so a hand-written subset
+            # renders as an error the moment the template touches a key this
+            # branch happened not to set. It already omitted `aborted`,
+            # `extract_error` and `extract_quarantined`.
             pair_log: dict = {
-                "city": city.name,
-                "topic": topic.name,
-                "queries": [],
+                **_new_pair_log(city.name, topic.name, []),
                 "urls_found": len(pages),
                 "fetched_urls": [url for url, _ in pages],
                 "cache_hits_scrape": len(pages),
-                "cache_hits_extract": 0,
-                "records_extracted": 0,
             }
 
             if not pages:
@@ -1894,16 +1955,25 @@ async def _run_ai_only(
             # Held pages are counted, not attempted — and only when this pass
             # would have extracted communities at all. A venues-only run never
             # asks the question, so it must not report an answer.
-            to_extract, quarantined_here = [], 0
+            to_extract, quarantined_here, gated_here = [], 0, 0
             for _u, _t in pages:
                 if cached_by_url.get(_u) is not None:
                     continue
                 if run_communities and quarantine.holds(_u):
                     quarantined_here += 1
-                else:
-                    to_extract.append((_u, _t))
+                    continue
+                # Asked before the batch is assembled, not inside it: this pass
+                # extracts several pages at once, and a page the gate rejects
+                # should never occupy a slot in that batch.
+                if run_communities and not await gate.allows(
+                        _url_hash(_u), _u, _t, city.name, topic.name):
+                    gated_here += 1
+                    continue
+                to_extract.append((_u, _t))
             if quarantined_here:
                 pair_log["extract_quarantined"] = quarantined_here
+            if gated_here:
+                pair_log["gate_skipped"] = gated_here
             if run_communities and not extractor.exhausted:
                 fresh_by_url, pair_stop, deferred_urls = await _extract_pair_pages(
                     extractor,

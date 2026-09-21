@@ -55,6 +55,9 @@ def load_config_from_docs(
         for t in topic_items
     ]
     cache_cfg = settings.get("cache", {})
+    gate_cfg = settings.get("gate") or {}
+    if not isinstance(gate_cfg, dict):
+        gate_cfg = {}
     deepseek_cfg = settings.get("deepseek", {})
     pipeline_cfg = PipelineConfig(
         search_results_per_query=settings["search"]["results_per_query"],
@@ -87,6 +90,12 @@ def load_config_from_docs(
         deepseek_max_text_chars=deepseek_cfg.get("max_text_chars", 8000),
         deepseek_max_output_tokens=int(deepseek_cfg.get("max_output_tokens", 1500) or 1500),
         deepseek_rate_limit_seconds=deepseek_cfg.get("rate_limit_seconds", 1.0),
+        gate_enabled=bool(gate_cfg.get("enabled", False)),
+        gate_threshold=float(gate_cfg.get("threshold", 0.06)),
+        gate_model=str(gate_cfg.get("model", "typesafe/jev")),
+        gate_provider=str(gate_cfg.get("provider", "cloudflare")),
+        gate_account_id=str(gate_cfg.get("account_id", "")),
+        gate_daily_budget_usd=float(gate_cfg.get("daily_budget_usd", 0.0) or 0.0),
     )
     return cities, topics, pipeline_cfg
 
