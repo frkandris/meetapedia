@@ -5,7 +5,8 @@ import json
 from fastapi.testclient import TestClient
 import pytest
 
-from scraper.db import get_daily_counter, get_data_guides, init_db
+from scraper.db import (bump_daily_counter, get_daily_counter,
+                        get_data_guides, init_db)
 from scraper.guides import (_DIMENSIONS, _MAX_WORDS, _MIN_NAMED_GROUPS,
                             _MIN_SECTION_WORDS, _PACKET_BUDGET_CHARS,
                             _decode_article, _fact_packet, _message_text,
@@ -349,3 +350,44 @@ def test_guide_routes_and_sitemaps_are_site_scoped(tmp_path, monkeypatch):
     assert "berlin-running" not in hu_map
     assert "https://meetapedia.com/guides/berlin-running" in en_map
     assert "budapest-futas" not in en_map
+
+
+def test_guide_writer_drops_models_that_keep_failing_the_prose_gate(tmp_path):
+    """Measured 2026-09-21: the fleet is ordered by an extraction score, and
+    writing is a different skill — a 4B scoring 73 returned a 132-word stub
+    where a 120B scoring 62 wrote 359 usable words. Rather than maintain a
+    second score for models that change weekly, the writer reads what the gate
+    already recorded today.
+    """
+    from types import SimpleNamespace
+    from scraper import pipeline as pipeline_mod
+
+    db = tmp_path / "writer.db"
+    init_db(db)
+    day = datetime.now(timezone.utc).date().isoformat()
+    fleet = [SimpleNamespace(provider="local", model="tiny-4b", quality=73),
+             SimpleNamespace(provider="cloud", model="big-120b", quality=62)]
+
+    def _fake_build(config):
+        return SimpleNamespace(primaries=list(fleet), router=None, exhausted=False)
+
+    cfg = SimpleNamespace(db_path=db)
+    original = pipeline_mod.build_extractor
+    pipeline_mod.build_extractor = _fake_build
+    try:
+        # Nothing refused yet: the whole fleet, in its own order.
+        assert [e.model for e in
+                pipeline_mod.build_guide_writer(cfg).primaries] == ["tiny-4b", "big-120b"]
+
+        for _ in range(3):
+            bump_daily_counter(db, day, "guide_rejected_by_tiny-4b", 1)
+        assert [e.model for e in
+                pipeline_mod.build_guide_writer(cfg).primaries] == ["big-120b"]
+
+        # Fails open: with every model refused, trying beats not trying.
+        for _ in range(3):
+            bump_daily_counter(db, day, "guide_rejected_by_big-120b", 1)
+        assert [e.model for e in
+                pipeline_mod.build_guide_writer(cfg).primaries] == ["tiny-4b", "big-120b"]
+    finally:
+        pipeline_mod.build_extractor = original

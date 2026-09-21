@@ -17,7 +17,7 @@ from .false_positives import load as load_false_positives
 from .fetch import fetch_and_clean
 from .search import (DataForSEOClient, FallbackSearchClient, SearchQuotaError,
                      SearchUnavailableError, build_queries)
-from .db import get_search_cache, save_search_cache, mark_search_collection_complete, get_collected_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs, get_upgradable_pages
+from .db import get_daily_counters_with_prefix, get_search_cache, save_search_cache, mark_search_collection_complete, get_collected_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs, get_upgradable_pages
 from .router import build_router
 from .store import save_results
 
@@ -882,6 +882,45 @@ def build_extractor(config: "PipelineConfig") -> FallbackExtractor:
             fingerprint_model=config.deepseek_fingerprint_model or None,
         ))
     return FallbackExtractor(primaries=primaries)
+
+
+def build_guide_writer(config: "PipelineConfig", *, give_up_at: int = 3,
+                       now=None) -> FallbackExtractor:
+    """The extraction fleet, minus the models that cannot write a guide today.
+
+    The fleet is ordered by a quality score measured for **structured
+    extraction**, and writing a readable 400-word article is a different skill.
+    Measured on the live fleet 2026-09-21: `qwen3-4b` (score 73) answered a
+    guide packet with a 132-word stub, `nemotron-3-super-120b` (58) returned an
+    empty message twice, and `gpt-oss-120b` (62) wrote 359 usable words naming
+    seven groups. Ordering by the extraction score therefore picks the worse
+    writer first, and with the prose gate failing closed that spends the whole
+    daily guide budget on drafts nothing will accept.
+
+    Rather than hand-maintain a second score for models that change week to
+    week, this reads what the gate already recorded: a model whose drafts were
+    refused `give_up_at` times today is skipped for the rest of the day. Same
+    shape as the router's rule for a provider that refuses every call, and it
+    resets at 00:00 UTC on its own.
+
+    Fails open. If every model is blocked the full fleet is returned, because a
+    draft that might be refused is worth more than a day with no attempt at all.
+    """
+    from datetime import datetime, timezone
+
+    writer = build_extractor(config)
+    day = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).date().isoformat()
+    refused = get_daily_counters_with_prefix(config.db_path, day, "guide_rejected_by_")
+    blocked = {model for model, count in refused.items() if count >= give_up_at}
+    if not blocked:
+        return writer
+    keep = [e for e in writer.primaries if getattr(e, "model", "") not in blocked]
+    if not keep:
+        log.info("guide_writer_all_models_refused", blocked=sorted(blocked))
+        return writer
+    log.info("guide_writer_skipping_models", blocked=sorted(blocked),
+             kept=[f"{e.provider}:{e.model}" for e in keep[:6]])
+    return FallbackExtractor(primaries=keep, router=getattr(writer, "router", None))
 
 
 async def run_pipeline(

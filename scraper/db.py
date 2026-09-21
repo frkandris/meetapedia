@@ -3956,6 +3956,26 @@ def bump_daily_counter(db_path: Path, day: str, name: str, amount: int = 1) -> N
         log.warning("daily_counter_failed", name=name, error=str(exc))
 
 
+def get_daily_counters_with_prefix(db_path: Path, day: str,
+                                   prefix: str) -> dict[str, int]:
+    """One day's counters whose name starts with `prefix`, keyed by the rest.
+
+    Lets a caller read a family of counters — one per model, say — without
+    knowing in advance which members exist, which is the point when the fleet's
+    membership changes week to week.
+    """
+    if not db_path.exists():
+        return {}
+    try:
+        with _connect(db_path) as conn:
+            rows = conn.execute(
+                "SELECT name, value FROM daily_counters WHERE day=? AND name LIKE ?",
+                (day, prefix.replace("%", "") + "%")).fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    return {r[0][len(prefix):]: int(r[1]) for r in rows if r[0].startswith(prefix)}
+
+
 def get_daily_counter(db_path: Path, day: str, name: str) -> int:
     if not db_path.exists():
         return 0

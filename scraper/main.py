@@ -14,8 +14,8 @@ from .cache import CacheManager
 from .config import CONFIG_DIR, load_config
 from .db import (backfill_records_count, get_last_run,
                  init_db)
-from .pipeline import (WORKER_EXTRACT, next_worker_action, run_pipeline, worker_after_run,
-                        worker_outcome)
+from .pipeline import (WORKER_EXTRACT, build_guide_writer, next_worker_action,
+                       run_pipeline, worker_after_run, worker_outcome)
 from .router import build_router
 from .web.app import app as web_app, templates
 from .web.log_stream import broadcaster
@@ -454,7 +454,7 @@ async def main() -> None:
         return value
 
     async def _worker_loop() -> None:
-        from .web.app import _build_extractor, launch_pipeline_run
+        from .web.app import launch_pipeline_run
         from .guides import publish_daily_guides
         import time as _time
         extract_idle_until = 0.0
@@ -478,7 +478,10 @@ async def main() -> None:
                         and _time.monotonic() >= guides_retry_at
                         and not getattr(app_state, "worker_paused", False)):
                     try:
-                        writer = _build_extractor(app_state.pipeline_cfg)
+                        # Not `_build_extractor`: the guide writer drops the
+                        # models whose drafts today's prose gate keeps refusing,
+                        # which the extraction chain has no reason to care about.
+                        writer = build_guide_writer(app_state.pipeline_cfg)
                         if writer.exhausted:
                             raise RuntimeError("no model available for daily guides")
                         published = await publish_daily_guides(
