@@ -230,7 +230,11 @@ def _decode_article(raw: str, allowed_dimensions: set[str],
     # absent from an English article even when it quotes Hungarian group names,
     # which is exactly the draft this catches: a Hungarian town written up in
     # English reads as competent work and is useless to the reader it is for.
-    if locale == "hu" and _HU_FUNCTION_WORDS.findall(body.casefold()).__len__() < 10:
+    # Measured on the ten real Hungarian articles of 2026-09-20/21: 15 to 44
+    # hits, against 0 for an English draft naming the same Hungarian groups.
+    # The floor is 8 rather than 10 because the shortest article this validator
+    # accepts is 260 words, where the thinnest of those ten would score ~12.
+    if locale == "hu" and len(_HU_FUNCTION_WORDS.findall(body.casefold())) < 8:
         return None, "wrong_language"
 
     # A directory guide that names none of its groups is not a guide. Nine of
