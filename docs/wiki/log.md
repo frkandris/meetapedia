@@ -3,6 +3,23 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-22
+- **Fix**: **A pipeline pass no longer holds the worker loop for a day.** Everything the worker does
+  besides running the pipeline lives at the top of its loop, and the loop cannot reach the top while
+  a run is in flight. On 2026-09-21 the guide step deferred with every provider rate limited and
+  asked for a retry in 900 s; the pass that started in the same second was still running 17 hours
+  later, so the retry never came, the 00:00 UTC quota reset passed unnoticed, and 2026-09-22
+  published one guide out of ten. A pass is now time-boxed to two hours, OR-ed with the mode's own
+  stop condition — the box hands the loop back, it never decides the work is finished — and the
+  logic moved out of a closure into `worker_should_stop()`, because the only way to test a closure
+  is to assert on source text. The guide step also stops marking the day done when it published one
+  of ten; it schedules a retry and picks up the remaining slots.
+- **Fix**: `language` is now normalised for display and comparison. Measured over the 45,546 filled
+  values: Hungarian is stored as "Magyar" (10,413), "Hungarian" (5,420) and "magyar" (778); German
+  as "Deutsch" (10,796) and "German" (3,252); Japanese as "Japanese" and "日本語". Each source page
+  writes it its own way. Raw, the value put an English word on a Hungarian page *and* defeated the
+  new comparison rules — three spellings of one answer look like variation. It is the only extracted
+  field with a closed enough vocabulary to normalise; an unrecognised language passes through
+  untouched, because dropping it loses what the source said and guessing invents it.
 - **Fix**: A UI pass over the live public pages — looked at, not read. The guide prose named four
   groups and none of them were links, so the reader had to scroll past two screens of cards and find
   the name again in a list; the gate refuses a draft naming fewer than three, and the page was

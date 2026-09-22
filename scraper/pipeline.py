@@ -503,6 +503,33 @@ def next_worker_action(*, is_running: bool, paused: bool, quota: bool,
     return WORKER_EXTRACT if (quota and extract_ready) else WORKER_COLLECT
 
 
+def worker_should_stop(*, mode: str, quota: bool, extract_ready: bool,
+                       past_deadline: bool) -> bool:
+    """Whether a pass in flight should hand the loop back now.
+
+    Extracted from the worker for the same reason as `next_worker_action`: it
+    was a closure, and the only way to check a closure is to assert on source
+    text, which passes when the logic is wrong.
+
+    Two independent reasons to stop, always OR-ed:
+
+    * the mode's own condition — extraction stops when the free budget is gone,
+      collection stops when it comes back (at 00:00 UTC that turns true by
+      itself, which is the whole of "resume extraction after the reset");
+    * the time box, which is not a judgement about the work at all. Everything
+      the worker does besides running the pipeline lives at the top of its
+      loop, and the loop cannot reach the top while a pass is in flight. On
+      2026-09-21 the guide step deferred and asked for a retry in 900 s; the
+      pass that started in the same second ran for 17 hours, so the retry never
+      came and the day published one guide.
+    """
+    if past_deadline:
+        return True
+    if mode == WORKER_EXTRACT:
+        return not quota
+    return quota and extract_ready
+
+
 def pages_worked(pair_logs: "list[dict]") -> int:
     """Pages this run newly extracted and cached.
 

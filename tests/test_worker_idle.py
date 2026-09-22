@@ -186,3 +186,37 @@ def test_the_worker_builds_its_outcome_with_that_function():
     assert "worker_outcome(pair_logs, total_new)" in src
     assert 'outcome["fetched"] =' not in src
     assert 'outcome["worked"] =' not in src
+
+
+def test_a_pass_hands_the_loop_back_at_its_deadline():
+    """Measured in production 2026-09-21: the guide step deferred and asked to
+    be retried in 900 s, the pass starting in the same second ran for 17 hours,
+    and the retry never came — everything the worker does besides running the
+    pipeline lives at the top of a loop the run was holding.
+    """
+    from scraper.pipeline import (WORKER_COLLECT, WORKER_EXTRACT,
+                                  worker_should_stop)
+
+    # Extraction with budget left, collection with none: neither has its own
+    # reason to stop, so only the deadline can hand the loop back.
+    for mode, quota in ((WORKER_EXTRACT, True), (WORKER_COLLECT, False)):
+        assert not worker_should_stop(mode=mode, quota=quota, extract_ready=True,
+                                      past_deadline=False)
+        assert worker_should_stop(mode=mode, quota=quota, extract_ready=True,
+                                  past_deadline=True)
+
+
+def test_the_deadline_does_not_replace_the_mode_s_own_condition():
+    from scraper.pipeline import (WORKER_COLLECT, WORKER_EXTRACT,
+                                  worker_should_stop)
+
+    # Extraction stops when the budget is gone, deadline or not.
+    assert worker_should_stop(mode=WORKER_EXTRACT, quota=False,
+                              extract_ready=True, past_deadline=False)
+    # Collection stops when the budget comes back — this is how extraction
+    # resumes at 00:00 UTC without anything being scheduled.
+    assert worker_should_stop(mode=WORKER_COLLECT, quota=True,
+                              extract_ready=True, past_deadline=False)
+    # …but not while extraction is still parked after an empty pass.
+    assert not worker_should_stop(mode=WORKER_COLLECT, quota=True,
+                                  extract_ready=False, past_deadline=False)

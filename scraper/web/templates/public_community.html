@@ -214,7 +214,10 @@
         {{ detail_row('users-three',   t('community_members'),   r.member_count) }}
         {{ detail_row('star',          t('community_level'),     r.skill_level) }}
         {{ detail_row('baby',          t('community_age_range'), r.age_range) }}
-        {{ detail_row('translate',     t('community_language'),  r.language) }}
+        {# The stored value is whatever the source page wrote — "Magyar", "Hungarian"
+           and "magyar" are all common — so it is written out in the reader's
+           language here rather than shown raw. An unknown language passes through. #}
+        {{ detail_row('translate',     t('community_language'),  r.language | display_languages(lang)) }}
       </div>
     </div>
     {% endif %}

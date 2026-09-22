@@ -14,8 +14,8 @@ from .cache import CacheManager
 from .config import CONFIG_DIR, load_config
 from .db import (backfill_records_count, get_last_run,
                  init_db)
-from .pipeline import (WORKER_EXTRACT, build_guide_writer, next_worker_action,
-                       run_pipeline, worker_after_run, worker_outcome)
+from .pipeline import (build_guide_writer, next_worker_action, run_pipeline,
+                       worker_after_run, worker_outcome, worker_should_stop)
 from .router import build_router
 from .web.app import app as web_app, templates
 from .web.log_stream import broadcaster
@@ -418,6 +418,17 @@ async def main() -> None:
     #: Consecutive extraction passes producing no records before standing aside
     #: regardless of what the work signal says. A backstop, not the mechanism.
     _WORKER_EMPTY_LIMIT = 3
+    #: A single pass never holds the loop longer than this. Everything the
+    #: worker does *besides* running the pipeline — publishing the daily guides,
+    #: restarting enrichment, retrying a step that deferred — lives at the top
+    #: of the loop, and the loop does not reach the top while a run is in
+    #: flight. On 2026-09-21 the guide step deferred with every provider rate
+    #: limited and asked to be retried in 900 s; the pass that started in the
+    #: same second then ran for 17 hours, so the retry never came, the 00:00 UTC
+    #: quota reset passed unnoticed, and the day published one guide. Stopping
+    #: is cheap by construction: finished pairs are persisted, the done-pair
+    #: pre-filter skips them, and unfinished work is simply pending again.
+    _WORKER_MAX_RUN_SECONDS = 2 * 3600
 
     #: The quota answer is cached for this long. `should_stop` is consulted
     #: between every pair, and building a router parses the provider catalogue
@@ -495,9 +506,22 @@ async def main() -> None:
                             min_dimensions=int(schedule_cfg.get("guides_min_dimensions") or 3),
                             country_priority=_settings_country_priority(),
                         )
-                        guides_checked_day = utc_day
+                        # The day is only "checked" once its budget is spent.
+                        # A pass that published one of ten used a tenth of the
+                        # day's allowance and then marked the day done; the
+                        # other nine slots were lost to whatever the fleet
+                        # happened to be doing in that minute. Coming back later
+                        # costs little — `publish_daily_guides` counts what is
+                        # already published, so a retry picks up the remainder,
+                        # and its own attempt cap bounds the work per pass.
+                        limit = int(schedule_cfg.get("guides_daily_limit") or 10)
+                        if len(published) >= limit:
+                            guides_checked_day = utc_day
+                        else:
+                            guides_retry_at = _time.monotonic() + _WORKER_EXTRACT_RETRY_S
                         log.info("daily_guides_published", count=len(published),
-                                 slugs=[g["slug"] for g in published])
+                                 limit=limit, slugs=[g["slug"] for g in published],
+                                 retrying=len(published) < limit)
                     except Exception as exc:  # fleet/quota failure: retry, do not block worker
                         guides_retry_at = _time.monotonic() + _WORKER_EXTRACT_RETRY_S
                         log.warning("daily_guides_deferred", error=str(exc),
@@ -520,18 +544,14 @@ async def main() -> None:
                 mode = next_worker_action(
                     is_running=False, paused=False,
                     quota=quota, extract_ready=extract_ready)
-                if mode == WORKER_EXTRACT:
-                    # Stop when the budget is gone — collection is what is left
-                    # to do, and it costs money rather than a daily allowance.
-                    def _preempt() -> bool:
-                        return not _free_quota_available()
-                else:
-                    # Stop when the budget comes back. At 00:00 UTC the ledger
-                    # rolls over and this turns true on its own, which is the
-                    # whole of "start extraction after the reset".
-                    def _preempt() -> bool:
-                        return (_free_quota_available()
-                                and _time.monotonic() >= extract_idle_until)
+                pass_deadline = _time.monotonic() + _WORKER_MAX_RUN_SECONDS
+
+                def _preempt() -> bool:
+                    return worker_should_stop(
+                        mode=mode,
+                        quota=_free_quota_available(),
+                        extract_ready=_time.monotonic() >= extract_idle_until,
+                        past_deadline=_time.monotonic() >= pass_deadline)
 
                 finished = asyncio.Event()
                 outcome: dict = {}

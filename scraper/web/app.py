@@ -110,7 +110,7 @@ from ..search import DataForSEOClient, FallbackSearchClient
 from ..store import save_results
 from ..url_safety import (UnsafeURLError, assert_safe_public_url,
                           is_public_http_url)
-from .i18n import get_topic_labels, lang_context
+from .i18n import display_languages, get_topic_labels, lang_context
 from .log_stream import broadcaster
 from .schema import (article_jsonld, breadcrumb_jsonld, person_jsonld, records_to_jsonld,
                      site_jsonld, venue_jsonld)
@@ -478,6 +478,7 @@ def _comparable_dimensions(dimensions) -> list:
 
 
 templates.env.filters["comparable_dimensions"] = _comparable_dimensions
+templates.env.filters["display_languages"] = display_languages
 templates.env.filters["breadcrumb_jsonld"] = breadcrumb_jsonld
 
 

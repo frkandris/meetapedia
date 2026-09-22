@@ -13,7 +13,7 @@ from .db import (bump_daily_counter, count_data_guides_published_on,
                  get_guide_candidate_groups, get_stale_data_guides,
                  init_db, replace_data_guide)
 from .identity import public_slug
-from .web.i18n import get_topic_labels, topic_phrase
+from .web.i18n import display_languages, get_topic_labels, topic_phrase
 
 log = structlog.get_logger(__name__)
 
@@ -333,6 +333,23 @@ def _text(record: dict) -> str:
             or record.get("short_description") or "").strip()
 
 
+def _dimension_value(field: str, raw, locale: str) -> str:
+    """One field's value as the reader should see it.
+
+    Only `language` is normalised, and only because it has a closed vocabulary
+    that the corpus writes three ways: "Magyar", "Hungarian" and "magyar" are
+    16,611 records describing one language. Left raw they defeat the comparison
+    rules — three spellings look like variation — and put an English word on a
+    Hungarian page. The other fields are free text with no closed vocabulary,
+    so they are left exactly as the source wrote them; mapping those would mean
+    inventing meaning the extractor never recorded.
+    """
+    text = str(raw or "").strip()
+    if field == "language" and text:
+        return display_languages(text, locale)
+    return text
+
+
 def _dimension_sections(records: list[dict], locale: str,
                         minimum_values: int = 2) -> list[dict]:
     """The fields worth putting side by side, most-reported first.
@@ -356,7 +373,8 @@ def _dimension_sections(records: list[dict], locale: str,
     total = sum(1 for r in records if r.get("name"))
     sections = []
     for field in _DIMENSIONS:
-        values = [(r.get("name", ""), str(r.get(field) or "").strip()) for r in records]
+        values = [(r.get("name", ""), _dimension_value(field, r.get(field), locale))
+                  for r in records]
         values = [(name, value) for name, value in values if name and value]
         if len(values) < minimum_values:
             continue

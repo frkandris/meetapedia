@@ -1,6 +1,8 @@
 """Minimal i18n support: cookie-based language detection, flat key translations."""
 from __future__ import annotations
 
+import re
+
 from fastapi import Request
 
 RTL_LANGS = {"ar", "he", "fa", "ur", "ps", "sd"}
@@ -769,6 +771,105 @@ TOPIC_ADJECTIVES_HU = {
     "writing": "írói", "yoga": "jóga-",
     "trivia": "kvíz-", "vallalkozas": "vállalkozói",
 }
+
+
+#: The `language` field arrives as either the English name or the language's
+#: own endonym, inconsistently, because that is how each source page writes it.
+#: Measured over 45,546 filled values on 2026-09-22: Hungarian alone appears as
+#: "Magyar" (10,413), "Hungarian" (5,420) and "magyar" (778); German as
+#: "Deutsch" (10,796) and "German" (3,252); Japanese as "Japanese" and "日本語".
+#: Left alone this shows an English word on a Hungarian page, and makes one
+#: language look like several when the values are compared.
+_LANGUAGE_CANON = {
+    "hu": ("magyar", "hungarian", "ungarisch", "hongrois"),
+    "de": ("deutsch", "german", "német", "nemet", "allemand"),
+    "en": ("english", "angol", "englisch", "anglais", "inglés", "ingles"),
+    "sv": ("swedish", "svenska", "svéd", "sved", "schwedisch"),
+    "ja": ("japanese", "日本語", "japán", "japan", "japanisch"),
+    "es": ("spanish", "español", "espanol", "spanyol", "spanisch"),
+    "it": ("italian", "italiano", "olasz", "italienisch"),
+    "nl": ("dutch", "nederlands", "holland", "niederländisch"),
+    "fr": ("french", "français", "francais", "francia", "französisch"),
+    "pl": ("polish", "polski", "lengyel", "polnisch"),
+    "ro": ("romanian", "română", "romana", "román", "roman"),
+    "sk": ("slovak", "slovenčina", "szlovák", "szlovak"),
+    "hr": ("croatian", "hrvatski", "horvát", "horvat"),
+    "sr": ("serbian", "srpski", "szerb"),
+    "id": ("indonesian", "bahasa indonesia", "indonéz", "indonez"),
+    "uk": ("ukrainian", "українська", "ukrán", "ukran"),
+    "ru": ("russian", "русский", "orosz"),
+    "pt": ("portuguese", "português", "portugues", "portugál"),
+    "tr": ("turkish", "türkçe", "török", "torok"),
+    "da": ("danish", "dansk", "dán", "dan"),
+    "no": ("norwegian", "norsk", "norvég", "norveg"),
+    "fi": ("finnish", "suomi", "finn"),
+    "cs": ("czech", "čeština", "cestina", "cseh"),
+}
+_LANGUAGE_LOOKUP = {name: code for code, names in _LANGUAGE_CANON.items()
+                    for name in names}
+LANGUAGE_NAMES = {
+    "hu": {"hu": "magyar", "en": "Hungarian"},
+    "de": {"hu": "német", "en": "German"},
+    "en": {"hu": "angol", "en": "English"},
+    "sv": {"hu": "svéd", "en": "Swedish"},
+    "ja": {"hu": "japán", "en": "Japanese"},
+    "es": {"hu": "spanyol", "en": "Spanish"},
+    "it": {"hu": "olasz", "en": "Italian"},
+    "nl": {"hu": "holland", "en": "Dutch"},
+    "fr": {"hu": "francia", "en": "French"},
+    "pl": {"hu": "lengyel", "en": "Polish"},
+    "ro": {"hu": "román", "en": "Romanian"},
+    "sk": {"hu": "szlovák", "en": "Slovak"},
+    "hr": {"hu": "horvát", "en": "Croatian"},
+    "sr": {"hu": "szerb", "en": "Serbian"},
+    "id": {"hu": "indonéz", "en": "Indonesian"},
+    "uk": {"hu": "ukrán", "en": "Ukrainian"},
+    "ru": {"hu": "orosz", "en": "Russian"},
+    "pt": {"hu": "portugál", "en": "Portuguese"},
+    "tr": {"hu": "török", "en": "Turkish"},
+    "da": {"hu": "dán", "en": "Danish"},
+    "no": {"hu": "norvég", "en": "Norwegian"},
+    "fi": {"hu": "finn", "en": "Finnish"},
+    "cs": {"hu": "cseh", "en": "Czech"},
+}
+
+
+def language_code(value: str) -> str:
+    """The canonical code for a stored language value, or "" if unrecognised."""
+    return _LANGUAGE_LOOKUP.get((value or "").strip().casefold(), "")
+
+
+def display_language(value: str, lang: str) -> str:
+    """One stored language value, written in the reader's language.
+
+    A value this table does not know is returned untouched. Passing an unknown
+    language through unchanged is right: it is what the source said, and the
+    alternative — dropping it, or guessing — loses or invents information. The
+    table covers roughly 93% of filled values; the tail is 400-odd spellings.
+    """
+    code = language_code(value)
+    if not code:
+        return (value or "").strip()
+    names = LANGUAGE_NAMES.get(code, {})
+    return names.get(lang) or names.get("en") or value
+
+
+def display_languages(value: str, lang: str) -> str:
+    """The same, for a value listing several languages ("Magyar, English")."""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    parts = [p.strip() for p in re.split(r"[,/;]| és | and ", raw) if p.strip()]
+    if len(parts) < 2:
+        return display_language(raw, lang)
+    seen, out = set(), []
+    for part in parts:
+        shown = display_language(part, lang)
+        key = language_code(part) or shown.casefold()
+        if key not in seen:
+            seen.add(key)
+            out.append(shown)
+    return ", ".join(out)
 
 
 def topic_phrase(topic: str, label: str, lang: str, noun: str) -> str:
