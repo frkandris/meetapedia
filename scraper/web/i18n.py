@@ -834,6 +834,20 @@ LANGUAGE_NAMES = {
 }
 
 
+#: Each language's name for itself. A reader whose language the table above
+#: does not cover still gets their *own* language right ("Deutsch" for a German
+#: reader) instead of an English word, which is the defect this table exists
+#: to fix.
+LANGUAGE_ENDONYMS = {
+    "hu": "magyar", "de": "Deutsch", "en": "English", "sv": "svenska",
+    "ja": "日本語", "es": "español", "it": "italiano", "nl": "Nederlands",
+    "fr": "français", "pl": "polski", "ro": "română", "sk": "slovenčina",
+    "hr": "hrvatski", "sr": "srpski", "id": "Bahasa Indonesia",
+    "uk": "українська", "ru": "русский", "pt": "português", "tr": "Türkçe",
+    "da": "dansk", "no": "norsk", "fi": "suomi", "cs": "čeština",
+}
+
+
 def language_code(value: str) -> str:
     """The canonical code for a stored language value, or "" if unrecognised."""
     return _LANGUAGE_LOOKUP.get((value or "").strip().casefold(), "")
@@ -846,12 +860,22 @@ def display_language(value: str, lang: str) -> str:
     language through unchanged is right: it is what the source said, and the
     alternative — dropping it, or guessing — loses or invents information. The
     table covers roughly 93% of filled values; the tail is 400-odd spellings.
+
+    The same holds for a reader language the table has no names in (the site
+    serves ~50, the table names Hungarian and English): falling back to English
+    would put "German" on a page a German reader opened, which is the defect
+    this function exists to fix. Such a reader gets their own language's
+    endonym, and every other value as the source wrote it.
     """
     code = language_code(value)
     if not code:
         return (value or "").strip()
-    names = LANGUAGE_NAMES.get(code, {})
-    return names.get(lang) or names.get("en") or value
+    name = LANGUAGE_NAMES.get(code, {}).get(lang)
+    if name:
+        return name
+    if lang == code:
+        return LANGUAGE_ENDONYMS.get(code) or (value or "").strip()
+    return (value or "").strip()
 
 
 def display_languages(value: str, lang: str) -> str:

@@ -9,7 +9,8 @@ import re
 from pathlib import Path
 
 from .db import (bump_daily_counter, count_data_guides_published_on,
-                 create_data_guide, get_communities,
+                 create_data_guide, get_communities, get_daily_counter,
+                 get_daily_counters_with_prefix,
                  get_guide_candidate_groups, get_stale_data_guides,
                  init_db, replace_data_guide)
 from .identity import public_slug
@@ -273,6 +274,50 @@ _WRITER_MAX_TOKENS = 2400
 #: frequency 1/2 = 50% and join_process 1/3 = 33% (both kept).
 _DOMINANT_VALUE_SHARE = 0.9
 _PACKET_BUDGET_CHARS = 6000
+
+#: Daily counters that make the guide budget restart-safe. A rewrite keeps its
+#: original `published_at`, so counting publications alone never sees it; and a
+#: refused city/topic is remembered so a retry moves on to the next candidate
+#: instead of paying for the same refusal again.
+_REWRITTEN_COUNTER = "guide_rewritten"
+_REFUSED_PREFIX = "guide_refused:"
+
+
+def is_comparable(counts: list[int], covered: int) -> bool:
+    """Whether a field's value counts make a comparison worth a card.
+
+    `counts` is the per-value tally, largest first; `covered` is how many
+    groups reported the field at all. It is the denominator even when `counts`
+    is truncated — the stored guide keeps only the top five values, and
+    dividing by their sum would call a field dominant when half its reports are
+    spread across values that fell off the list. One value is never a
+    comparison, and a value carrying `_DOMINANT_VALUE_SHARE` of the reports is
+    near enough one. Shared by the build-time and the render-time rule so the
+    two cannot disagree.
+    """
+    counts = [int(c) for c in counts if int(c) > 0]
+    covered = max(int(covered or 0), sum(counts))
+    if len(counts) < 2 or not covered:
+        return False
+    return max(counts) / covered < _DOMINANT_VALUE_SHARE
+
+
+def guide_budget_left(db_path: Path, limit: int, day: str) -> int:
+    """Today's guide slots not yet spent on a publication or a rewrite."""
+    spent = (count_data_guides_published_on(db_path, day)
+             + get_daily_counter(db_path, day, _REWRITTEN_COUNTER))
+    return max(0, limit - spent)
+
+
+class GuidePass(list):
+    """The guides one pass published, plus whether the day is finished.
+
+    `settled` is True when there is nothing left to do today: the budget is
+    spent, or every candidate has been tried. The worker marks the day done on
+    it; retrying an unsettled day is what fills the remaining slots.
+    """
+
+    settled: bool = False
 _PACKET_MAX_COMMUNITIES = 12
 _PACKET_DESCRIPTION_CHARS = 160
 _PACKET_EXAMPLES = 3
@@ -378,11 +423,8 @@ def _dimension_sections(records: list[dict], locale: str,
         values = [(name, value) for name, value in values if name and value]
         if len(values) < minimum_values:
             continue
-        distinct = {value for _, value in values}
-        if len(distinct) < 2:
-            continue
         counts = Counter(value for _, value in values)
-        if counts.most_common(1)[0][1] / len(values) >= _DOMINANT_VALUE_SHARE:
+        if not is_comparable(list(counts.values()), len(values)):
             continue
         common = counts.most_common(5)
         sections.append({
@@ -390,7 +432,7 @@ def _dimension_sections(records: list[dict], locale: str,
             "label": _DIMENSION_LABELS[locale][field],
             "covered": len(values),
             "total": total,
-            "distinct": len(distinct),
+            "distinct": len(counts),
             "examples": [{"name": name, "value": value} for name, value in values[:5]],
             "common": [{"value": value, "count": count} for value, count in common],
         })
@@ -536,7 +578,7 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
                          min_dimensions: int = 3,
                          country_priority: list[str] | None = None,
                          give_up_at: int = 3,
-                         now: datetime | None = None) -> list[dict]:
+                         now: datetime | None = None) -> GuidePass:
     """Spend today's guide budget: first rewriting stale pages, then publishing new.
 
     Rewrites come first deliberately. A guide written by a superseded prompt is
@@ -545,20 +587,33 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
     writer reaches the articles that most needed it.
 
     The function is restart-safe: the database counts UTC-day publications and
-    has a unique key per site/city/topic. It intentionally does less than
-    ``limit`` when the corpus cannot support that many useful pages.
+    rewrites, and has a unique key per site/city/topic. It intentionally does
+    less than ``limit`` when the corpus cannot support that many useful pages.
+
+    A pass is also bounded (``remaining * 2`` new drafts), and a city/topic the
+    gate refuses is remembered for the day, so calling it again later tries the
+    *next* candidates rather than re-buying the same refusals. The returned
+    list's ``settled`` says whether another call today could do anything.
     """
     init_db(db_path)
     now = now or datetime.now(timezone.utc)
     stamp = now.astimezone(timezone.utc).isoformat()
     day = now.astimezone(timezone.utc).date().isoformat()
-    remaining = max(0, limit - count_data_guides_published_on(db_path, day))
+    published = GuidePass()
+    remaining = guide_budget_left(db_path, limit, day)
     if not remaining:
-        return []
+        published.settled = True
+        return published
 
     city_meta = {c.name: c for c in cities}
     written: list[dict] = []
     refused_by_model: Counter = Counter()
+    refused_today = set(get_daily_counters_with_prefix(db_path, day, _REFUSED_PREFIX))
+
+    def _refuse(city: str, topic: str):
+        key = f"{city}|{topic}"
+        refused_today.add(key)
+        bump_daily_counter(db_path, day, _REFUSED_PREFIX + key, 1)
 
     def _note_refusal(model: str):
         """Stop asking a model that is failing every draft of this pass."""
@@ -574,23 +629,26 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
                 writer = narrowed
 
     # --- stale rewrites, oldest first -------------------------------------
-    for stale in get_stale_data_guides(db_path, _PROMPT_VERSION, limit=remaining):
+    stale_guides = get_stale_data_guides(
+        db_path, _PROMPT_VERSION, limit=remaining + len(refused_today))
+    for stale in stale_guides:
         if len(written) >= remaining:
             break
         meta = city_meta.get(stale["city"])
-        if not meta:
+        if not meta or f"{stale['city']}|{stale['topic']}" in refused_today:
             continue
         guide, _reason = await _draft_guide(
             db_path, stale["city"], stale["topic"], meta, writer,
             stamp=stamp, day=day, min_dimensions=min_dimensions)
         if not guide:
+            _refuse(stale["city"], stale["topic"])
             _note_refusal(getattr(writer, "last_model", ""))
             continue
         # The rewrite keeps the original publication date and slug; only the
         # body, the counts and `updated_at` move.
         guide["published_at"] = stale["published_at"]
         if replace_data_guide(db_path, stale["slug"], guide):
-            bump_daily_counter(db_path, day, "guide_rewritten", 1)
+            bump_daily_counter(db_path, day, _REWRITTEN_COUNTER, 1)
             log.info("guide_rewritten", slug=stale["slug"],
                      model=guide["data"]["writer_model"])
             written.append(guide)
@@ -604,15 +662,16 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
         -int(c["community_count"]), -int(c["described_count"] or 0),
         c["city"], c["topic"],
     ))
-    published = []
+    capped = False
     attempts = 0
     for candidate in candidates:
         if len(written) >= remaining:
             break
         if attempts >= remaining * 2:
+            capped = True
             break
         meta = city_meta.get(candidate["city"])
-        if not meta:
+        if not meta or f"{candidate['city']}|{candidate['topic']}" in refused_today:
             continue
         attempts += 1
         guide, _reason = await _draft_guide(
@@ -621,9 +680,13 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
             min_communities=min_communities,
             min_description_ratio=min_description_ratio)
         if not guide:
+            _refuse(candidate["city"], candidate["topic"])
             _note_refusal(getattr(writer, "last_model", ""))
             continue
         if create_data_guide(db_path, guide):
             published.append(guide)
             written.append(guide)
+    # Budget spent, or every candidate tried without hitting the per-pass cap:
+    # either way another pass today would do nothing.
+    published.settled = len(written) >= remaining or not capped
     return published

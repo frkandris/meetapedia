@@ -22,7 +22,7 @@
       {% endfor %}
     </section>
 
-    {% set comparable = guide_data.dimensions | comparable_dimensions %}
+    {% set comparable = guide_data.dimensions | comparable_dimensions(guide.locale) %}
     {% if comparable %}
     <section class="mt-10">
       <h2 class="text-2xl font-bold">{{ 'Miben különböznek?' if guide.locale == 'hu' else 'What can you compare?' }}</h2>

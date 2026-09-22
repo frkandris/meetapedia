@@ -55,3 +55,14 @@ def test_a_genuinely_bilingual_place_keeps_its_language_card():
                     if d["field"] == "language")
     assert [(v["value"], v["count"]) for v in language["common"]] == [
         ("magyar", 10), ("német", 10)]
+
+
+def test_a_reader_outside_the_table_never_gets_an_english_name():
+    """The site serves ~50 languages; the table names two. A German reader
+    must not see "German" where the source wrote "Deutsch".
+    """
+    assert display_language("Deutsch", "de") == "Deutsch"
+    assert display_language("German", "de") == "Deutsch"
+    assert display_language("日本語", "ja") == "日本語"
+    # Another language for that reader: exactly what the source said.
+    assert display_language("Magyar", "de") == "Magyar"

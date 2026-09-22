@@ -506,22 +506,21 @@ async def main() -> None:
                             min_dimensions=int(schedule_cfg.get("guides_min_dimensions") or 3),
                             country_priority=_settings_country_priority(),
                         )
-                        # The day is only "checked" once its budget is spent.
-                        # A pass that published one of ten used a tenth of the
-                        # day's allowance and then marked the day done; the
-                        # other nine slots were lost to whatever the fleet
-                        # happened to be doing in that minute. Coming back later
-                        # costs little — `publish_daily_guides` counts what is
-                        # already published, so a retry picks up the remainder,
-                        # and its own attempt cap bounds the work per pass.
-                        limit = int(schedule_cfg.get("guides_daily_limit") or 10)
-                        if len(published) >= limit:
+                        # The day is only "checked" once it is settled: the
+                        # budget is spent (publications *and* rewrites, across
+                        # every pass today), or every candidate has been tried.
+                        # A pass that published one of ten used to mark the day
+                        # done and forfeit nine slots; judging by this pass's
+                        # own count instead retried all day after a 4 + 6 day.
+                        # A retry is cheap because candidates refused today are
+                        # remembered and skipped, and each pass is capped.
+                        if published.settled:
                             guides_checked_day = utc_day
                         else:
                             guides_retry_at = _time.monotonic() + _WORKER_EXTRACT_RETRY_S
                         log.info("daily_guides_published", count=len(published),
-                                 limit=limit, slugs=[g["slug"] for g in published],
-                                 retrying=len(published) < limit)
+                                 slugs=[g["slug"] for g in published],
+                                 retrying=not published.settled)
                     except Exception as exc:  # fleet/quota failure: retry, do not block worker
                         guides_retry_at = _time.monotonic() + _WORKER_EXTRACT_RETRY_S
                         log.warning("daily_guides_deferred", error=str(exc),

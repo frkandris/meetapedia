@@ -91,3 +91,37 @@ def test_a_dominant_value_is_dropped_when_the_guide_is_built_too():
     records.append({"name": "Kivétel", "language": "Magyar"})
     assert not [s for s in _dimension_sections(records, "hu")
                 if s["field"] == "language"]
+
+
+def test_a_name_is_linked_only_as_a_whole_word():
+    """Hungarian inflects by suffix: "Futókör" must not link inside "futókörök"."""
+    groups = [{"name": "Jóga"}, {"name": "Futókör"}]
+    out = str(_link_communities("A Jógaoktatás és a Jóga, valamint a Futókörök.",
+                                groups, "Pécs"))
+    assert out.count("<a ") == 1
+    assert ">Jóga</a>," in out and "Jógaoktatás" in out
+
+
+def test_dominance_is_measured_against_everyone_who_answered():
+    """`common` keeps the top five values only. 40 of 80 is half, not 40 of 44."""
+    spread = {"field": "fee", "covered": 80,
+              "common": [{"value": "ingyenes", "count": 40}] +
+                        [{"value": f"{i} Ft", "count": 1} for i in range(4)]}
+    assert _comparable_dimensions([spread]) == [spread]
+
+
+def test_an_older_guide_gets_its_language_values_merged_on_render():
+    """Stored before normalisation: "Hungarian" and "Magyar" as two values."""
+    language = {"field": "language", "covered": 44,
+                "common": [{"value": "Hungarian", "count": 40},
+                           {"value": "Magyar", "count": 4}],
+                "examples": [{"name": "A", "value": "Hungarian"}]}
+    assert _comparable_dimensions([language], "hu") == []
+
+    mixed = {**language, "common": [{"value": "Hungarian", "count": 20},
+                                    {"value": "Magyar", "count": 10},
+                                    {"value": "English", "count": 14}]}
+    [shown] = _comparable_dimensions([mixed], "hu")
+    assert [(e["value"], e["count"]) for e in shown["common"]] == [
+        ("magyar", 30), ("angol", 14)]
+    assert shown["examples"][0]["value"] == "magyar"

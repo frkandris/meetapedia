@@ -423,8 +423,10 @@ def _link_communities(text: str, communities, city: str) -> "Markup":
 
     Longest name first, so "Ambassador Club Mecsek (Regionális)" is not eaten by
     "Ambassador Club" sitting inside it. One pass over the text, so a name can
-    never be matched inside a link already written. The prose is escaped either
-    way: it is model output, and this is the one place it becomes markup.
+    never be matched inside a link already written. Whole words only: Hungarian
+    inflects by suffix, so a group called "Futókör" would otherwise turn the
+    first half of "futókörök" into a link. The prose is escaped either way: it
+    is model output, and this is the one place it becomes markup.
     """
     raw = text or ""
     names = sorted({(c.get("name") or "").strip() for c in (communities or [])},
@@ -432,7 +434,8 @@ def _link_communities(text: str, communities, city: str) -> "Markup":
     names = [n for n in names if len(n) > 3]
     if not raw or not names:
         return Markup(escape(raw))
-    pattern = re.compile("|".join(re.escape(n) for n in names))
+    pattern = re.compile(
+        r"(?<!\w)(?:" + "|".join(re.escape(n) for n in names) + r")(?!\w)")
     city_slug = public_slug(city or "")
     parts, cursor = [], 0
     for match in pattern.finditer(raw):
@@ -450,31 +453,48 @@ def _link_communities(text: str, communities, city: str) -> "Markup":
 templates.env.filters["link_communities"] = _link_communities
 
 
-def _comparable_dimensions(dimensions) -> list:
+def _comparable_dimensions(dimensions, locale: str = "en") -> list:
     """The dimension cards that actually compare something.
 
-    `common` holds the value counts. One entry means every group said the same
-    thing; a dominant first entry means near enough the same, which is the case
-    that matters — the Pécs guide's "Nyelv" card had 42 groups saying
-    "Hungarian" and two saying "Magyar", two values for one fact.
+    `common` holds the top value counts, `covered` how many groups reported the
+    field. One value means every group said the same thing; a dominant value
+    means near enough the same — the Pécs guide's "Nyelv" card had 42 groups
+    saying "Hungarian" and two saying "Magyar", two values for one fact. The
+    rule is `guides.is_comparable`, the same one the build uses, measured
+    against `covered` because `common` is truncated to five values.
 
-    Applied here as well as when a guide is built, so a guide stored before the
-    rule existed stops showing a card that compares nothing the moment this
-    ships — without a rewrite or a fleet call.
+    Applied here as well as when a guide is built, so a guide stored before a
+    rule existed follows it the moment this ships — without a rewrite or a
+    fleet call. That includes the language normalisation: an older guide still
+    stores "Hungarian" and "Magyar" as two values, so they are merged and
+    written in the page's language here before the rule is asked.
     """
-    from ..guides import _DOMINANT_VALUE_SHARE
+    from ..guides import is_comparable
 
     kept = []
     for dimension in dimensions or []:
+        if dimension.get("field") == "language":
+            dimension = _normalised_language_dimension(dimension, locale)
         common = dimension.get("common") or []
-        if len(common) < 2:
-            continue
-        reported = sum(int(entry.get("count") or 0) for entry in common)
-        top = int(common[0].get("count") or 0)
-        if reported and top / reported >= _DOMINANT_VALUE_SHARE:
+        counts = [int(entry.get("count") or 0) for entry in common]
+        if not is_comparable(counts, int(dimension.get("covered") or 0)):
             continue
         kept.append(dimension)
     return kept
+
+
+def _normalised_language_dimension(dimension: dict, locale: str) -> dict:
+    """A stored language card with its values written one way per language."""
+    merged: dict[str, int] = {}
+    for entry in dimension.get("common") or []:
+        value = display_languages(str(entry.get("value") or ""), locale)
+        merged[value] = merged.get(value, 0) + int(entry.get("count") or 0)
+    common = sorted(({"value": v, "count": c} for v, c in merged.items()),
+                    key=lambda e: -e["count"])
+    examples = [{**item, "value": display_languages(str(item.get("value") or ""), locale)}
+                for item in dimension.get("examples") or []]
+    return {**dimension, "common": common, "examples": examples,
+            "distinct": len(common)}
 
 
 templates.env.filters["comparable_dimensions"] = _comparable_dimensions

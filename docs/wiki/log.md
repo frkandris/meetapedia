@@ -3,6 +3,18 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-22
+- **Fix**: A review of the day's own commits found the guide retry had broken the daily budget three
+  ways. The worker judged the day by one pass's `len(published)`, so a 4 + 6 day never counted as
+  done and retried until midnight; a rewrite keeps its old `published_at`, so rewrites never counted
+  and every retry got ten more; and a refused candidate was re-drafted by every retry, spending fleet
+  calls on the same refusals while the candidates behind them were never reached. Now
+  `guide_budget_left()` counts publications plus rewrites, refused city/topic pairs are remembered
+  for the UTC day, and `publish_daily_guides` returns `settled` for the worker to mark the day on.
+  Same review, render side: the dominance rule divided by the stored top-5 sum instead of `covered`
+  (hiding genuinely varied fields), the build and render rules now share `guides.is_comparable()`,
+  older guides get their language values merged at render time, group names link only as whole
+  words ("Futókör" no longer links inside "futókörök"), and a reader language outside the hu/en
+  table gets its endonym or the source value instead of an English language name.
 - **Fix**: **A pipeline pass no longer holds the worker loop for a day.** Everything the worker does
   besides running the pipeline lives at the top of its loop, and the loop cannot reach the top while
   a run is in flight. On 2026-09-21 the guide step deferred with every provider rate limited and

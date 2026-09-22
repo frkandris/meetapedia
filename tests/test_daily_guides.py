@@ -485,3 +485,75 @@ def test_published_hungarian_guide_uses_the_attributive_title(tmp_path):
     published = asyncio.run(publish_daily_guides(db, [city], _Writer(), limit=1))
     assert published and published[0]["title"].startswith("Táncos közösségek Pécs")
     assert "Tánc közösségek" not in published[0]["title"]
+
+
+def _cities(*names):
+    return [CityConfig(name, "hu", [], "Hungary") for name in names]
+
+
+def test_the_budget_spans_passes_and_the_day_settles_when_it_is_spent(tmp_path):
+    """Found in review 2026-09-22: the worker compared one pass's count with
+    the limit, so a 4 + 6 day never counted as done and retried until midnight.
+    """
+    db = tmp_path / "span.db"
+    init_db(db)
+    cities = _cities("Budapest", "Debrecen", "Szeged", "Pécs")
+    for city in cities:
+        _seed(db, city)
+    now = datetime(2026, 9, 22, 1, tzinfo=timezone.utc)
+
+    first = asyncio.run(publish_daily_guides(db, cities[:2], _Writer(), limit=4, now=now))
+    assert len(first) == 2 and first.settled, "every candidate it could see was tried"
+    second = asyncio.run(publish_daily_guides(db, cities, _Writer(), limit=4, now=now))
+    assert len(second) == 2 and second.settled
+    third = asyncio.run(publish_daily_guides(db, cities, _Writer(), limit=4, now=now))
+    assert third == [] and third.settled
+
+
+def test_a_refused_candidate_is_not_redrafted_by_a_later_pass(tmp_path):
+    """Each retry used to re-draft the same top candidates — real fleet calls
+    for refusals already bought — and never reached the ones behind them.
+    """
+    db = tmp_path / "refused.db"
+    init_db(db)
+    cities = _cities("Budapest", "Debrecen", "Szeged", "Pécs", "Győr")
+    for city in cities:
+        _seed(db, city)
+    now = datetime(2026, 9, 22, 1, tzinfo=timezone.utc)
+    writer = _SloppyWriter()
+
+    # limit=2 caps a pass at four drafts, so five candidates need two passes.
+    first = asyncio.run(publish_daily_guides(db, cities, writer, limit=2, now=now))
+    assert first == [] and not first.settled
+    assert writer.calls_made == 4
+    second = asyncio.run(publish_daily_guides(db, cities, writer, limit=2, now=now))
+    assert writer.calls_made == 5, "only the one untried candidate is drafted"
+    assert second.settled, "every candidate has now been tried today"
+
+    # A new day forgets the refusals: the writer may have improved overnight.
+    tomorrow = datetime(2026, 9, 23, 1, tzinfo=timezone.utc)
+    asyncio.run(publish_daily_guides(db, cities, writer, limit=2, now=tomorrow))
+    assert writer.calls_made == 9
+
+
+def test_rewrites_spend_the_same_daily_budget_across_passes(tmp_path):
+    """A rewrite keeps its original `published_at`, so counting publications
+    alone never saw it, and every retry got a fresh ten rewrites.
+    """
+    import sqlite3
+
+    db = tmp_path / "rewrites.db"
+    init_db(db)
+    cities = _cities("Budapest", "Debrecen", "Szeged", "Pécs")
+    for city in cities:
+        _seed(db, city)
+    asyncio.run(publish_daily_guides(
+        db, cities, _Writer(), limit=10, now=datetime(2026, 9, 20, tzinfo=timezone.utc)))
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE data_guides SET data = json_set(data, '$.prompt_version', 'old')")
+
+    now = datetime(2026, 9, 22, 1, tzinfo=timezone.utc)
+    first = asyncio.run(publish_daily_guides(db, cities, _Writer(), limit=2, now=now))
+    assert first.settled and first == [], "two rewrites spend a limit of two"
+    asyncio.run(publish_daily_guides(db, cities, _Writer(), limit=2, now=now))
+    assert get_daily_counter(db, "2026-09-22", "guide_rewritten") == 2
