@@ -234,11 +234,17 @@
           </div>
           <div class="min-w-0">
             <div class="text-[11px] font-semibold text-[#B5ADA0] uppercase tracking-[0.08em] mb-0.5">{{ t('community_contact') }}</div>
+            {# Both contact lines are links and both must look like one. The
+               phone used to be styled only with `hover:`, so on a touch screen —
+               where the number is most useful, because tapping it dials — it was
+               indistinguishable from plain text. min-h-6 is the WCAG 2.2 AA
+               pointer target of 24 CSS px; the native 44pt figure is a different
+               rule and does not apply here. #}
             {% if r.email %}
-            <div class="text-[#4A4441]"><a href="mailto:{{ r.email }}" class="text-[#A8512F] hover:underline">{{ r.email }}</a></div>
+            <div><a href="mailto:{{ r.email }}" class="inline-flex items-center min-h-6 text-[#A8512F] hover:underline break-all">{{ r.email }}</a></div>
             {% endif %}
             {% if r.phone %}
-            <div class="text-[#4A4441]"><a href="tel:{{ r.phone }}" class="hover:text-[#C2613A]">{{ r.phone }}</a></div>
+            <div><a href="tel:{{ r.phone }}" class="inline-flex items-center min-h-6 text-[#A8512F] hover:underline tabular-nums">{{ r.phone }}</a></div>
             {% endif %}
             {% if r.contact and not r.email and not r.phone %}
             <div class="text-[#4A4441]">{{ r.contact }}</div>

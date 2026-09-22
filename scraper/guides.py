@@ -331,20 +331,42 @@ def _text(record: dict) -> str:
 
 def _dimension_sections(records: list[dict], locale: str,
                         minimum_values: int = 2) -> list[dict]:
+    """The fields worth putting side by side, most-reported first.
+
+    A dimension earns its card by **discriminating**. The guide published on
+    2026-09-21 gave its most prominent card to "Nyelv", where all 44 groups
+    said "Hungarian" — a comparison table whose every row is identical compares
+    nothing, and it pushed the two fields that did vary further down. So a field
+    whose reported values are all the same is dropped, however complete it is.
+
+    Coverage is carried with its denominator. "2 közösségnél ismert" reads like
+    a fact about the topic until you learn there are 44 groups; "2 / 44" says
+    what it is. Low coverage is not a reason to hide the field — it is a reason
+    to be honest about it — so the number is shown, not the field removed.
+    """
+    total = sum(1 for r in records if r.get("name"))
     sections = []
     for field in _DIMENSIONS:
         values = [(r.get("name", ""), str(r.get(field) or "").strip()) for r in records]
         values = [(name, value) for name, value in values if name and value]
         if len(values) < minimum_values:
             continue
+        distinct = {value for _, value in values}
+        if len(distinct) < 2:
+            continue
         common = Counter(value for _, value in values).most_common(5)
         sections.append({
             "field": field,
             "label": _DIMENSION_LABELS[locale][field],
             "covered": len(values),
+            "total": total,
+            "distinct": len(distinct),
             "examples": [{"name": name, "value": value} for name, value in values[:5]],
             "common": [{"value": value, "count": count} for value, count in common],
         })
+    # Best-covered first: the card a reader meets first should be the one with
+    # the most behind it, not whichever field happens to sort earliest.
+    sections.sort(key=lambda d: (-d["covered"], -d["distinct"], d["field"]))
     return sections
 
 

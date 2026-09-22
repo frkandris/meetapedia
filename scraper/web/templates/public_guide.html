@@ -18,25 +18,45 @@
       {% for paragraph in guide_data.article.paragraphs or [
            guide_data.article.introduction, guide_data.article.comparison,
            guide_data.article.choosing_advice, guide_data.article.conclusion] %}
-      {% if paragraph %}<p>{{ paragraph }}</p>{% endif %}
+      {% if paragraph %}<p>{{ paragraph | link_communities(guide_data.communities, guide.city) }}</p>{% endif %}
       {% endfor %}
     </section>
 
+    {% set comparable = guide_data.dimensions | comparable_dimensions %}
+    {% if comparable %}
     <section class="mt-10">
       <h2 class="text-2xl font-bold">{{ 'Miben különböznek?' if guide.locale == 'hu' else 'What can you compare?' }}</h2>
       <p class="mt-2 leading-7 text-[#6A6259]">{{ 'Az alábbi mezők a közösségek saját nyilvános információiból származnak; a hiányzó adatot nem találgatjuk.' if guide.locale == 'hu' else 'The fields below come from the communities’ public information; missing details are never guessed.' }}</p>
-      <div class="mt-5 grid sm:grid-cols-2 gap-4">
-        {% for section in guide_data.dimensions %}
+      {# items-start: without it the grid stretches every card to the tallest,
+         so a field reported by two groups leaves a hand-sized blank below it. #}
+      <div class="mt-5 grid sm:grid-cols-2 gap-4 items-start">
+        {% for section in comparable %}
         <div class="rounded-xl border border-[#EAE5DB] bg-white p-5">
           <h3 class="font-bold">{{ section.label }}</h3>
-          <p class="mt-1 text-xs text-[#8C8478]">{{ section.covered }} {{ 'közösségnél ismert' if guide.locale == 'hu' else 'communities report this' }}</p>
+          {# The denominator is the honest part: "2" reads like a fact about the
+             topic until you know there are 44 groups. #}
+          <p class="mt-1 text-xs text-[#8C8478]">
+            {% if section.total %}<span class="tabular-nums">{{ section.covered }}/{{ section.total }}</span>{% else %}{{ section.covered }}{% endif %}
+            {{ 'közösség adta meg' if guide.locale == 'hu' else 'groups report this' }}
+          </p>
           <dl class="mt-3 space-y-2 text-sm">
-            {% for item in section.examples %}<div><dt class="font-semibold">{{ item.name }}</dt><dd class="text-[#6A6259]">{{ item.value }}</dd></div>{% endfor %}
+            {% for item in section.examples %}
+            <div>
+              <dt class="font-semibold"><a class="hover:text-[#A8512F]" href="/{{ guide.city|slugify }}/{{ item.name|slugify }}">{{ item.name }}</a></dt>
+              <dd class="text-[#6A6259]">{{ item.value }}</dd>
+            </div>
+            {% endfor %}
           </dl>
+          {% if section.covered > section.examples|length %}
+          <p class="mt-3 text-xs text-[#8C8478]">
+            +{{ section.covered - section.examples|length }} {{ 'további közösségnél' if guide.locale == 'hu' else 'more groups' }}
+          </p>
+          {% endif %}
         </div>
         {% endfor %}
       </div>
     </section>
+    {% endif %}
 
     <section class="mt-12">
       <h2 class="text-2xl font-bold">{{ 'Közösségek röviden' if guide.locale == 'hu' else 'Communities at a glance' }}</h2>

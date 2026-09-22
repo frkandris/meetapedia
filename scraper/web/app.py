@@ -7,6 +7,8 @@ import json
 import os
 from functools import lru_cache
 import re
+
+from markupsafe import Markup, escape
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -408,6 +410,58 @@ def _slugify(text: str) -> str:
 
 
 templates.env.filters["slugify"] = _slugify
+
+
+def _link_communities(text: str, communities, city: str) -> "Markup":
+    """Turn the group names a guide names into links to those groups.
+
+    The whole point of the guide prose is that it names real groups — the
+    validator refuses a draft that names fewer than three. Leaving those names
+    as flat text asks the reader to scroll past two screens of cards and find
+    the name again in a list, which is the work the article was supposed to do
+    for them.
+
+    Longest name first, so "Ambassador Club Mecsek (Regionális)" is not eaten by
+    "Ambassador Club" sitting inside it. One pass over the text, so a name can
+    never be matched inside a link already written. The prose is escaped either
+    way: it is model output, and this is the one place it becomes markup.
+    """
+    raw = text or ""
+    names = sorted({(c.get("name") or "").strip() for c in (communities or [])},
+                   key=len, reverse=True)
+    names = [n for n in names if len(n) > 3]
+    if not raw or not names:
+        return Markup(escape(raw))
+    pattern = re.compile("|".join(re.escape(n) for n in names))
+    city_slug = public_slug(city or "")
+    parts, cursor = [], 0
+    for match in pattern.finditer(raw):
+        parts.append(escape(raw[cursor:match.start()]))
+        name = match.group(0)
+        parts.append(Markup(
+            '<a class="font-medium text-[#A8512F] underline decoration-[#E3D5C8] '
+            'decoration-2 underline-offset-2 hover:decoration-[#A8512F]" '
+            'href="/{}/{}">{}</a>').format(city_slug, public_slug(name), name))
+        cursor = match.end()
+    parts.append(escape(raw[cursor:]))
+    return Markup("").join(parts)
+
+
+templates.env.filters["link_communities"] = _link_communities
+
+
+def _comparable_dimensions(dimensions) -> list:
+    """The dimension cards that actually compare something.
+
+    `common` holds the value counts, so one entry means every group reporting
+    the field said the same thing. Applied here as well as when a guide is
+    built, so a guide stored before the rule existed stops showing a card that
+    compares nothing the moment this ships — without a rewrite or a fleet call.
+    """
+    return [d for d in (dimensions or []) if len(d.get("common") or []) > 1]
+
+
+templates.env.filters["comparable_dimensions"] = _comparable_dimensions
 templates.env.filters["breadcrumb_jsonld"] = breadcrumb_jsonld
 
 

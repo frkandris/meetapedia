@@ -140,12 +140,20 @@ class _SloppyWriter(_Writer):
 def _seed(db, city: CityConfig, topic: str = "running", count: int = 8) -> None:
     names = ("Aurora", "Borealis", "Canyon", "Delta", "Evergreen", "Falcon",
              "Galaxy", "Harbour", "Indigo", "Juniper")
+    # Deliberately varied: a dimension now earns its card by discriminating, so
+    # a fixture where every group reports the same fee and the same skill level
+    # produces no comparable dimensions at all — which is exactly what the real
+    # corpus does with `language`, where every Hungarian group says "Hungarian".
+    fees = ("free", "2000 Ft / alkalom", "első alkalom ingyenes")
+    levels = ("kezdő", "haladó", "minden szint")
+    ages = ("felnőtt", "14+", "minden korosztály")
     records = [CommunityRecord(
         name=f"{city.name} {names[i]}", city=city.name, topic=topic, locale=city.locale,
         description=("A recurring open community with public joining details and "
                      "a sufficiently informative description for prospective members."),
-        meeting_schedule=f"Tuesday {i}:00", location=f"Hall {i}", fee="free",
-        skill_level="all levels", language=city.locale,
+        meeting_schedule=f"Tuesday {i}:00", location=f"Hall {i}",
+        fee=fees[i % len(fees)], skill_level=levels[i % len(levels)],
+        age_range=ages[i % len(ages)], language=city.locale,
         source_url=f"https://example.org/{city.name}/{i}",
         extracted_at="2026-09-20T00:00:00Z",
     ) for i in range(count)]
