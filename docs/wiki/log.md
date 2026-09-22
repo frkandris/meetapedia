@@ -2,6 +2,21 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-22
+- **Fix**: A UI pass over the live public pages — looked at, not read. The guide prose named four
+  groups and none of them were links, so the reader had to scroll past two screens of cards and find
+  the name again in a list; the gate refuses a draft naming fewer than three, and the page was
+  wasting that. The "Miben különböznek?" section led with a card where 42 of 44 groups said
+  "Hungarian" and two said "Magyar" — one fact written two ways, which a distinctness test passes,
+  so the rule is now dominance at 90%. Coverage showed "2 közösségnél ismert" with the denominator
+  missing, which reads like a fact about the topic until you learn there are 44. The card grid
+  stretched every card to the tallest, leaving a hand-sized blank under the short one. And the
+  community page's phone number was already a `tel:` link but styled with `hover:` alone, so on a
+  touch screen — where tapping it dials — nothing said it was tappable; both contact lines now meet
+  the WCAG 2.2 AA pointer target of 24 CSS px, which is the web rule, not the native 44pt one. The
+  two dimension rules are applied at render time as well as at build time, so the already-published
+  guide improved without a rewrite. [[2026-09-guides-named-nobody]].
+
 ## 2026-09-21
 - **Fix**: Two defects the first production pass after the guide rewrite exposed, both invisible in
   testing. The learned model-skipping **never fired**: it reads the day's per-model counters, but the
