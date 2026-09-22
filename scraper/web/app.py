@@ -453,12 +453,28 @@ templates.env.filters["link_communities"] = _link_communities
 def _comparable_dimensions(dimensions) -> list:
     """The dimension cards that actually compare something.
 
-    `common` holds the value counts, so one entry means every group reporting
-    the field said the same thing. Applied here as well as when a guide is
-    built, so a guide stored before the rule existed stops showing a card that
-    compares nothing the moment this ships — without a rewrite or a fleet call.
+    `common` holds the value counts. One entry means every group said the same
+    thing; a dominant first entry means near enough the same, which is the case
+    that matters — the Pécs guide's "Nyelv" card had 42 groups saying
+    "Hungarian" and two saying "Magyar", two values for one fact.
+
+    Applied here as well as when a guide is built, so a guide stored before the
+    rule existed stops showing a card that compares nothing the moment this
+    ships — without a rewrite or a fleet call.
     """
-    return [d for d in (dimensions or []) if len(d.get("common") or []) > 1]
+    from ..guides import _DOMINANT_VALUE_SHARE
+
+    kept = []
+    for dimension in dimensions or []:
+        common = dimension.get("common") or []
+        if len(common) < 2:
+            continue
+        reported = sum(int(entry.get("count") or 0) for entry in common)
+        top = int(common[0].get("count") or 0)
+        if reported and top / reported >= _DOMINANT_VALUE_SHARE:
+            continue
+        kept.append(dimension)
+    return kept
 
 
 templates.env.filters["comparable_dimensions"] = _comparable_dimensions

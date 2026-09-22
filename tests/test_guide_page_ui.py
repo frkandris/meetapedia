@@ -48,17 +48,26 @@ def test_text_without_known_names_is_returned_escaped_and_unlinked():
     assert str(_link_communities("", COMMUNITIES, "Pécs")) == ""
 
 
-def test_a_dimension_where_every_group_says_the_same_thing_is_dropped():
-    """Published 2026-09-21: the most prominent card was "Nyelv", where all 44
-    groups said "Hungarian". A comparison whose every row is identical compares
-    nothing, and it pushed the fields that did vary further down.
+def test_a_dimension_nearly_everyone_answers_identically_is_dropped():
+    """The real numbers from the Pécs guide, 2026-09-21. "Nyelv" led the
+    section with 42 of 44 groups saying "Hungarian" and two saying "Magyar" —
+    one fact written two ways by the extractor, which a distinctness test
+    passes and a reader gets nothing from.
     """
-    uniform = {"field": "language", "common": [{"value": "Hungarian", "count": 44}]}
-    varied = {"field": "fee", "common": [{"value": "ingyenes", "count": 9},
-                                         {"value": "2000 Ft", "count": 3}]}
-    assert _comparable_dimensions([uniform, varied]) == [varied]
+    language = {"field": "language", "common": [{"value": "Hungarian", "count": 42},
+                                                {"value": "Magyar", "count": 2}]}
+    frequency = {"field": "frequency", "common": [{"value": "Havi", "count": 1},
+                                                  {"value": "Telihold", "count": 1}]}
+    uniform = {"field": "fee", "common": [{"value": "ingyenes", "count": 9}]}
+
+    assert _comparable_dimensions([language, frequency, uniform]) == [frequency]
     assert _comparable_dimensions([uniform]) == []
     assert _comparable_dimensions(None) == []
+
+    # A field just under the threshold is still a comparison.
+    close = {"field": "fee", "common": [{"value": "ingyenes", "count": 8},
+                                        {"value": "2000 Ft", "count": 2}]}
+    assert _comparable_dimensions([close]) == [close]
 
 
 def test_dimension_sections_carry_their_denominator_and_sort_by_coverage():
@@ -72,3 +81,13 @@ def test_dimension_sections_carry_their_denominator_and_sort_by_coverage():
     # "location" is reported by five groups and every value is "Ház": dropped.
     assert not [s for s in sections if s["field"] == "location"]
     assert sections == sorted(sections, key=lambda d: -d["covered"])
+
+
+def test_a_dominant_value_is_dropped_when_the_guide_is_built_too():
+    """Both ends of the rule, so a stored guide and a fresh one agree."""
+    from scraper.guides import _dimension_sections
+
+    records = [{"name": f"Csoport {i}", "language": "Hungarian"} for i in range(19)]
+    records.append({"name": "Kivétel", "language": "Magyar"})
+    assert not [s for s in _dimension_sections(records, "hu")
+                if s["field"] == "language"]

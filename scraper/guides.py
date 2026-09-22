@@ -268,6 +268,10 @@ def _decode_article(raw: str, allowed_dimensions: set[str],
 # shrank: Groq charges prompt + max_tokens against an 8,000-token minute window
 # before generating, and 1,700 + 2,400 fits where the old 3,400 + 2,400 did not.
 _WRITER_MAX_TOKENS = 2400
+#: A field where this share of reports carry one value is not a comparison.
+#: Measured on the 2026-09-21 Pécs guide: language 42/44 = 95% (dropped),
+#: frequency 1/2 = 50% and join_process 1/3 = 33% (both kept).
+_DOMINANT_VALUE_SHARE = 0.9
 _PACKET_BUDGET_CHARS = 6000
 _PACKET_MAX_COMMUNITIES = 12
 _PACKET_DESCRIPTION_CHARS = 160
@@ -334,10 +338,15 @@ def _dimension_sections(records: list[dict], locale: str,
     """The fields worth putting side by side, most-reported first.
 
     A dimension earns its card by **discriminating**. The guide published on
-    2026-09-21 gave its most prominent card to "Nyelv", where all 44 groups
-    said "Hungarian" — a comparison table whose every row is identical compares
-    nothing, and it pushed the two fields that did vary further down. So a field
-    whose reported values are all the same is dropped, however complete it is.
+    2026-09-21 gave its most prominent card to "Nyelv", where 42 of 44 groups
+    said "Hungarian" and the other two said "Magyar" — the same fact written two
+    ways by the extractor. A distinctness test passes that; a card listing five
+    groups that all say the same thing still compares nothing. So the test is
+    **dominance**: if one value accounts for `_DOMINANT_VALUE_SHARE` of the
+    reports, the field is not a comparison, however complete it is. "Most of
+    them are free" is a real finding, but it belongs in the prose — the writer
+    gets the value counts for exactly that — not in a table of five identical
+    rows.
 
     Coverage is carried with its denominator. "2 közösségnél ismert" reads like
     a fact about the topic until you learn there are 44 groups; "2 / 44" says
@@ -354,7 +363,10 @@ def _dimension_sections(records: list[dict], locale: str,
         distinct = {value for _, value in values}
         if len(distinct) < 2:
             continue
-        common = Counter(value for _, value in values).most_common(5)
+        counts = Counter(value for _, value in values)
+        if counts.most_common(1)[0][1] / len(values) >= _DOMINANT_VALUE_SHARE:
+            continue
+        common = counts.most_common(5)
         sections.append({
             "field": field,
             "label": _DIMENSION_LABELS[locale][field],
