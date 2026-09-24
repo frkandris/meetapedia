@@ -1154,31 +1154,30 @@ def replace_communities_for_topic(
     records: list[dict],
 ) -> None:
     with _connect(db_path) as conn:
+        # One transaction from the snapshot to the write: read outside it, a
+        # concurrent enrichment write between the two was silently erased.
+        conn.execute("BEGIN IMMEDIATE")
         # Snapshot existing records before delete so history can diff against them.
-        # hidden is moderation state that must survive the DELETE+reinsert —
-        # otherwise a merged/reported (hidden) community resurfaces publicly on
-        # the next scrape.
         rows = conn.execute(
-            "SELECT data, hidden, updated_at FROM communities WHERE city=? AND topic=?",
+            "SELECT data, updated_at FROM communities WHERE city=? AND topic=?",
             (city, topic)
         ).fetchall()
         previous: dict[str, dict] = {}
         prev_updated: dict[str, str] = {}
-        hidden_keys: set[str] = set()
-        for data_str, hidden, updated_at in rows:
+        for data_str, updated_at in rows:
             d = json.loads(data_str)
             key = _community_record_key(d["name"], d["city"], d["topic"])
             previous[key] = d
             prev_updated[key] = updated_at
-            if hidden:
-                hidden_keys.add(key)
 
-        conn.execute("DELETE FROM communities WHERE city=? AND topic=?", (city, topic))
+        # Visible rows only. `records` is built from the *visible* set plus the
+        # new extraction, so deleting hidden rows too erased every moderated
+        # (merged / reported) community not in this batch — and one that came
+        # back later came back visible. Kept hidden rows are updated in place by
+        # the upsert's ON CONFLICT branch, which never touches `hidden`.
+        conn.execute("DELETE FROM communities WHERE city=? AND topic=? AND hidden=0",
+                     (city, topic))
         _bulk_upsert_communities(conn, records, previous, prev_updated)
-        for key in hidden_keys:
-            conn.execute(
-                "UPDATE communities SET hidden=1 WHERE record_key=?", (key,)
-            )
         conn.commit()
 
 

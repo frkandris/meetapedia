@@ -70,6 +70,7 @@ def load_config_from_docs(
         search_concurrency=int(pipeline_settings.get("search_concurrency", 1) or 1),
         extract_max_page_failures=int(
             pipeline_settings.get("extract_max_page_failures", 3) or 0),
+        llm_person_extraction=bool(pipeline_settings.get("llm_person_extraction", False)),
         fetch_timeout=settings["fetch"]["timeout_seconds"],
         fetch_min_text_length=settings["fetch"]["min_text_length"],
         fetch_max_concurrent=settings["fetch"]["max_concurrent"],

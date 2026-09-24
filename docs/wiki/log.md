@@ -3,6 +3,19 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-24
+- **Fix**: ~28% of `cache_pages` were undecoded Brotli. The fetcher offered `Accept-Encoding: br`
+  without the `brotli` package, httpx passed the compressed bytes through, and html2text accepted
+  them as text — measured 1,448 of a 5,183-page sample, with records extracted from some of them.
+  `br` is no longer offered, bodies with a high U+FFFD share are refused, and
+  `scripts/repair_undecoded_pages.py` forgets the affected pages and reopens their search pairs.
+- **Fix**: `save_results` deleted every *hidden* community of a city/topic not in the new batch
+  (the batch is built from visible rows only), undoing moderation; a hidden record mentioned again
+  later came back visible. The replace now deletes visible rows only, inside one transaction.
+- **Fix**: The LLM person call is off (`pipeline.llm_person_extraction`). Its prompt never named
+  `community_name`, which the parser requires, so from 2026-08 it spent a quarter of all extraction
+  calls and saved nobody. Leaders still reach the people pages from the `leader` field. Also:
+  placeholder `website` / `member_count` / `email` values ("N/A", "unknown") are no longer
+  published, and a website without a real host is dropped.
 - **Fix**: LLM failure classification, from a whole-repo review against production logs. Groq's HTTP
   400 `json_validate_failed` (the model wrote invalid JSON under `response_format`) was read as an
   outage: the chain retried the whole fleet in a second round, the page could never be quarantined,

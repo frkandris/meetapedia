@@ -105,8 +105,10 @@ pipeline:
   # the quarantine. Releases automatically when the fingerprint changes, and by
   # hand at /admin/quarantine.
   extract_max_page_failures: 3
-  commit_after_run: false
-  push_after_commit: false
+  # The separate LLM person-extraction call. Off since 2026-09-24: it spent a
+  # quarter of all extraction calls and saved no one (see PipelineConfig).
+  # Leaders still reach the people pages from the community `leader` field.
+  llm_person_extraction: false
   test_mode: false
   test_cities:
     - Szentendre

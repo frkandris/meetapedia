@@ -39,7 +39,12 @@ _HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
+    # No "br": httpx decodes Brotli only when the `brotli` package is
+    # installed, and it is not. Until 2026-09-24 servers that honoured the
+    # offer sent Brotli, httpx passed the bytes through undecoded, html2text
+    # accepted them as text, and ~28% of cached pages were binary noise the
+    # model then "extracted" communities from.
+    "Accept-Encoding": "gzip, deflate",
     "DNT": "1",
     "Upgrade-Insecure-Requests": "1",
     "Sec-Fetch-Dest": "document",
@@ -65,7 +70,23 @@ def _is_blocked(url: str, blocked_domains: list[str]) -> bool:
         return False
 
 
+#: Share of U+FFFD (the replacement character for undecodable bytes) above
+#: which a page is binary noise, not text. Real pages measure ~0; the
+#: undecoded-Brotli pages found on 2026-09-24 measured well above 5%.
+_MAX_REPLACEMENT_SHARE = 0.02
+
+
+def looks_undecoded(text: str) -> bool:
+    """True when `text` is mostly bytes that failed to decode."""
+    return bool(text) and text.count("\ufffd") / len(text) > _MAX_REPLACEMENT_SHARE
+
+
 def _extract_text(html: str, min_text_length: int = 100) -> str | None:
+    if looks_undecoded(html):
+        # html2text accepts anything with 100 characters in it, so this has to
+        # be refused before either extractor sees it.
+        log.warning("fetch_undecoded_body")
+        return None
     text = trafilatura.extract(html, include_comments=False, include_tables=False)
     if text and len(text) >= min_text_length:
         return text

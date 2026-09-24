@@ -967,3 +967,45 @@ def test_round_two_does_not_repeat_a_content_failure():
     with pytest.raises(ExtractorUnavailableError):
         asyncio.run(chain.completion([]))
     assert bad.calls == 1 and flaky.calls == 2
+
+
+def test_ai_only_makes_no_llm_person_call_but_still_records_leaders(tmp_path):
+    """The separate person call spent a quarter of all extraction calls from
+    2026-08 to 2026-09-24 and saved no one; leaders come from the community
+    record's own `leader` field.
+    """
+    import sqlite3
+
+    from scraper.cache import CacheManager
+    from scraper.db import save_search_cache
+    from scraper.models import CommunityRecord
+    from scraper.pipeline import _run_ai_only
+
+    db, cfg, cities, topics = _pipeline_fixtures(tmp_path)
+    cache = CacheManager(db)
+    url = "https://budapest.test/klub"
+    cache.save_scraped(url, "Elég hosszú oldalszöveg a teszthez.", "Budapest", "running")
+    save_search_cache(db, "Budapest", "running", [url], ["q"])
+
+    record = CommunityRecord(
+        name="Budapesti Futókör", city="Budapest", topic="running", locale="hu",
+        description="Heti futás a Margitszigeten, bárki csatlakozhat.",
+        meeting_schedule="Kedd 18:00", location="Margitsziget", leader="Kovács Anna",
+        website="https://futokor.test", source_url=url,
+        extracted_at="2026-09-24T00:00:00Z")
+
+    class _Primary(StubPrimary):
+        person_calls = 0
+
+        async def extract_persons(self, *a, **k):
+            _Primary.person_calls += 1
+            return []
+
+    chain = FallbackExtractor(primaries=[_Primary([[record]])])
+    asyncio.run(_run_ai_only(cities, topics, cfg, chain, cache, True, {}, None,
+                             run_venues=False, run_persons=True))
+
+    assert _Primary.person_calls == 0
+    with sqlite3.connect(db) as conn:
+        names = [r[0] for r in conn.execute("SELECT json_extract(data, '$.name') FROM persons")]
+    assert names == ["Kovács Anna"]

@@ -1,6 +1,7 @@
 import hashlib
 import json as _json
 import re
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -90,17 +91,22 @@ class CommunityRecord(BaseModel):
         # Null out placeholder strings in text fields
         for field in ("phone", "contact", "location", "meeting_schedule",
                       "description", "fee", "history", "frequency",
-                      "leader", "join_process", "skill_level", "age_range", "language"):
+                      "leader", "join_process", "skill_level", "age_range", "language",
+                      "member_count", "website", "email"):
             v = getattr(self, field, None)
             if isinstance(v, str) and v.strip().lower() in self._NULL_STRINGS:
                 setattr(self, field, None)
 
-        # Normalize website: add https:// if no scheme present
+        # Normalize website: add https:// if no scheme present, and drop what is
+        # not an address at all. Before this, "N/A" and "Lerne Deutsch in Bern"
+        # were published as links (47 visible records, 2026-09-24).
         if self.website:
             w = self.website.strip()
             if w and not w.startswith(("http://", "https://")):
                 w = "https://" + w
-            self.website = w or None
+            host = urlparse(w).netloc if w else ""
+            self.website = w if host and "." in host and not any(
+                c.isspace() for c in host) else None
 
         # Keep only actual URLs in social_links
         self.social_links = [

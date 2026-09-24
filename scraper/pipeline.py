@@ -784,6 +784,15 @@ class PipelineConfig:
     #: every run against every provider — ~21 pages × 30 runs a day, and once
     #: paid providers were on, most of the bill. 0 disables the quarantine.
     extract_max_page_failures: int = 3
+    #: The separate LLM call that extracts people from a page. Off: from
+    #: 2026-08 to 2026-09-24 it ran on every page with communities — about a
+    #: quarter of all extraction calls, ~40 s each on the local GPU — and saved
+    #: no one, because its prompt never named the `community_name` field the
+    #: parser requires. Leaders still become person records from the community
+    #: extraction's own `leader` field (`_persons_from_leaders`), which is what
+    #: actually populated the people pages. Turning this back on needs the
+    #: prompt fixed first, and changing the prompt re-runs it on every page.
+    llm_person_extraction: bool = False
 
     #: The joinability gate (scraper/gate.py). Off by default and with a zero
     #: budget, because it spends real money — the same two-lock shape the paid
@@ -1029,7 +1038,7 @@ async def run_pipeline(
                 person_fp,
                 run_communities=run_communities,
                 run_venues=run_venues,
-                run_persons=run_persons,
+                run_persons=run_persons and config.llm_person_extraction,
                 max_pages=config.search_max_pages,
                 quarantine_threshold=config.extract_max_page_failures,
             )
@@ -1672,7 +1681,7 @@ async def _run_full(
                             break
 
                 # ── Person extraction (with fingerprint cache) ───────────────
-                if community_names:
+                if community_names and config.llm_person_extraction:
                     _person_cache = cache.get_person_extracted(
                         url, city.name, topic.name,
                         fingerprint=extractor.canonical_person_fingerprint) if cache else None
@@ -2148,7 +2157,7 @@ async def _run_ai_only(
                             extract_dead = True
 
                 # ── Person extraction (with fingerprint cache) ───────────────
-                if community_names:
+                if community_names and config.llm_person_extraction:
                     _person_cache = cache.get_person_extracted(
                         url, city.name, topic.name, fingerprint=extractor.canonical_person_fingerprint)
                     if _person_cache is not None:
