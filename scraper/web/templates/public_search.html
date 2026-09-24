@@ -33,7 +33,7 @@
   <p class="text-[#8C8478] text-base">{{ t('search_no_results') }} <strong class="text-[#1C1917]">„{{ q }}"</strong></p>
 
   {% else %}
-  <p class="text-sm text-[#8C8478] mb-6">{{ t('search_results_for') }} <strong class="text-[#1C1917]">„{{ q }}"</strong> — {{ total }} találat</p>
+  <p class="text-sm text-[#8C8478] mb-6">{{ t('search_results_for') }} <strong class="text-[#1C1917]">„{{ q }}"</strong> — {{ total }} {{ t('search_hits') }}</p>
 
   {% if communities %}
   <section class="mb-8">

@@ -1,7 +1,7 @@
 {% extends "public_base.html" %}
 {% block title %}{{ v.name }} – {{ site_name }}{% endblock %}
 {% block og_image_url %}/static/img/og/{% if v.welcomed_topics %}{{ v.welcomed_topics[0] }}{% else %}default{% endif %}.png{% endblock %}
-{% block og_desc %}{{ v.description or (v.name + ' helyszín ' + city + 'ban.') }}{% endblock %}
+{% block og_desc %}{{ v.description or t('venue_og_fallback', name=v.name, city=city) }}{% endblock %}
 {% from "_related.html" import related_block %}
 {% block content %}
 
@@ -9,7 +9,7 @@
 <div class="brand-gradient relative overflow-hidden">
   <div class="max-w-3xl mx-auto px-4 sm:px-6 py-5 sm:py-7 relative">
     <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/70 mb-1.5">
-      {{ city }} · Helyszínek
+      {{ city }} · {{ t('explore_venues') }}
     </p>
     <h1 class="text-xl sm:text-2xl font-black tracking-[-0.025em] text-white leading-tight">{{ v.name }}</h1>
   </div>
@@ -25,7 +25,7 @@
     <a href="/{{ city_slug }}" class="hover:text-[#1C1917] transition-colors shrink-0">{{ city }}</a>
     {% endif %}
     <span class="text-[#D8D1C4]">/</span>
-    <a href="/helyszinek?city={{ city | urlencode }}" class="hover:text-[#1C1917] transition-colors shrink-0">Helyszínek</a>
+    <a href="/helyszinek?city={{ city | urlencode }}" class="hover:text-[#1C1917] transition-colors shrink-0">{{ t('explore_venues') }}</a>
     <span class="text-[#D8D1C4]">/</span>
     <span class="text-[#4A4441] font-medium truncate">{{ v.name }}</span>
   </nav>
@@ -66,7 +66,7 @@
     {% set has_contact = v.address or v.email or v.phone or v.contact %}
     {% if has_links or has_contact %}
     <div class="mb-6 pb-6 border-b border-[#F5F2EC]">
-      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">Elérhetőség</p>
+      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">{{ t('community_contact') }}</p>
 
       {% macro detail_row(icon, value, href='') %}
       {% if value %}
@@ -136,7 +136,7 @@
     <!-- Welcomed topics -->
     {% if v.welcomed_topics %}
     <div class="{% if has_links or has_contact %}{% else %}mb-6 pb-6 border-b border-[#F5F2EC]{% endif %}">
-      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">Fogadott érdeklődések</p>
+      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">{{ t('venue_welcomed_topics') }}</p>
       <div class="flex flex-wrap gap-2">
         {% for t in v.welcomed_topics %}
         {% set t_slug = topic_url_slugs.get(t, t.replace('_','-')) %}
@@ -154,7 +154,7 @@
     {% if communities %}
     <div class="{% if v.welcomed_topics or has_links or has_contact %}pt-5 border-t border-[#F5F2EC]{% endif %}">
       <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">
-        <i class="ph ph-users-three mr-1"></i>Közösségek itt
+        <i class="ph ph-users-three mr-1"></i>{{ t('venue_communities_here') }}
         <span class="font-normal text-[#B5ADA0]">{{ communities | length }}</span>
       </p>
       <div class="flex flex-col gap-2">
@@ -179,15 +179,15 @@
   <!-- Edit request -->
   <div class="mt-4 bg-white border border-[#EAE5DB] rounded-xl p-5">
     <div id="venue-edit-prompt">
-      <p class="text-sm text-[#8C8478] mb-3">Helyesek az oldalon szereplő adatok?</p>
+      <p class="text-sm text-[#8C8478] mb-3">{{ t('entity_edit_prompt') }}</p>
       <button
         onclick="document.getElementById('venue-edit-prompt').classList.add('hidden'); document.getElementById('venue-edit-form').classList.remove('hidden');"
         class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-[#EAE5DB] rounded-lg text-[#6A6259] hover:border-[#C2613A] hover:text-[#8A4226] transition-colors">
-        <i class="ph ph-pencil-simple"></i> Adatok javítása
+        <i class="ph ph-pencil-simple"></i> {{ t('entity_edit_button') }}
       </button>
     </div>
     <div id="venue-edit-form" class="hidden">
-      <p class="text-sm font-medium text-[#2E2B29] mb-3">Módosítási javaslat: <strong>{{ v.name }}</strong></p>
+      <p class="text-sm font-medium text-[#2E2B29] mb-3">{{ t('entity_edit_title') }} <strong>{{ v.name }}</strong></p>
       <form onsubmit="submitVenueEditRequest(event, this)">
         <input type="hidden" name="entity_type" value="venue">
         <input type="hidden" name="entity_id" value="{{ v.venue_id | default('') | e }}">
@@ -195,40 +195,40 @@
         <input type="hidden" name="entity_city" value="{{ city | e }}">
         <input type="hidden" name="entity_topic" value="">
         <input type="hidden" name="record_key" value="{{ v.record_key | default('') | e }}">
-        <label class="block text-xs font-medium text-[#6A6259] mb-1">Mit szeretnél módosítani?</label>
+        <label class="block text-xs font-medium text-[#6A6259] mb-1">{{ t('community_report_what_problem') }}</label>
         <select name="change_type" required onchange="onVenueChangeType(this.value)"
           class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] mb-3 text-[#1C1917] bg-white">
-          <option value="">— válassz —</option>
-          <option value="wrong_info">Hibás / elavult adatok</option>
-          <option value="closed">Megszűnt helyszín</option>
-          <option value="name_correction">Névpontosítás</option>
+          <option value="">{{ t('community_report_select') }}</option>
+          <option value="wrong_info">{{ t('entity_edit_wrong_info') }}</option>
+          <option value="closed">{{ t('venue_edit_closed') }}</option>
+          <option value="name_correction">{{ t('community_report_name_correction') }}</option>
         </select>
         <div id="venue-edit-new-name" class="hidden mb-3">
-          <label class="block text-xs font-medium text-[#6A6259] mb-1">Helyes név</label>
+          <label class="block text-xs font-medium text-[#6A6259] mb-1">{{ t('community_report_correct_name') }}</label>
           <input type="text" name="new_value_name" value="{{ v.name | e }}"
             class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] text-[#1C1917]">
         </div>
         <textarea name="notes" rows="2" required
-          placeholder="Megjegyzés / indoklás (kötelező)"
+          placeholder="{{ t('entity_edit_notes_placeholder') }}"
           class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg resize-none focus:outline-none focus:border-[#C2613A] mb-3 text-[#1C1917] placeholder-[#B5ADA0]"></textarea>
         <input type="email" name="email" required
-          placeholder="E-mail cím (kötelező)"
+          placeholder="{{ t('entity_edit_email_placeholder') }}"
           class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] mb-3 text-[#1C1917] placeholder-[#B5ADA0]">
         <div class="flex items-center gap-3">
           <button type="submit"
             class="px-4 py-2 bg-[#A8512F] text-white text-xs font-semibold rounded-lg hover:bg-[#8A4226] transition-colors">
-            Javaslat beküldése
+            {{ t('entity_edit_submit') }}
           </button>
           <button type="button"
             onclick="document.getElementById('venue-edit-form').classList.add('hidden'); document.getElementById('venue-edit-prompt').classList.remove('hidden');"
             class="text-xs text-[#8C8478] hover:text-[#4A4441] transition-colors">
-            Mégsem
+            {{ t('community_feedback_cancel') }}
           </button>
         </div>
       </form>
     </div>
     <div id="venue-edit-thanks" class="hidden text-sm text-green-700 flex items-center gap-2">
-      <i class="ph ph-check-circle"></i> Köszönjük, hamarosan átnézzük a javaslatot.
+      <i class="ph ph-check-circle"></i> {{ t('entity_edit_thanks') }}
     </div>
   </div>
 
@@ -252,10 +252,10 @@ async function submitVenueEditRequest(event, form) {
       document.getElementById('venue-edit-form').classList.add('hidden');
       document.getElementById('venue-edit-thanks').classList.remove('hidden');
     } else {
-      alert('Hiba: ' + (data.error || 'ismeretlen'));
+      alert({{ t('entity_edit_error') | tojson }} + ': ' + (data.error || ''));
     }
   } catch (e) {
-    alert('Hálózati hiba, próbáld újra.');
+    alert({{ t('entity_edit_network_error') | tojson }});
   }
 }
 </script>

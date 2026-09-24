@@ -167,7 +167,7 @@
       {% for r in extraction_rules %}
       <div class="flex items-start gap-3 text-xs border-l-2 border-orange-200 pl-3 py-1">
         <div class="min-w-0 flex-1 text-gray-700 leading-relaxed">{{ r.reason }}</div>
-        <button onclick="removeRule(this, {{ r.name | tojson }})"
+        <button onclick='removeRule(this, {{ r.name | tojson }})'
           class="text-gray-300 hover:text-red-500 transition-colors shrink-0" title="Remove">✕</button>
       </div>
       {% endfor %}

@@ -143,3 +143,55 @@ def test_the_city_link_keeps_the_topic_filter(venue_client):
     # Unfiltered, the link carries no topic at all.
     plain = venue_client.get("/helyszinek", headers=KOZ).text
     assert "topic=" not in plain.split('href="/helyszinek?city=Varos003')[1][:40]
+
+
+def test_a_site_wide_topic_page_samples_cities_instead_of_rendering_all(tmp_path):
+    """`/felfedezes/vallas` was 4.9 MB (2026-09-24): every record of every city
+    in the visitor's country and three more, one query per city.
+    """
+    from scraper.models import CommunityRecord
+    from scraper.store import save_results
+
+    db = tmp_path / "scraper.db"
+    init_db(db)
+    cities = [f"Varos{i:03d}" for i in range(_CITIES)]
+    for ci in cities:
+        save_results(ci, "music", [CommunityRecord(
+            name=f"{ci} Kórus {n}", city=ci, topic="music", locale="hu",
+            description="Heti próbák, új tagokat várunk.",
+            source_url=f"https://{ci}.test/{n}", extracted_at="2026-09-24T00:00:00Z")
+            for n in range(_PER_CITY)], db)
+    old_db, old_cities = app_state.db_path, app_state.cities
+    app_state.db_path = db
+    app_state.cities = [CityConfig(name=ci, country="Hungary", locale="hu",
+                                   search_variants=[ci]) for ci in cities]
+    try:
+        from scraper.web.app import _topic_url_slug
+        r = TestClient(web_app.app).get(f"/felfedezes/{_topic_url_slug('music', 'hu')}",
+                                        headers={**KOZ, "CF-IPCountry": "HU"})
+    finally:
+        app_state.db_path, app_state.cities = old_db, old_cities
+    assert r.status_code == 200
+    rendered = sum(1 for ci in cities for n in range(_PER_CITY) if f"{ci} Kórus {n}<" in r.text)
+    assert 0 < rendered <= web_app._EXPLORE_TOPIC_CITIES * 10
+
+
+def test_city_topic_counts_come_from_one_query_and_skip_hidden(tmp_path, monkeypatch):
+    from scraper.db import _community_record_key, set_community_hidden
+    from scraper.models import CommunityRecord
+    from scraper.pipeline import TopicConfig
+    from scraper.store import save_results
+
+    db = tmp_path / "scraper.db"
+    init_db(db)
+    rec = lambda n: CommunityRecord(name=n, city="Pécs", topic="music", locale="hu",  # noqa: E731
+                                    source_url=f"https://x.test/{n}",
+                                    extracted_at="2026-09-24T00:00:00Z")
+    save_results("Pécs", "music", [rec("Kórus A"), rec("Kórus B")], db)
+    set_community_hidden(db, _community_record_key("Kórus B", "Pécs", "music"), True)
+    monkeypatch.setattr(app_state, "db_path", db)
+    monkeypatch.setattr(app_state, "topics", [TopicConfig("music", {}), TopicConfig("running", {})])
+    monkeypatch.setattr(web_app, "_load_communities",
+                        lambda *a, **k: pytest.fail("must not load records to count them"))
+    r = TestClient(web_app.app).get("/api/city-topics?city=Pécs", headers=KOZ)
+    assert r.json() == {"music": 1, "running": 0}

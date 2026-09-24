@@ -245,7 +245,7 @@ async function fetchCounts(city) {
       if (count > 0) total += count;
     });
     cityCountText.textContent = total > 0
-      ? total + ' {{ t("about_communities") }} itt: ' + city
+      ? {{ t('communities_in_city', n='__N__', city='__C__') | tojson }}.replace('__N__', total).replace('__C__', city)
       : '{{ t("home_no_city_data") }}';
   } catch (e) {}
 }

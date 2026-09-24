@@ -1,6 +1,6 @@
 {% extends "public_base.html" %}
 {% import "_listing_filter.html" as lf %}
-{% block title %}Helyszínek – {{ site_name }}{% endblock %}
+{% block title %}{{ t('explore_venues') }} – {{ site_name }}{% endblock %}
 {% block og_desc %}{{ t('venues_og_desc') }}{% endblock %}
 {% block content %}
 
@@ -64,9 +64,9 @@
 
 <div class="brand-gradient relative overflow-hidden">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-7 relative">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/70 mb-1.5">Helyszínek</p>
-    <h1 class="text-xl sm:text-2xl font-black tracking-[-0.025em] text-white leading-tight">Közösségeknek otthont adó helyszínek</h1>
-    <p class="text-sm text-white/75 mt-1">{{ venues | length }}{% if selected_city or selected_topic %} / {{ total_all }}{% endif %} helyszín</p>
+    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/70 mb-1.5">{{ t('explore_venues') }}</p>
+    <h1 class="text-xl sm:text-2xl font-black tracking-[-0.025em] text-white leading-tight">{{ t('venues_heading') }}</h1>
+    <p class="text-sm text-white/75 mt-1">{{ t('venues_count', n=(venues | length | string) ~ ((' / ' ~ total_all) if selected_city or selected_topic else '')) }}</p>
   </div>
 </div>
 
@@ -153,7 +153,7 @@
   {% else %}
   <div class="text-center py-20 text-[#B5ADA0]">
     <i class="ph ph-map-pin text-5xl mb-4 block"></i>
-    <p class="text-base">Nincsenek helyszínek a megadott szűrőkre.</p>
+    <p class="text-base">{{ t('venues_none_for_filters') }}</p>
     {% if selected_city or selected_topic %}
     <a href="/helyszinek" class="mt-3 inline-block text-sm text-[#A8512F] hover:underline">Szűrők törlése</a>
     {% endif %}

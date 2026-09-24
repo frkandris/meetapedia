@@ -70,3 +70,29 @@ def test_reload_runtime_config_updates_app_state(monkeypatch, tmp_path):
         app_state.cities = old_cities
         app_state.topics = old_topics
         app_state.pipeline_cfg = old_pipeline_cfg
+
+
+def test_config_editors_refuse_instead_of_losing_the_edit(tmp_path, monkeypatch):
+    """`/app/config` ships in the image and is not persisted: a city or topic
+    saved here was reverted by the next deploy (review, 2026-09-24).
+    """
+    import base64
+    from unittest.mock import patch
+
+    from fastapi.testclient import TestClient
+
+    from scraper.web import app as web_app
+
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "cities.yaml").write_text("cities: []\n", encoding="utf-8")
+    monkeypatch.setattr(web_app, "CONFIG_DIR", config_dir)
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:testpass").decode(),
+            "Origin": "http://testserver"}
+    with patch("scraper.web.app._ADMIN_PASSWORD", "testpass"):
+        for name in ("cities", "topics", "settings"):
+            r = TestClient(web_app.app).post(f"/admin/config/{name}", headers=auth,
+                                             data={f"{name}_yaml": "x: 1\n"},
+                                             follow_redirects=False)
+            assert r.status_code in (302, 303) and "error" in r.headers["location"]
+    assert (config_dir / "cities.yaml").read_text(encoding="utf-8") == "cities: []\n"

@@ -48,7 +48,7 @@
       <i class="ph ph-tag"></i> Tag
     </p>
     <h1 class="text-xl sm:text-2xl font-extrabold tracking-[-0.025em] text-white leading-tight">{{ tag }}</h1>
-    <p class="text-sm text-white/75 mt-1">{{ tag_records | length }} közösség{% if city %} – {{ city }}{% endif %}</p>
+    <p class="text-sm text-white/75 mt-1">{{ t('n_communities', n=tag_records | length) }}{% if city %} – {{ city }}{% endif %}</p>
   </div>
 </div>
 {% elif country_sections %}
@@ -142,7 +142,7 @@
   {% else %}
   <div class="text-center py-16 text-[#B5ADA0]">
     <i class="ph ph-tag text-5xl mb-3 block"></i>
-    <p class="text-base">Nincs közösség ezzel a taggel.</p>
+    <p class="text-base">{{ t('tag_no_communities') }}</p>
   </div>
   {% endif %}
 
@@ -157,7 +157,7 @@
         <h3 class="text-base font-semibold text-[#4A4441] flex items-center gap-1.5">
           <i class="ph ph-map-pin text-[#C2613A] text-sm"></i>
           <a href="{{ city_sec.city_url }}" class="hover:text-[#8A4226] transition-colors">{{ city_sec.city }}</a>
-          <span class="text-xs font-normal text-[#8C8478]">{{ city_sec.total }} közösség</span>
+          <span class="text-xs font-normal text-[#8C8478]">{{ t('n_communities', n=city_sec.total) }}</span>
         </h3>
         <a href="{{ city_sec.city_url }}"
            class="text-xs font-medium text-[#A8512F] hover:text-[#8A4226] transition-colors">

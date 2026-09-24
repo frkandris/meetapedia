@@ -101,3 +101,34 @@ def test_sitemap_thin_pages_stay_out(tmp_path):
     by_name = {r["name"]: r["thin"] for r in rows}
     assert by_name["Leírt Klub"] is False
     assert by_name["Néma Klub"] is True
+
+
+def test_a_sitemap_over_the_limit_becomes_an_index_of_parts(tmp_path, monkeypatch):
+    """The protocol caps a file at 50,000 URLs and a file over it is rejected
+    whole; meetapedia.com served 64,666 in one `<urlset>` (2026-09-24).
+    """
+    db = tmp_path / "scraper.db"
+    init_db(db)
+    save_results("Budapest", "music", [_rec("Aktív zenei közösség Budapesten.")], db)
+    monkeypatch.setattr(app_state, "db_path", db)
+    monkeypatch.setattr(app_state, "cities", [
+        CityConfig(name="Budapest", country="Hungary", locale="hu", search_variants=[])])
+    monkeypatch.setattr(web_app, "_SITEMAP_MAX_URLS", 5)
+    client = TestClient(web_app.app)
+
+    index = client.get("/sitemap.xml", headers=KOZ).text
+    assert "<sitemapindex" in index
+    parts = [loc.split("</loc>")[0] for loc in index.split("<loc>")[1:]]
+    assert parts[0] == "https://kozossegek.com/sitemap-1.xml"
+
+    urls = []
+    for n in range(1, len(parts) + 1):
+        response = client.get(f"/sitemap-{n}.xml", headers=KOZ)
+        assert response.status_code == 200 and "<urlset" in response.text
+        chunk = response.text.count("<url>")
+        assert chunk <= 5
+        urls.append(chunk)
+    assert sum(urls) > 5
+    assert "/budapest/zenei-kor</loc>" in "".join(
+        client.get(f"/sitemap-{n}.xml", headers=KOZ).text for n in range(1, len(parts) + 1))
+    assert client.get(f"/sitemap-{len(parts) + 1}.xml", headers=KOZ).status_code == 404

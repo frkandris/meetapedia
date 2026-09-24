@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 from scraper.db import (
     init_db, upsert_venues, upsert_persons,
@@ -10,6 +11,15 @@ from scraper.pipeline import CityConfig
 from scraper.web import app as web_app
 from scraper.web.state import app_state
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture(autouse=True)
+def _budapest_is_a_known_city(monkeypatch):
+    """The detail routes resolve the city from the loaded city list, as in
+    production; an unknown city slug redirects instead of scanning every row.
+    """
+    monkeypatch.setattr(app_state, "cities", [
+        CityConfig(name="Budapest", country="Hungary", locale="hu", search_variants=[])])
 
 
 def _db(tmp_path: Path) -> Path:
@@ -243,3 +253,45 @@ def test_emberek_page_lists_persons(tmp_path):
     finally:
         app_state.db_path = old_db
         app_state.cities = old_cities
+
+
+def test_kozossegek_does_not_serve_a_foreign_venue_or_person(tmp_path, monkeypatch):
+    """It answered 200 with a self-canonical: a duplicate of meetapedia.com's
+    page (review, 2026-09-24). Same rule as the city pages.
+    """
+    db = _db(tmp_path)
+    upsert_venues(db, [_venue(name="Musikhaus", city="Aach").model_dump()])
+    monkeypatch.setattr(app_state, "db_path", db)
+    monkeypatch.setattr(app_state, "cities", [
+        CityConfig(name="Aach", country="Germany", locale="de", search_variants=[])])
+    client = TestClient(web_app.app)
+    koz = client.get("/aach/helyszin/musikhaus", headers={"host": "kozossegek.com"},
+                     follow_redirects=False)
+    assert koz.status_code in (301, 302)
+    assert client.get("/aach/helyszin/musikhaus",
+                      headers={"host": "meetapedia.com"}).status_code == 200
+    assert client.get("/nowhere/helyszin/x", headers={"host": "meetapedia.com"},
+                      follow_redirects=False).status_code == 302
+
+
+def test_an_international_venue_page_is_not_in_hungarian(tmp_path, monkeypatch):
+    """`<html lang="en">` over "Helyszínek", "Elérhetőség", "Adatok javítása"
+    on every meetapedia.com venue page (review, 2026-09-24).
+    """
+    db = _db(tmp_path)
+    upsert_venues(db, [{**_venue(name="Musikhaus", city="Aach").model_dump(),
+                        "address": "Hauptstraße 1"}])
+    monkeypatch.setattr(app_state, "db_path", db)
+    monkeypatch.setattr(app_state, "cities", [
+        CityConfig(name="Aach", country="Germany", locale="de", search_variants=[]),
+        CityConfig(name="Budapest", country="Hungary", locale="hu", search_variants=[])])
+    client = TestClient(web_app.app)
+    en = client.get("/aach/helyszin/musikhaus", headers={"host": "meetapedia.com"}).text
+    for hungarian in ("Helyszínek", "Elérhetőség", "Adatok javítása", "Fogadott érdeklődések",
+                      "Javaslat beküldése", "helyszín Aachban"):
+        assert hungarian not in en, hungarian
+    assert "Suggest a correction" in en
+
+    upsert_venues(db, [_venue().model_dump()])
+    hu = client.get("/budapest/helyszin/mupa-budapest", headers={"host": "kozossegek.com"}).text
+    assert "Adatok javítása" in hu and "Helyszínek" in hu

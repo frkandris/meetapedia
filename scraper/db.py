@@ -1706,6 +1706,19 @@ def get_city_topic_counts(db_path: Path) -> dict[str, dict[str, int]]:
     return result
 
 
+def get_topic_counts_for_city(db_path: Path, city: str) -> dict[str, int]:
+    """{topic: visible community count} for one city — an index lookup, where
+    `get_city_topic_counts(...)[city]` aggregates the whole table to read one row.
+    """
+    if not db_path.exists():
+        return {}
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT topic, COUNT(*) FROM communities WHERE city=? AND hidden=0 GROUP BY topic",
+            (city,)).fetchall()
+    return {topic: count for topic, count in rows}
+
+
 def get_city_topic_states(db_path: Path, current_fp: str) -> dict[str, dict[str, dict]]:
     """Return per-(city, topic) state dict for the coverage page.
 

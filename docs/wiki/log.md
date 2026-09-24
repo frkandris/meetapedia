@@ -3,6 +3,17 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-24
+- **Fix**: Public web, from the review. meetapedia.com's sitemap held 64,666 URLs in one file
+  (the protocol's limit is 50,000, and a file over it is rejected whole); `/sitemap.xml` is now a
+  sitemap index above 45,000 URLs. Site-wide topic pages rendered every record of every city
+  (`/felfedezes/vallas` was 4.9 MB) and now sample 12 cities × 10 groups with "see all" links.
+  Venue and person pages: kozossegek.com no longer serves foreign ones with a self-canonical, an
+  unknown city slug redirects instead of scanning every row on the event loop, and the templates
+  are translated — meetapedia.com served them in Hungarian under `<html lang="en">`.
+  `/api/city-topics` counts with one indexed query instead of loading ~36 topics of records per
+  keystroke. The admin prompt editor's "remove rule" button works (a `tojson` value inside a
+  double-quoted attribute), and the city/topic config editors refuse instead of writing files the
+  next deploy reverts.
 - **Perf**: Worker passes stopped paying for work that produced nothing. The post-run
   `detect_all` (~120 s of GIL-holding matching per two-hour pass, 216 of 225 runs found nothing)
   runs only after a pass that saved records, and without its community half, which `save_results`

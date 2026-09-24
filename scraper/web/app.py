@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from ..config import load_config, load_config_from_docs
+from ..config import load_config
 from ..db import (
     delete_all_communities,
     get_sitemap_communities,
@@ -32,6 +32,7 @@ from ..db import (
     get_community_history,
     get_all_communities,
     get_city_topic_counts,
+    get_topic_counts_for_city,
     get_community_lastmods,
     get_city_totals,
     get_communities,
@@ -551,21 +552,6 @@ def _safe_redirect_target(target: str, fallback: str) -> str:
 
 def _config_error_redirect(exc: Exception) -> RedirectResponse:
     return RedirectResponse(f"/admin/config?error={_url_quote(str(exc), safe='')}", status_code=302)
-
-
-def _read_config_yaml(name: str) -> object:
-    return yaml.safe_load((CONFIG_DIR / name).read_text(encoding="utf-8"))
-
-
-def _validate_candidate_config(
-    cities_yaml: str | None = None,
-    topics_yaml: str | None = None,
-    settings_yaml: str | None = None,
-) -> None:
-    cities_raw = yaml.safe_load(cities_yaml) if cities_yaml is not None else _read_config_yaml("cities.yaml")
-    topics_raw = yaml.safe_load(topics_yaml) if topics_yaml is not None else _read_config_yaml("topics.yaml")
-    settings_raw = yaml.safe_load(settings_yaml) if settings_yaml is not None else _read_config_yaml("settings.yaml")
-    load_config_from_docs(_db(), cities_raw, topics_raw, settings_raw)
 
 
 def _reload_runtime_config() -> None:
@@ -4696,6 +4682,11 @@ def _nearby_cities(request: Request, city_name: str, limit: int = 6) -> list[dic
     return out[:limit]
 
 
+#: Cities per country on a site-wide topic page; each shows ten groups and
+#: links to its full topic listing.
+_EXPLORE_TOPIC_CITIES = 12
+
+
 async def _render_explore(
     request: Request,
     city: str = "",
@@ -4730,7 +4721,7 @@ async def _render_explore(
         # Uses the module-level import: a function-local import here would make
         # the name local to the whole function and crash the no-city branch
         # below with UnboundLocalError.
-        counts = get_city_topic_counts(_db()).get(city, {}) if app_state.db_path else {}
+        counts = get_topic_counts_for_city(_db(), city) if app_state.db_path else {}
         available_topics = {t.name: counts[t.name] for t in topics if counts.get(t.name, 0) > 0}
 
     # City page with no topic filter: show all communities (small chips will filter client-side)
@@ -4781,23 +4772,36 @@ async def _render_explore(
 
         all_city_topic_counts = get_city_topic_counts(_db())
         for country, is_user in country_order:
-            # When browsing by topic, show ALL cities and ALL records so counts match.
-            # Without topic, show 3-city sample for discovery.
             all_city_entries = country_cities.get(country, [])
-            city_entries = all_city_entries if topic else all_city_entries[:3]
+            if topic:
+                # The cities with the most groups in these topics, a sample of
+                # each, and "see all" into the city's own topic page. Rendering
+                # every record of every city made /felfedezes/vallas 4.9 MB
+                # (2026-09-24) — a page proportional to the database, which
+                # this site does not serve. Counts come from the aggregate, so
+                # "see all N" still matches the page it links to.
+                in_topic = {
+                    name: sum(all_city_topic_counts.get(name, {}).get(t, 0) for t in topic)
+                    for name, _count in all_city_entries}
+                city_entries = sorted(((n, c) for n, c in in_topic.items() if c),
+                                      key=lambda x: x[1], reverse=True)[:_EXPLORE_TOPIC_CITIES]
+            else:
+                # Without topic, a 3-city sample for discovery.
+                city_entries = all_city_entries[:3]
             city_sections: list[dict] = []
             for city_name, city_count in city_entries:
                 if topic:
                     recs: list[dict] = []
                     for t in topic:
                         recs.extend(_load_communities(city_name, t))
+                    recs = recs[:10]
                 else:
                     recs = [_ensure_community_id(r) for r in get_communities_for_city(_db(), city_name)][:10]
                 if recs:
                     city_url = "/" + _slugify(city_name)
                     if topic and len(topic) == 1:
                         city_url += "/" + _topic_url_slug(topic[0], _city_locale(city_name))
-                    topic_count = len(recs) if topic else city_count
+                    topic_count = city_count
                     city_locale_str = _city_locale(city_name)
                     city_chips = sorted(
                         [
@@ -5227,10 +5231,12 @@ async def api_city_topics(city: str = ""):
     """Return per-topic community counts for a city (used by home page JS)."""
     if not city:
         return JSONResponse({})
-    result = {}
-    for t in (app_state.topics or []):
-        result[t.name] = len(_load_communities(city, t.name))
-    return JSONResponse(result)
+    # One indexed GROUP BY, off the loop. It loaded and parsed every record of
+    # each of ~36 topics just to count them, on the event loop, and the home
+    # page calls it as the visitor types.
+    counts = await asyncio.to_thread(get_topic_counts_for_city, _db(), city) \
+        if app_state.db_path else {}
+    return JSONResponse({t.name: counts.get(t.name, 0) for t in (app_state.topics or [])})
 
 
 @_fastapi.get("/set-lang")
@@ -5527,11 +5533,16 @@ async def robots_txt(request: Request):
     )
 
 
-#: Rendered sitemaps per site, with the time they were built. The document is
-#: pure SQL + string assembly over the whole corpus; Google refetches on its own
-#: schedule and does not need it fresher than this.
-_SITEMAP_CACHE: dict[str, tuple[float, str]] = {}
+#: Sitemap entries per site, with the time they were built. Pure SQL + string
+#: assembly over the whole corpus; Google refetches on its own schedule and
+#: does not need it fresher than this.
+_SITEMAP_CACHE: dict[str, tuple[float, list]] = {}
 _SITEMAP_TTL = 3600.0
+#: URLs per sitemap file. The protocol's hard limit is 50,000, and a file over
+#: it is rejected whole: meetapedia.com served 64,666 in one `<urlset>` after
+#: venue and person pages were added (found 2026-09-24). Above this
+#: `/sitemap.xml` becomes an index of `/sitemap-N.xml` parts.
+_SITEMAP_MAX_URLS = 45_000
 
 
 @_fastapi.get("/utmutatok", response_class=HTMLResponse)
@@ -5586,26 +5597,50 @@ async def public_guide(request: Request, slug: str):
     })
 
 
-@_fastapi.get("/sitemap.xml")
-async def sitemap(request: Request):
+async def _sitemap_entries(request: Request) -> tuple[dict, list]:
     # Local import: other functions in this module already bind `_time`
     # locally, and a module-level name would be shadowed inside them.
     import time as _time
 
-    from fastapi.responses import Response as _Response
     ctx = lang_context(request)
     cache_key = ctx.get("site") or "kozossegek"
     cached = _SITEMAP_CACHE.get(cache_key)
     if cached and (_time.monotonic() - cached[0]) < _SITEMAP_TTL:
-        return _Response(cached[1], media_type="application/xml")
+        return ctx, cached[1]
     # Built in a worker thread: every query below is blocking sqlite, and on the
     # event loop it stalls unrelated requests for as long as it runs.
-    xml = await asyncio.to_thread(_build_sitemap, ctx)
-    _SITEMAP_CACHE[cache_key] = (_time.monotonic(), xml)
-    return _Response(xml, media_type="application/xml")
+    entries = await asyncio.to_thread(_build_sitemap, ctx)
+    _SITEMAP_CACHE[cache_key] = (_time.monotonic(), entries)
+    return ctx, entries
 
 
-def _build_sitemap(ctx: dict) -> str:
+@_fastapi.get("/sitemap.xml")
+async def sitemap(request: Request):
+    from fastapi.responses import Response as _Response
+    ctx, entries = await _sitemap_entries(request)
+    if len(entries) <= _SITEMAP_MAX_URLS:
+        return _Response(_render_urlset(entries), media_type="application/xml")
+    parts = (len(entries) + _SITEMAP_MAX_URLS - 1) // _SITEMAP_MAX_URLS
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    lines += [f"  <sitemap><loc>{ctx['site_url']}/sitemap-{n}.xml</loc></sitemap>"
+              for n in range(1, parts + 1)]
+    lines.append("</sitemapindex>")
+    return _Response("\n".join(lines), media_type="application/xml")
+
+
+@_fastapi.get("/sitemap-{part}.xml")
+async def sitemap_part(request: Request, part: int):
+    from fastapi.responses import Response as _Response
+    _ctx, entries = await _sitemap_entries(request)
+    chunk = entries[(part - 1) * _SITEMAP_MAX_URLS: part * _SITEMAP_MAX_URLS] if part >= 1 else []
+    if not chunk:
+        return _Response("Not found", status_code=404)
+    return _Response(_render_urlset(chunk), media_type="application/xml")
+
+
+def _build_sitemap(ctx: dict) -> list[tuple[str, str | None]]:
+    """Every canonical URL of this site with its lastmod, deduplicated."""
     base = ctx["site_url"]
     is_meetapedia = ctx.get("site") == "meetapedia"
     site_city_names = {
@@ -5709,15 +5744,18 @@ def _build_sitemap(ctx: dict) -> str:
                 seen_persons.add((city_sl, name_sl))
                 locs.append(f"{base}/{city_sl}/ember/{name_sl}")
 
+    # Deduplicate while preserving order.
+    return [(loc, lastmods.get(loc)) for loc in dict.fromkeys(locs)]
+
+
+def _render_urlset(entries: list[tuple[str, str | None]]) -> str:
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
-    for loc in dict.fromkeys(locs):  # deduplicate while preserving order
-        lastmod = f"<lastmod>{lastmods[loc]}</lastmod>" if loc in lastmods else ""
-        lines.append(
-            f"  <url><loc>{loc}</loc>{lastmod}<changefreq>weekly</changefreq></url>"
-        )
+    for loc, lastmod in entries:
+        stamp = f"<lastmod>{lastmod}</lastmod>" if lastmod else ""
+        lines.append(f"  <url><loc>{loc}</loc>{stamp}<changefreq>weekly</changefreq></url>")
     lines.append("</urlset>")
     return "\n".join(lines)
 
@@ -6216,44 +6254,21 @@ async def config_page(request: Request, saved: Optional[str] = None, error: Opti
     })
 
 
-@admin.post("/config/cities")
-async def save_cities(request: Request, cities_yaml: str = Form(...)):
-    try:
-        _validate_candidate_config(cities_yaml=cities_yaml)
-        (CONFIG_DIR / "cities.yaml").write_text(cities_yaml, encoding="utf-8")
-        _reload_runtime_config()
-        return RedirectResponse("/admin/config?saved=cities", status_code=302)
-    except Exception as exc:
-        return _config_error_redirect(exc)
+@admin.post("/config/{name}")
+async def save_config(request: Request, name: str):
+    """Refused on purpose: every file under config/ is version-controlled.
 
-
-@admin.post("/config/topics")
-async def save_topics(request: Request, topics_yaml: str = Form(...)):
-    try:
-        _validate_candidate_config(topics_yaml=topics_yaml)
-        (CONFIG_DIR / "topics.yaml").write_text(topics_yaml, encoding="utf-8")
-        _reload_runtime_config()
-        return RedirectResponse("/admin/config?saved=topics", status_code=302)
-    except Exception as exc:
-        return _config_error_redirect(exc)
-
-
-@admin.post("/config/settings")
-async def save_settings(request: Request, settings_yaml: str = Form(...)):
-    """Refused on purpose. settings.yaml is version-controlled.
-
-    This form used to write the file and reload the config, which looked like it
-    worked — until the next deploy replaced the container and the edit was gone.
-    On 2026-08-18 the concurrency settings were lost exactly that way, and the
-    only evidence was the pipeline quietly running the old values.
-
-    A form that silently loses its input is worse than no form. cities.yaml and
-    topics.yaml keep their editors: those are content, curated by hand and read
-    back from disk. Settings are code.
+    These forms used to write the file and reload the config, which looked like
+    it worked — until the next deploy replaced the container and the edit was
+    gone. `/app/config` ships in the image and is not persisted. The settings
+    editor was closed after the 2026-08-18 concurrency settings were lost that
+    way; the city and topic editors lost their edits the same way until
+    2026-09-24 (and a city added there also got no map coordinates). A form that
+    silently loses its input is worse than no form.
     """
-    del settings_yaml
+    del name
     return _config_error_redirect(Exception(
-        "settings.yaml is version-controlled — edit it in the repository and "
+        "config/ is version-controlled — edit the file in the repository and "
         "deploy. A change saved here would be silently reverted by the next "
         "deploy, which is how the 2026-08-18 concurrency settings were lost."))
 
@@ -7840,20 +7855,22 @@ async def public_people_en(request: Request, city: str = ""):
 async def public_venue_detail(request: Request, city_slug: str, venue_slug: str):
     if not app_state.db_path:
         return RedirectResponse("/helyszinek", status_code=302)
+    # An unknown city is a redirect, not a scan: the old fallback loaded and
+    # JSON-parsed every venue on the event loop for any bot-typed slug.
     city_name = _city_from_slug(city_slug)
-    if city_name:
-        venues = get_venues(app_state.db_path, city_name)
-    else:
-        # Cities not yet loaded (e.g. test env) — scan all venues and match by slug
-        all_venues = get_all_venues(app_state.db_path)
-        venues = [v for v in all_venues if _slugify(v.get("city", "")) == city_slug]
-        if venues:
-            city_name = venues[0].get("city", city_slug)
-    venue = next((v for v in venues if _slugify(v.get("name", "")) == venue_slug), None)
-    if not venue or not city_name:
+    if not city_name or city_name not in {c.name for c in _site_cities(request)}:
+        # Same rule as the city pages: kozossegek.com serves Hungarian cities
+        # only. It answered 200 for foreign venues with a self-canonical — a
+        # duplicate of the meetapedia.com page.
+        if (redirect := _hu_redirect(request, city_name)):
+            return redirect
         return RedirectResponse("/helyszinek", status_code=302)
     if (redirect := _hu_redirect(request, city_name)):
         return redirect
+    venues = await asyncio.to_thread(get_venues, app_state.db_path, city_name)
+    venue = next((v for v in venues if _slugify(v.get("name", "")) == venue_slug), None)
+    if not venue:
+        return RedirectResponse("/helyszinek", status_code=302)
     community_ids = venue.get("community_ids") or []
     communities = get_communities_for_venue(
         app_state.db_path, community_ids, venue.get("name", ""), city_name
@@ -7872,8 +7889,10 @@ async def public_venue_detail(request: Request, city_slug: str, venue_slug: str)
         # understands best, and this page type carried no markup until
         # 2026-09-20.
         "schema_json": venue_jsonld(venue, _venue_canonical),
+        # Labels in the page's language, not "hu": these notes rendered
+        # Hungarian topic names on meetapedia.com's venue and person pages.
         "related": related_communities(_city_records, exclude_key="", topic=None,
-                                       locale="hu"),
+                                       locale=lang_context(request)["lang"]),
         "city": city_name,
         "city_slug": city_slug,
         "communities": communities,
@@ -7895,18 +7914,13 @@ async def public_person_detail(request: Request, city_slug: str, name_slug: str)
     if not app_state.db_path:
         return RedirectResponse("/emberek", status_code=302)
     city_name = _city_from_slug(city_slug)
-    if city_name:
-        all_persons = get_persons(app_state.db_path, city_name)
-    else:
-        # Cities not yet loaded (e.g. test env) — scan all persons and match by city slug
-        all_persons_all = get_all_persons(app_state.db_path)
-        all_persons = [p for p in all_persons_all if _slugify(p.get("city", "")) == city_slug]
-        if all_persons:
-            city_name = all_persons[0].get("city", city_slug)
-    if not city_name:
+    if not city_name or city_name not in {c.name for c in _site_cities(request)}:
+        if (redirect := _hu_redirect(request, city_name)):
+            return redirect
         return RedirectResponse("/emberek", status_code=302)
     if (redirect := _hu_redirect(request, city_name)):
         return redirect
+    all_persons = await asyncio.to_thread(get_persons, app_state.db_path, city_name)
     merged = [p for p in all_persons if _slugify(p.get("name", "")) == name_slug]
     if not merged:
         return RedirectResponse("/emberek", status_code=302)
@@ -7957,8 +7971,10 @@ async def public_person_detail(request: Request, city_slug: str, name_slug: str)
             [{"name": c["name"], "url": _canonical_base(request, city_name) + c["url"]}
              for c in community_entries],
             _person_canonical),
+        # Labels in the page's language, not "hu": these notes rendered
+        # Hungarian topic names on meetapedia.com's venue and person pages.
         "related": related_communities(_city_records, exclude_key="", topic=None,
-                                       locale="hu"),
+                                       locale=lang_context(request)["lang"]),
         "bio": bio,
         "website": website,
         "social_links": social_links,
@@ -8023,7 +8039,7 @@ async def public_city_segment(
         related = related_communities(
             _city_records,
             exclude_key=_community_record_key(record["name"], city_name, rec_topic),
-            topic=public_topic, locale=city_locale)
+            topic=public_topic, locale=_page_lang["lang"])
         breadcrumb_pairs = [(city_name, f"/{city_slug}")]
         if public_topic:
             breadcrumb_pairs.append((
