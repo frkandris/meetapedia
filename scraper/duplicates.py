@@ -254,10 +254,15 @@ def cleanup_stale_community_candidates(db_path: Path) -> int:
     return dismissed
 
 
-def detect_all(db_path: Path) -> int:
-    """Run detection for all entity types. Returns total candidates inserted."""
+def detect_all(db_path: Path, communities: bool = True) -> int:
+    """Run detection for all entity types. Returns total candidates inserted.
+
+    `communities=False` skips the community pass — the expensive one (1.5M name
+    pairs through SequenceMatcher at production scale), and redundant after a
+    pipeline run because `save_results` already scans each city it saves.
+    """
     cleanup_stale_community_candidates(db_path)
-    c = detect_community_candidates(db_path)
+    c = detect_community_candidates(db_path) if communities else 0
     v = detect_venue_candidates(db_path)
     p = detect_person_candidates(db_path)
     total = c + v + p

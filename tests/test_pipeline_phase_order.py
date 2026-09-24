@@ -59,7 +59,9 @@ def test_full_mode_runs_reai_before_search(tmp_path):
 
 def test_ai_only_mode_does_not_run_full(tmp_path):
     """ai_only mode must not trigger the full search phase."""
+    from scraper.db import save_search_cache
     db = _db(tmp_path)
+    save_search_cache(db, "Budapest", "running", ["https://x.test/"], ["q"])
     cities = [CityConfig(name="Budapest", locale="hu", search_variants=[])]
     topics = [TopicConfig(name="running", search_terms={"hu": ["futás"]})]
     cfg = _cfg(db)
@@ -80,3 +82,25 @@ def test_ai_only_mode_does_not_run_full(tmp_path):
         asyncio.run(run_pipeline(cities, topics, cfg, cache=None, run_mode="ai_only"))
 
     assert call_order == ["ai_only"], f"Expected only ai_only, got: {call_order}"
+
+
+def test_ai_only_skips_pairs_that_were_never_searched(tmp_path):
+    """A never-searched pair has no cached page; walking it only logged
+    `ai_only_no_cache` (~100 per pass in production, 2026-09-24).
+    """
+    from scraper.db import save_search_cache
+    db = _db(tmp_path)
+    save_search_cache(db, "Budapest", "running", ["https://x.test/"], ["q"])
+    cities = [CityConfig(name=n, locale="hu", search_variants=[]) for n in ("Budapest", "Szeged")]
+    topics = [TopicConfig(name="running", search_terms={"hu": ["futás"]})]
+    seen = {}
+
+    async def fake_ai_only(*args, **kwargs):
+        seen["pairs"] = kwargs["pairs_filter"]
+        return 0, []
+
+    with patch("scraper.pipeline._run_ai_only", side_effect=fake_ai_only), \
+         patch("scraper.duplicates.detect_all"):
+        asyncio.run(run_pipeline(cities, topics, _cfg(db), cache=None, run_mode="ai_only"))
+
+    assert seen["pairs"] == {("Budapest", "running")}

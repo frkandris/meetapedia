@@ -1009,3 +1009,29 @@ def test_ai_only_makes_no_llm_person_call_but_still_records_leaders(tmp_path):
     with sqlite3.connect(db) as conn:
         names = [r[0] for r in conn.execute("SELECT json_extract(data, '$.name') FROM persons")]
     assert names == ["Kovács Anna"]
+
+
+def test_preflight_skips_a_model_that_served_real_work_recently():
+    """Probing every model every two-hour pass spent ~80 requests a day per
+    model — most of Cloudflare's 100 (review, 2026-09-24).
+    """
+    from types import SimpleNamespace
+
+    class _Model:
+        def __init__(self, model):
+            self.provider, self.model, self.probes = "p", model, 0
+
+        async def extract(self, *a, **k):
+            self.probes += 1
+            return []
+
+    busy, idle = _Model("busy"), _Model("idle")
+    router = SimpleNamespace(done_for_today=lambda e: False, note=lambda *a, **k: None,
+                             has_capacity=lambda scope=None: True)
+    chain = FallbackExtractor(primaries=[busy, idle])
+    asyncio.run(chain.extract("t", "c", "top", "hu", "https://x.test"))  # busy serves
+    assert busy.probes == 1
+
+    chain.router = router  # preflight probes a fleet only when it is routed
+    asyncio.run(chain.preflight())
+    assert (busy.probes, idle.probes) == (1, 1)

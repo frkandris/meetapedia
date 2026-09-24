@@ -6583,6 +6583,7 @@ def launch_pipeline_run(
     run_persons: bool = True,
     filter_country: str = "",
     filter_city: str = "",
+    cities: "list | None" = None,
     stop_at: "datetime | None" = None,
     should_stop: "Callable[[], bool] | None" = None,
     on_finished: "Callable[[list, int], None] | None" = None,
@@ -6600,7 +6601,9 @@ def launch_pipeline_run(
     if not app_state.run_coordinator.reserve(mode_label):
         return False, "already running"
 
-    cities = app_state.cities or []
+    # `cities` lets the worker pass them in expansion-priority order; the
+    # admin form runs whatever `cities.yaml` lists, in file order.
+    cities = list(cities if cities is not None else (app_state.cities or []))
     if filter_city.strip():
         cities = [c for c in cities if c.name == filter_city.strip()]
     elif filter_country.strip():

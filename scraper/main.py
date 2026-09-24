@@ -434,7 +434,10 @@ async def main() -> None:
     #: between every pair, and building a router parses the provider catalogue
     #: and reads the ledger — per pair, with eight searches in flight, that is a
     #: real cost for a number that changes on the scale of minutes.
-    _QUOTA_CACHE_SECONDS = 30.0
+    # The answer only changes when a day's allowance runs out or resets, and the
+    # preempt check asks between every pair: at 30 s every ask rebuilt the
+    # router (YAML parse, the fleet, a ledger read) on the event loop.
+    _QUOTA_CACHE_SECONDS = 300.0
     _quota_cache: dict = {"at": 0.0, "value": True}
 
     def _free_quota_available() -> bool:
@@ -570,6 +573,13 @@ async def main() -> None:
                     # would never collect again.
                     skip_scraped=bool(getattr(cfg, "cache_skip_scraped", True)),
                     skip_extracted=bool(getattr(cfg, "cache_skip_extracted", True)),
+                    # In `country_priority` order. `cities.yaml` lists Hungary,
+                    # Sweden, ~60 small countries, Indonesia and Germany last,
+                    # and the worker walked it in that order — the documented
+                    # expansion priority reached only enrichment.
+                    cities=[c for group in _saver_city_groups(
+                        app_state.cities or [], _settings_country_priority())
+                        for c in group],
                     should_stop=_preempt, on_finished=_on_finished)
                 if not started:
                     log.info("worker_run_skipped", mode=mode, reason=reason)

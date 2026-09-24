@@ -3,6 +3,17 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-24
+- **Perf**: Worker passes stopped paying for work that produced nothing. The post-run
+  `detect_all` (~120 s of GIL-holding matching per two-hour pass, 216 of 225 runs found nothing)
+  runs only after a pass that saved records, and without its community half, which `save_results`
+  already does per city. `ai_only` skips pairs that were never searched (~100 `ai_only_no_cache`
+  per pass). Preflight no longer probes a model that served real work in the last three hours
+  (~80 probes a day per model — most of Cloudflare's 100). A provider blocked until midnight (402,
+  refusing everything) no longer counts as capacity. The worker's quota answer is cached for five
+  minutes instead of rebuilding the router between every pair, and `model_router_ready` is debug.
+- **Fix**: The worker now runs cities in `pipeline.country_priority` order. It passed
+  `app_state.cities` in `cities.yaml` order — Hungary, Sweden, ~60 small countries, Indonesia,
+  Germany last — so the documented expansion priority only reached enrichment.
 - **Fix**: ~28% of `cache_pages` were undecoded Brotli. The fetcher offered `Accept-Encoding: br`
   without the `brotli` package, httpx passed the compressed bytes through, and html2text accepted
   them as text — measured 1,448 of a 5,183-page sample, with records extracted from some of them.

@@ -17,7 +17,7 @@ from .false_positives import load as load_false_positives
 from .fetch import fetch_and_clean
 from .search import (DataForSEOClient, FallbackSearchClient, SearchQuotaError,
                      SearchUnavailableError, build_queries)
-from .db import get_daily_counters_with_prefix, get_search_cache, save_search_cache, mark_search_collection_complete, get_collected_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs, get_upgradable_pages
+from .db import get_daily_counters_with_prefix, get_search_cache, save_search_cache, mark_search_collection_complete, get_collected_pairs, get_searched_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs, get_upgradable_pages
 from .router import build_router
 from .store import save_results
 
@@ -1051,6 +1051,12 @@ async def run_pipeline(
         log.info("done_pair_filter", pairs=len(done_pairs),
                  seconds=round(time.monotonic() - _filter_started, 2))
     pairs_to_run = all_pairs - done_pairs
+    if run_mode == "ai_only":
+        # A pair never searched has no cached page, so extraction can only log
+        # "ai_only_no_cache" for it — ~100 per pass in production, 11,677 such
+        # pairs waiting, and a never-empty list that kept the early return
+        # below from ever firing.
+        pairs_to_run &= await _off_loop(get_searched_pairs, config.db_path)
     skipped = len(all_pairs) - len(pairs_to_run)
     if skipped:
         log.info("pairs_skipped_fully_processed", count=skipped, remaining=len(pairs_to_run))
@@ -1164,10 +1170,14 @@ async def run_pipeline(
 
     log.info("pipeline_complete", run_mode=run_mode, total_new_records=total_new)
     _log_throughput(extractor, run_mode, config.db_path)
-    if run_mode != "search_only":
+    # Only after a run that saved something, and without the community pass:
+    # `save_results` already scans every city it saves. Measured 2026-09-24 at
+    # ~120 s of pure-Python matching per two-hour pass, holding the GIL the
+    # web app needs, and 216 of 225 runs found nothing.
+    if run_mode != "search_only" and total_new:
         try:
             from .duplicates import detect_all
-            await asyncio.to_thread(detect_all, config.db_path)
+            await asyncio.to_thread(detect_all, config.db_path, communities=False)
         except Exception as exc:
             log.warning("post_run_duplicate_scan_failed", error=str(exc))
     failed_search = sum(1 for p in pair_logs if p.get("search_failed"))

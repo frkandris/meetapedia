@@ -14,9 +14,13 @@ def _reset_pacing_clock():
     """
     from scraper.router import QuotaLedger
 
+    from scraper.extract import _LAST_SERVED
+
     QuotaLedger._last_call.clear()
+    _LAST_SERVED.clear()
     yield
     QuotaLedger._last_call.clear()
+    _LAST_SERVED.clear()
 
 
 @pytest.fixture(autouse=True)

@@ -252,6 +252,14 @@ class QuotaLedger:
         """
         return time.time() < float(self._row(provider).get("blocked_until") or 0)
 
+    def blocked_for_day(self, provider: str) -> bool:
+        """True when the provider is blocked until the next 00:00 UTC.
+
+        A 402 or a provider refusing everything is blocked to midnight; that is
+        a spent day, not a short back-off, and must read as "no capacity".
+        """
+        return float(self._row(provider).get("blocked_until") or 0) >= _next_utc_midnight() - 1
+
     def paced(self, spec: ProviderSpec) -> bool:
         """False while `rpm` says the next call is too soon."""
         return self.pace_wait(spec) <= 0
@@ -607,7 +615,12 @@ class ModelRouter:
         so the pass started, hit the first pair with real work, and stopped on
         "all providers rate limited". Every run, all day, on 2026-08-19.
         """
+        # A provider blocked until midnight has no budget either. Without this
+        # it still counted as capacity: preflight probed it every pass (two
+        # guaranteed 429s per run from Mistral), and the worker stayed in
+        # extraction on providers that could not answer until tomorrow.
         return (self._spendable(spec)
+                and not self.ledger.blocked_for_day(spec.name)
                 and self.ledger.remaining(spec) > 0
                 and self.ledger.tokens_left(spec) > _MIN_TOKENS_TO_START)
 
@@ -748,7 +761,9 @@ def build_router(
         fingerprint_model=fingerprint_model,
     )
     if extractors:
-        log.info("model_router_ready",
+        # Debug: the worker's quota check builds one of these between pairs, and
+        # at info level this line was ~870 of a day's log entries.
+        log.debug("model_router_ready",
                  fleet=[f"{e.provider}:{e.model}" for e in extractors[:6]],
                  total=len(extractors))
     router = ModelRouter(cat, ledger, extractors)

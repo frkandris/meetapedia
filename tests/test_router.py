@@ -1550,3 +1550,17 @@ def test_a_busy_but_working_provider_is_not_dropped(tmp_path):
 
     assert float(ledger._row(spec.name)["blocked_until"]) < _t.time() + 120, \
         "a provider that is mostly succeeding must only wait out its window"
+
+
+def test_a_provider_blocked_until_midnight_is_not_capacity(tmp_path, monkeypatch):
+    """A 402 blocks to 00:00 UTC. Still counted as capacity, preflight probed it
+    every pass and the worker stayed in extraction on a fleet that could not
+    answer until tomorrow (review, 2026-09-24).
+    """
+    monkeypatch.setenv("A_KEY", "k")
+    router, ledger = _router(tmp_path, _spec("a", env="A_KEY", quality=(50,)))
+    [only] = router.all_extractors()
+    assert router.has_capacity()
+    ledger.note_call("a", ok=False, billing_blocked=True, error="HTTP 402")
+    assert not router.has_capacity()
+    assert router.done_for_today(only)

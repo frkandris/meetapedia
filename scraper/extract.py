@@ -81,6 +81,18 @@ async def _sleep(seconds: float) -> None:
     await asyncio.sleep(seconds)
 
 
+#: provider:model -> monotonic time of its last successful answer, process-wide.
+#: A model that answered real work minutes ago has proven everything preflight
+#: would; probing it again every two-hour pass spent ~80 requests a day per
+#: model, most of Cloudflare's 100-request day.
+_LAST_SERVED: dict[str, float] = {}
+_PREFLIGHT_FRESH_S = 3 * 3600
+
+
+def _served_key(primary) -> str:
+    return f"{getattr(primary, 'provider', '?')}:{getattr(primary, 'model', '')}"
+
+
 def _prompt_hash(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:12]
 
@@ -1627,6 +1639,7 @@ class FallbackExtractor:
                 try:
                     result = await getattr(primary, method)(*args, **kwargs)
                     self._note_attempt(_t0)
+                    _LAST_SERVED[_served_key(primary)] = time.monotonic()
                     self._consecutive_failures = 0
                     self._provider_failures[i] = 0
                     self._provider_success_gen[i] += 1
@@ -2004,6 +2017,10 @@ class FallbackExtractor:
                 # once; 41 calls a day, all refused, none of them necessary.
                 live.append(label + " (no budget)")
                 continue
+            served = _LAST_SERVED.get(_served_key(primary))
+            if served is not None and time.monotonic() - served < _PREFLIGHT_FRESH_S:
+                live.append(label + " (recently served)")
+                continue
             try:
                 await primary.extract(
                     text=self._PREFLIGHT_TEXT, city="Preflight", topic="running",
@@ -2011,6 +2028,7 @@ class FallbackExtractor:
                 )
                 self._note_router(primary, ok=True,
                                   tokens=getattr(primary, "last_tokens", 0))
+                _LAST_SERVED[_served_key(primary)] = time.monotonic()
                 live.append(label)
             except ExtractorRateLimitError as exc:
                 # Rate limited ≠ broken; leave it enabled and let the ledger

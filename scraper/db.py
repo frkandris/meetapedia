@@ -1757,6 +1757,15 @@ def get_city_topic_states(db_path: Path, current_fp: str) -> dict[str, dict[str,
     return result
 
 
+def get_searched_pairs(db_path: Path) -> set[tuple[str, str]]:
+    """Pairs with a saved search — the only ones that can have cached pages."""
+    if not db_path.exists():
+        return set()
+    with _connect(db_path) as conn:
+        rows = conn.execute("SELECT city, topic FROM search_cache").fetchall()
+    return {(row[0], row[1]) for row in rows}
+
+
 def get_collected_pairs(db_path: Path, max_pages: int) -> set[tuple[str, str]]:
     """Pairs whose selected search results have all had a fetch attempt."""
     del max_pages  # retained in the public signature for compatibility
