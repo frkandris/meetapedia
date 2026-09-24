@@ -180,3 +180,92 @@ def test_shared_client_is_keyed_by_the_loop_object_not_its_id():
     gc.collect()
     assert len(search_mod._shared_clients) == 0, (
         "entries must be released with their loop, not pinned for the process")
+
+
+class _Resp:
+    def __init__(self, data):
+        self.status_code, self._data = 200, data
+
+    def json(self):
+        return self._data
+
+
+def _queue(monkeypatch, polls):
+    """A DataForSEO stand-in: counts task_posts, answers task_gets from `polls`."""
+    calls = {"posts": 0}
+
+    class FakeClient:
+        is_closed = False
+
+        async def post(self, url, json, headers):
+            calls["posts"] += 1
+            return _Resp({"status_code": 20000,
+                          "tasks": [{"id": "task-1", "status_code": 20100}]})
+
+        async def get(self, url, headers):
+            status = polls.pop(0) if polls else 40602
+            return _Resp({"tasks": [{"status_code": status, "result": []}]})
+
+    monkeypatch.setattr("scraper.search.httpx.AsyncClient", lambda **kwargs: FakeClient())
+    monkeypatch.setattr("scraper.search.DataForSEOClient._STANDARD_POLL_SECONDS", 0)
+    monkeypatch.setattr("scraper.search._PENDING_TASKS", {})
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_no_search_results_is_an_empty_answer_not_a_wait(monkeypatch):
+    """40102 kept the poll going for the whole window, then raised — so the
+    empty search was bought again every run (review, 2026-09-24).
+    """
+    calls = _queue(monkeypatch, [40602, 40102])
+    client = DataForSEOClient("l", "p", mode="standard", standard_priority=2,
+                              rate_limit_seconds=0)
+    assert await client.search("running Pécs", locale="hu") == []
+    assert calls["posts"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_timed_out_task_is_resumed_not_paid_for_again(monkeypatch):
+    """DataForSEO charges at task_post; a task still queued at the deadline was
+    forgotten and the next pass posted it again.
+    """
+    import scraper.search as search_mod
+
+    polls: list[int] = []  # empty: the queue answers "still queued"
+    calls = _queue(monkeypatch, polls)
+    monkeypatch.setattr("scraper.search.DataForSEOClient._STANDARD_TIMEOUT_SECONDS", 0.01)
+    client = DataForSEOClient("l", "p", mode="standard", standard_priority=2,
+                              rate_limit_seconds=0)
+    with pytest.raises(SearchUnavailableError):
+        await client.search("running Pécs", locale="hu")
+    assert search_mod._PENDING_TASKS, "the timed-out task must be remembered"
+
+    polls.append(20000)  # the task has finished by the next pass
+    assert await client.search("running Pécs", locale="hu") == []
+    assert calls["posts"] == 1
+    assert not search_mod._PENDING_TASKS
+
+
+@pytest.mark.asyncio
+async def test_blocked_urls_do_not_count_toward_stop_after():
+    """Only fetchable URLs are worth stopping for; a Facebook result is never
+    fetched, and counting it paid for a query whose results went unused.
+    """
+    from scraper.models import SearchResult
+    from scraper.search import FallbackSearchClient
+
+    class _Provider:
+        def __init__(self):
+            self.queries = []
+
+        async def search(self, query, locale="en", num_results=10):
+            self.queries.append(query)
+            n = len(self.queries)
+            return [SearchResult(url=f"https://facebook.com/{n}", title=""),
+                    SearchResult(url=f"https://klub{n}.test/", title="")]
+
+    provider = _Provider()
+    client = FallbackSearchClient([provider])
+    await client.search_all(["q1", "q2", "q3"], stop_after=2,
+                            usable=lambda u: "facebook.com" not in u)
+    assert provider.queries == ["q1", "q2"]

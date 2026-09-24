@@ -1,4 +1,5 @@
 import asyncio
+import json
 import weakref
 
 import structlog
@@ -92,6 +93,15 @@ LOCALE_TO_DATAFORSEO_LOCATION: dict[str, int] = {
     "zh": 2156,   # China (Taipei rides along; keyword carries the city)
     "id": 2360,   # Indonesia
 }
+
+#: Posted DataForSEO tasks not yet collected: request -> (task id, posted at).
+#: DataForSEO keeps a task's result for days, so a resumed poll costs nothing.
+_PENDING_TASKS: dict[str, tuple[str, float]] = {}
+_PENDING_TASK_MAX_AGE_S = 24 * 3600
+#: task_get statuses that mean "still working": 0 is an empty or unreadable
+#: answer, 40601 "Task Handed", 40602 "Task in Queue".
+_TASK_PENDING_STATUSES = (0, 40601, 40602)
+
 
 class DataForSEOClient:
     """DataForSEO Google Organic SERP.
@@ -219,8 +229,60 @@ class DataForSEOClient:
 
     async def _search_standard(self, task: dict, query: str,
                                num_results: int) -> list[SearchResult]:
-        """Queue-mode search: task_post ($0.6/1K) then poll task_get until done."""
+        """Queue-mode search: task_post ($0.6/1K) then poll task_get until done.
+
+        DataForSEO charges at task_post. A task still queued when the poll
+        window closes used to be forgotten, so the next pass posted — and paid
+        for — the same search again. It is remembered per process and resumed.
+        """
+        import time
         headers = {"Authorization": self._auth_header, "Content-Type": "application/json"}
+        key = json.dumps(task, sort_keys=True)
+        pending = _PENDING_TASKS.get(key)
+        if pending and time.time() - pending[1] < _PENDING_TASK_MAX_AGE_S:
+            task_id = pending[0]
+            log.info("dataforseo_task_resumed", query=query, task_id=task_id)
+        else:
+            task_id = await self._post_task(task, query, headers)
+            _PENDING_TASKS[key] = (task_id, time.time())
+
+        budget = (self._STANDARD_TIMEOUT_SECONDS if self.standard_priority >= 2
+                  else self._NORMAL_PRIORITY_TIMEOUT_SECONDS)
+        deadline = time.monotonic() + budget
+        while time.monotonic() < deadline:
+            await asyncio.sleep(self._STANDARD_POLL_SECONDS)
+            try:
+                client = shared_client()
+                poll = await client.get(f"{self._TASK_GET}/{task_id}", headers=headers)
+                pdata = poll.json()
+            except Exception as exc:
+                log.warning("dataforseo_task_get_failed", query=query, error=str(exc))
+                continue
+            ptasks = pdata.get("tasks") or []
+            status = ptasks[0].get("status_code", 0) if ptasks else 0
+            if status in _TASK_PENDING_STATUSES:
+                continue
+            _PENDING_TASKS.pop(key, None)
+            if status == 20000:
+                results = self._parse_tasks(pdata)
+                log.info("dataforseo_results", query=query, found=len(results), mode="standard")
+                return results[:num_results]
+            if status == 40102:
+                # "No Search Results": a finished, empty SERP — a result, and
+                # cacheable. It used to keep polling for the whole window, then
+                # raise, so the empty search was bought again every run.
+                log.info("dataforseo_results", query=query, found=0, mode="standard")
+                return []
+            if status == 40201:
+                raise SearchQuotaError("DataForSEO: task quota exhausted (40201)")
+            message = ptasks[0].get("status_message", "") if ptasks else ""
+            raise SearchUnavailableError(f"DataForSEO task status {status} {message}".strip())
+        log.warning("dataforseo_task_timeout", query=query, task_id=task_id,
+                    waited_s=round(budget), priority=self.standard_priority,
+                    note="kept; the next attempt resumes it instead of paying again")
+        raise SearchUnavailableError("DataForSEO standard task timed out")
+
+    async def _post_task(self, task: dict, query: str, headers: dict) -> str:
         try:
             client = shared_client()
             resp = await client.post(
@@ -257,32 +319,7 @@ class DataForSEOClient:
             log.warning("dataforseo_task_post_no_id", query=query,
                         status=data.get("status_code"))
             raise SearchUnavailableError("DataForSEO task_post returned no task id")
-
-        import time
-        budget = (self._STANDARD_TIMEOUT_SECONDS if self.standard_priority >= 2
-                  else self._NORMAL_PRIORITY_TIMEOUT_SECONDS)
-        deadline = time.monotonic() + budget
-        while time.monotonic() < deadline:
-            await asyncio.sleep(self._STANDARD_POLL_SECONDS)
-            try:
-                client = shared_client()
-                poll = await client.get(f"{self._TASK_GET}/{task_id}", headers=headers)
-                pdata = poll.json()
-            except Exception as exc:
-                log.warning("dataforseo_task_get_failed", query=query, error=str(exc))
-                continue
-            ptasks = pdata.get("tasks") or []
-            status = ptasks[0].get("status_code", 0) if ptasks else 0
-            if status == 20000:
-                results = self._parse_tasks(pdata)
-                log.info("dataforseo_results", query=query, found=len(results), mode="standard")
-                return results[:num_results]
-            if status == 40201:
-                raise SearchQuotaError("DataForSEO: task quota exhausted (40201)")
-            # 40601/40602 = task queued / in progress — keep polling
-        log.warning("dataforseo_task_timeout", query=query, task_id=task_id,
-                    waited_s=round(budget), priority=self.standard_priority)
-        raise SearchUnavailableError("DataForSEO standard task timed out")
+        return task_id
 
     async def search_all(
         self,
@@ -393,12 +430,17 @@ class FallbackSearchClient:
 
     async def search_all(self, queries: list[str], locale: str = "en",
                          num_results: int = 10,
-                         stop_after: int | None = None) -> list[SearchResult]:
+                         stop_after: int | None = None,
+                         usable=None) -> list[SearchResult]:
         """Run queries left-to-right across providers, deduplicating by URL.
 
         stop_after: stop issuing further (paid) queries once this many unique
         results have been collected. The pipeline caps fetched pages anyway, so
         extra queries past that point only cost money. None = run all queries.
+        usable: optional `url -> bool`; only URLs it accepts count toward
+        `stop_after`. A blocked social URL will never be fetched, so counting
+        it bought a second query for 40% of pairs whose extra results were
+        never used.
 
         Failover semantics: quota error blocks the provider and the *remaining*
         queries move to the next one (already-collected results are kept). If a
@@ -421,7 +463,9 @@ class FallbackSearchClient:
             provider_done: list[str] = []
             try:
                 for query in remaining:
-                    if stop_after is not None and len(combined) >= stop_after:
+                    if stop_after is not None and sum(
+                            1 for r in combined
+                            if usable is None or usable(r.url)) >= stop_after:
                         log.info("search_stop_after_reached", collected=len(combined),
                                  skipped_queries=len(remaining) - len(provider_done))
                         return combined

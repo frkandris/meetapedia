@@ -3,6 +3,13 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-24
+- **Cost**: DataForSEO, for when collection runs again. A standard task still queued when the
+  25-minute poll window closed was forgotten and posted — and paid for — again on the next pass; it
+  is now remembered and resumed. 40102 "No Search Results" kept the poll going for the whole window
+  and then raised, so an empty search was bought on every run; it is now a cached empty answer, and
+  any other unexpected status fails at once. `stop_after` counts only fetchable URLs and stops at
+  `search_max_pages`: counting blocked social URLs toward twice that bought a second query for 40%
+  of pairs (21,479 of 54,326 cached searches hold more than one query's results).
 - **Fix**: Router quota accounting. `near_daily` counted refusals as calls, so a morning of
   per-minute 429s read as "near the daily cap" and the next 429 pinned a daily ceiling that later
   unlearned — 31 learned / 24 unlearned in 36 h, each cycle idling a provider with quota left. It now

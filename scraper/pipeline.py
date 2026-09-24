@@ -14,7 +14,7 @@ from .extract import (DeepSeekExtractor, ExtractorContentError,
                       get_venue_fingerprint)
 from .false_positives import build_prompt_section
 from .false_positives import load as load_false_positives
-from .fetch import fetch_and_clean
+from .fetch import _is_blocked, fetch_and_clean
 from .search import (DataForSEOClient, FallbackSearchClient, SearchQuotaError,
                      SearchUnavailableError, build_queries)
 from .db import get_daily_counters_with_prefix, get_search_cache, save_search_cache, mark_search_collection_complete, get_collected_pairs, get_searched_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs
@@ -1213,7 +1213,8 @@ async def _prefetch_searches(
                 results = await searxng.search_all(
                     queries, locale=city.locale,
                     num_results=config.search_results_per_query,
-                    stop_after=config.search_max_pages * 2,
+                    stop_after=config.search_max_pages,
+                    usable=lambda url: not _is_blocked(url, config.fetch_blocked_domains),
                 )
             except (SearchQuotaError, SearchUnavailableError) as exc:
                 out[(city.name, topic.name)] = exc
@@ -1368,7 +1369,8 @@ async def _run_full(
                         raise _pre
                     search_results = _pre if _pre is not None else await searxng.search_all(
                         queries, locale=city.locale, num_results=config.search_results_per_query,
-                        stop_after=config.search_max_pages * 2,
+                        stop_after=config.search_max_pages,
+                        usable=lambda url: not _is_blocked(url, config.fetch_blocked_domains),
                     )
                 except (SearchQuotaError, SearchUnavailableError) as exc:
                     pair_logs.append({**_new_pair_log(city.name, topic.name, queries),

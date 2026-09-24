@@ -97,7 +97,7 @@ def test_empty_search_result_is_cached(tmp_path):
     class FakeFallback:
         exhausted = False
         def __init__(self, primaries): ...
-        async def search_all(self, queries, locale="en", num_results=10, stop_after=None):
+        async def search_all(self, queries, locale="en", num_results=10, stop_after=None, usable=None):
             return []
 
     with patch("scraper.pipeline.FallbackSearchClient", FakeFallback):

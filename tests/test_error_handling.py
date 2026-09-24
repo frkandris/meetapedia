@@ -583,7 +583,7 @@ def test_a_citys_searches_are_issued_together(tmp_path):
         peak = 0
         exhausted = False
 
-        async def search_all(self, queries, locale="en", num_results=10, stop_after=None):
+        async def search_all(self, queries, locale="en", num_results=10, stop_after=None, usable=None):
             _Slow.in_flight += 1
             _Slow.peak = max(_Slow.peak, _Slow.in_flight)
             await asyncio.sleep(0.02)
@@ -607,7 +607,7 @@ def test_a_prefetched_search_is_saved_even_if_never_consumed(tmp_path):
     class _Ok:
         exhausted = False
 
-        async def search_all(self, queries, locale="en", num_results=10, stop_after=None):
+        async def search_all(self, queries, locale="en", num_results=10, stop_after=None, usable=None):
             return [SearchResult(url="https://a.test", title="t", snippet="s")]
 
     out = asyncio.run(_prefetch_searches(_Ok(), [(city, topic)], cfg, concurrency=2))
