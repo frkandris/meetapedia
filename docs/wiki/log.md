@@ -3,6 +3,13 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-24
+- **Deprecation**: Dead code removed after grep-verifying no callers: `scraper/vcs.py`,
+  `scraper/migrate_json.py` (a one-off JSON import that would overwrite current cache rows if
+  run), `scraper/fix_leaked_names.py`, the dormant Playwright fetcher (its package was never in
+  the image), the unreachable quality-upgrade sweep and its `upgrade_*` router settings, the
+  enrichment `deadline` plumbing, the unused `POST /admin/progress/clear-all` (one request wiped
+  every community and the cache) and `POST /cities/request`, and ~20 unused helpers in `db.py`,
+  `cache.py`, `app.py`, `extract.py`, `router.py` and `models.py`.
 - **Fix**: Public web, from the review. meetapedia.com's sitemap held 64,666 URLs in one file
   (the protocol's limit is 50,000, and a file over it is rejected whole); `/sitemap.xml` is now a
   sitemap index above 45,000 URLs. Site-wide topic pages rendered every record of every city

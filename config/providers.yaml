@@ -63,14 +63,6 @@ router:
   # providers are also `enabled: false` individually further down, so a paid
   # call now needs three separate reversals rather than one.
   allow_paid: false
-  # Re-extracting an already-processed page is only ever a filler for quota that
-  # would otherwise expire unused. New pages always come first; a page is
-  # re-extracted only when an available model scores at least this many points
-  # above the one that produced the cached result.
-  upgrade_min_gain: 8
-  # Hard ceiling on re-extraction calls per run, so an upgrade sweep can never
-  # crowd out the next day's new work.
-  upgrade_max_per_run: 500
   # ── The money ceiling ────────────────────────────────────────────────────
   # What every paid provider together may spend in one UTC day. Reached → paid
   # providers are unavailable until midnight and the day finishes on free

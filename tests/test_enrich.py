@@ -64,27 +64,6 @@ def test_batch_writes_short_and_long(tmp_path):
     assert rec["description"] == "Rövid."  # base extraction field untouched
 
 
-def test_deadline_stops_before_any_paid_call(tmp_path):
-    from datetime import datetime, timedelta, timezone
-    db = _setup(tmp_path)
-    ex = FakeExtractor()
-    past = datetime.now(timezone.utc) - timedelta(minutes=1)
-    stats = asyncio.run(enrich_batch(db, ex, HU, limit=10, fetch_missing=False, deadline=past))
-    assert stats["stopped_at_deadline"] is True
-    assert stats["enriched"] == 0 and ex.calls == 0  # no paid call past the cutoff
-    assert not get_communities(db, "Budapest", "music")[0].get("long_description")
-
-
-def test_future_deadline_does_not_block(tmp_path):
-    from datetime import datetime, timedelta, timezone
-    db = _setup(tmp_path)
-    ex = FakeExtractor()
-    future = datetime.now(timezone.utc) + timedelta(hours=1)
-    stats = asyncio.run(enrich_batch(db, ex, HU, limit=10, fetch_missing=False, deadline=future))
-    assert stats["stopped_at_deadline"] is False
-    assert stats["enriched"] == 1 and ex.calls == 1
-
-
 def test_dry_run_does_not_write(tmp_path):
     db = _setup(tmp_path)
     stats = asyncio.run(enrich_batch(db, FakeExtractor(), HU, limit=10, dry_run=True, fetch_missing=False))

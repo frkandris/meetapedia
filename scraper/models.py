@@ -262,7 +262,3 @@ class PersonRecord(BaseModel):
         return self
 
 
-class RunMetadata(BaseModel):
-    last_run: str
-    records_by_city_topic: dict[str, dict[str, int]] = Field(default_factory=dict)
-    total_records: int = 0

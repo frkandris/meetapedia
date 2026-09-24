@@ -211,9 +211,6 @@ async def _enrich_body(cfg, enrich_batch,
     limit = int(cfg.get("enrich_batch_limit") or 200)
     # No deadline: the batch stops when the fleet runs out of quota and waits
     # out per-minute limits, which is the only thing that ever needed a clock.
-    # The parameter stays on enrich_batch for the off-peak pricing case, should
-    # a paid provider ever return.
-    deadline = None
     total = 0
     try:
         while True:
@@ -230,14 +227,8 @@ async def _enrich_body(cfg, enrich_batch,
             stats = await enrich_batch(
                 app_state.db_path, extractor, scope, limit=limit,
                 fetch_missing=False,
-                blocked_domains=app_state.pipeline_cfg.fetch_blocked_domains,
-                deadline=deadline)
+                blocked_domains=app_state.pipeline_cfg.fetch_blocked_domains)
             total += stats["enriched"]  # count before any early exit
-            if stats.get("stopped_at_deadline"):
-                # Unreachable while `deadline` is None; kept because
-                # enrich_batch owns the contract, not this loop.
-                log.info("enrich_deadline_reached", enriched_this_window=total)
-                break
             if stats["pool"] == 0:
                 log.info("enrich_complete", enriched_this_window=total,
                          scope_size=len(scope))

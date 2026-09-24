@@ -750,10 +750,6 @@ class _ApiExtractor:
     def person_fingerprint(self) -> str:
         return _prompt_hash(get_prompt("person_system") + self.fingerprint_model)
 
-    @property
-    def enrich_fingerprint(self) -> str:
-        return _prompt_hash(get_prompt("enrich_system") + self.fingerprint_model)
-
     #: Whether this provider accepts `response_format: {"type": "json_object"}`.
     #: Subclasses covering free providers flip this off per model — several of
     #: them reject the field with a 400, which the chain would count as a
@@ -1276,9 +1272,6 @@ class DeepSeekExtractor(_ApiExtractor):
         super().__init__(api_key, model, temperature, timeout_seconds, max_text_chars,
                          rate_limit_seconds, fingerprint_model=fingerprint_model)
         self.max_output_tokens = max_output_tokens
-
-
-_GROQ_RETRY_DEFAULT_WAIT = _API_RETRY_DEFAULT_WAIT
 
 
 class FallbackExtractor:
@@ -1887,16 +1880,6 @@ class FallbackExtractor:
         return self.primaries[0].model_fingerprint if self.primaries else ""
 
     @property
-    def venue_fingerprint(self) -> str:
-        idx = self._first_available()
-        return self.primaries[idx].venue_fingerprint if idx is not None else (self.primaries[0].venue_fingerprint if self.primaries else "")
-
-    @property
-    def person_fingerprint(self) -> str:
-        idx = self._first_available()
-        return self.primaries[idx].person_fingerprint if idx is not None else (self.primaries[0].person_fingerprint if self.primaries else "")
-
-    @property
     def canonical_venue_fingerprint(self) -> str:
         """primaries[0]'s venue fingerprint — same rationale as canonical_fingerprint:
         venue results extracted by the fallback provider must be cached under the
@@ -1907,11 +1890,6 @@ class FallbackExtractor:
     def canonical_person_fingerprint(self) -> str:
         """primaries[0]'s person fingerprint — see canonical_venue_fingerprint."""
         return self.primaries[0].person_fingerprint if self.primaries else ""
-
-    @property
-    def enrich_fingerprint(self) -> str:
-        idx = self._first_available()
-        return self.primaries[idx].enrich_fingerprint if idx is not None else (self.primaries[0].enrich_fingerprint if self.primaries else "")
 
     @property
     def model(self) -> str:

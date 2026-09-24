@@ -708,28 +708,6 @@ class ModelRouter:
         waits = [w for w in (self.pace_wait(e) for e in self._all) if w > 0]
         return min(waits) if waits else 0.0
 
-    def quality_of(self, extractor) -> int:
-        return int(getattr(extractor, "quality", 0) or 0)
-
-    def upgrade_threshold(self) -> int:
-        """Cached-extraction quality below which a re-run is worth a request.
-
-        A page is only re-extracted when the best model we can currently reach
-        scores at least `upgrade_min_gain` points above whatever produced the
-        cached result. Below that the expected gain does not justify spending a
-        request that new pages could use.
-
-        Can legitimately be 0 when the best available model scores at or under
-        `upgrade_min_gain` — that means "nothing is worth upgrading", which the
-        candidate query expresses naturally (`quality < 0` matches nothing).
-        Callers must not read 0 as "no capacity"; use `best_available_quality()`
-        for that.
-        """
-        best = self.best_available_quality()
-        gain = max(0, self.catalogue.router.upgrade_min_gain)
-        return max(0, best - gain)
-
-
 def build_router(
     db_path: Path | None,
     *,

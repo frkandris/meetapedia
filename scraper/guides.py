@@ -36,8 +36,6 @@ _PROMPT_VERSION = "guide-writer-v2"
 # different verb — name, interpret, advise, disclose — and the validator
 # enforces that no sentence is shared between them.
 _SECTIONS = ("orientation", "practicalities", "choosing_advice", "gaps")
-_LEGACY_SECTIONS = ("introduction", "comparison", "choosing_advice", "conclusion")
-
 # Calibrated on the ten v1 articles published 2026-09-20/21, every one of which
 # this gate rejects. See docs/wiki/pages/post-mortems/.
 _MAX_SHINGLE_REPEATS = 4     # worst v1 article: 13

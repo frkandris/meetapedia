@@ -62,7 +62,6 @@ fetch:
     - linkedin.com
     - youtube.com
     - reddit.com
-  playwright_domains: []
 
 pipeline:
   # Order the worker walks countries in. A run ends when the work signal flips

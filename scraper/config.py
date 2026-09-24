@@ -75,7 +75,6 @@ def load_config_from_docs(
         fetch_min_text_length=settings["fetch"]["min_text_length"],
         fetch_max_concurrent=settings["fetch"]["max_concurrent"],
         fetch_blocked_domains=settings["fetch"].get("blocked_domains", []),
-        fetch_playwright_domains=settings["fetch"].get("playwright_domains", []),
         db_path=db_path,
         cache_skip_scraped=cache_cfg.get("skip_scraped", True),
         cache_skip_extracted=cache_cfg.get("skip_extracted", True),

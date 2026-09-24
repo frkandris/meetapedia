@@ -25,7 +25,6 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ..config import load_config
 from ..db import (
-    delete_all_communities,
     get_sitemap_communities,
     find_community_by_id,
     get_extraction_quality_mix,
@@ -64,7 +63,6 @@ from ..db import (
     get_all_persons,
     get_person_counts,
     get_person_history,
-    get_scope_stats,
     get_prompt_overrides,
     upsert_prompt_override,
     delete_prompt_override,
@@ -4378,13 +4376,6 @@ def _hu_topic_counts() -> dict[str, int]:
     return get_topic_counts_for_cities(_db(), hu)
 
 
-def _top_cities(n: int = 8) -> list[tuple[str, str, int]]:
-    city_totals = get_city_totals(_db())
-    cities_map = {c.name: c.country for c in (app_state.cities or [])}
-    return [(name, cities_map.get(name, ""), count)
-            for name, count in city_totals[:n] if count > 0]
-
-
 # ISO-3166-1 alpha-2 → country name as used in cities.yaml
 _ISO2_COUNTRY: dict[str, str] = {
     "AR": "Argentina", "AU": "Australia", "AT": "Austria", "BE": "Belgium",
@@ -4443,55 +4434,6 @@ def _detect_country(request: Request) -> str | None:
             if code and code in _ISO2_COUNTRY:
                 return _ISO2_COUNTRY[code]
     return None
-
-
-def _cities_by_country(
-    user_country: str | None,
-    user_top: int = 20,
-    other_countries: int = 3,
-    other_top: int = 8,
-) -> dict:
-    """Return grouped city data for the home page city browser."""
-    city_totals = dict(get_city_totals(_db()))
-    cities_map = {c.name: c.country for c in (app_state.cities or [])}
-
-    # Group by country
-    country_cities: dict[str, list[tuple[str, int]]] = {}
-    for name, country in cities_map.items():
-        count = city_totals.get(name, 0)
-        if count > 0:
-            country_cities.setdefault(country, []).append((name, count))
-
-    for cities_list in country_cities.values():
-        cities_list.sort(key=lambda x: x[1], reverse=True)
-
-    user_cities: list[tuple[str, str, int]] = []
-    if user_country and user_country in country_cities:
-        user_cities = [
-            (name, user_country, count)
-            for name, count in country_cities[user_country][:user_top]
-        ]
-
-    # Top other countries by total community count
-    other_sorted = sorted(
-        [(c, cities) for c, cities in country_cities.items() if c != user_country],
-        key=lambda x: sum(cnt for _, cnt in x[1]),
-        reverse=True,
-    )
-    other_sections = [
-        {
-            "country": country,
-            "cities": [(name, country, count) for name, count in cities[:other_top]],
-            "total": sum(cnt for _, cnt in cities),
-        }
-        for country, cities in other_sorted[:other_countries]
-    ]
-
-    return {
-        "user_country": user_country,
-        "user_cities": user_cities,
-        "other_sections": other_sections,
-    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -5379,11 +5321,6 @@ async def request_city(request: Request, city_name: str = Form(""), email: str =
     return RedirectResponse("/varosok?requested=" + city_name.strip(), status_code=303)
 
 
-@_fastapi.post("/cities/request")
-async def request_city_en(request: Request, city_name: str = Form(""), email: str = Form("")):
-    return RedirectResponse("/varosok", status_code=301)
-
-
 @_fastapi.get("/admin", response_class=HTMLResponse)
 async def admin_root_redirect():
     return RedirectResponse("/admin/", status_code=301)
@@ -5764,67 +5701,6 @@ def _render_urlset(entries: list[tuple[str, str | None]]) -> str:
 # ADMIN ROUTES  (prefix: /admin, protected by _BasicAuth)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _get_run_scopes() -> dict:
-    """Compute expected search/fetch/AI call counts for each Run Now preset."""
-    from ..extract import _prompt_hash, get_prompt as _ep
-    cfg = app_state.pipeline_cfg
-    if not cfg or not app_state.db_path:
-        return {}
-    # Best currently active model (same priority as pipeline extractor selection)
-    if cfg.deepseek_api_key:
-        model = cfg.deepseek_model or "deepseek-chat"
-    else:
-        return {}
-    try:
-        extract_fp = _prompt_hash(_ep("extraction_system") + model)
-        venue_fp   = _prompt_hash(_ep("venue_system") + model)
-        person_fp  = _prompt_hash(_ep("person_system") + model)
-        stats = get_scope_stats(app_state.db_path, extract_fp, venue_fp, person_fp)
-        hu_names = list(_hu_city_names())
-        stats_hu = get_scope_stats(app_state.db_path, extract_fp, venue_fp, person_fp, cities=hu_names) if hu_names else {"with_text": 0, "extract_match": 0, "venue_match": 0, "person_match": 0}
-    except Exception:
-        return {}
-    n              = stats["with_text"]
-    extract_needed = n - stats["extract_match"]
-    venue_needed   = n - stats["venue_match"]
-    person_needed  = n - stats["person_match"]
-    n_hu              = stats_hu["with_text"]
-    extract_needed_hu = n_hu - stats_hu["extract_match"]
-    venue_needed_hu   = n_hu - stats_hu["venue_match"]
-    person_needed_hu  = n_hu - stats_hu["person_match"]
-    city_count     = len(app_state.cities or [])
-    topic_count    = len(app_state.topics or [])
-    hu_city_count  = len(hu_names)
-    search_pairs   = city_count * topic_count
-    search_pairs_hu = hu_city_count * topic_count
-    return {
-        "smart": {
-            "search":    search_pairs,
-            "search_hu": search_pairs_hu,
-            "fetch":     None,
-            "fetch_hu":  None,
-            "ai":        extract_needed + venue_needed + person_needed,
-            "ai_hu":     extract_needed_hu + venue_needed_hu + person_needed_hu,
-        },
-        "rebuild": {
-            "search":    search_pairs,
-            "search_hu": search_pairs_hu,
-            "fetch":     n,
-            "fetch_hu":  n_hu,
-            "ai":        n + venue_needed + person_needed,
-            "ai_hu":     n_hu + venue_needed_hu + person_needed_hu,
-        },
-        "reai": {
-            "search":    0,
-            "search_hu": 0,
-            "fetch":     0,
-            "fetch_hu":  0,
-            "ai":        n + venue_needed + person_needed,
-            "ai_hu":     n_hu + venue_needed_hu + person_needed_hu,
-        },
-    }
-
-
 @admin.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     next_run = None
@@ -5966,7 +5842,6 @@ async def providers_page(request: Request):
         "day": day,
         "router_enabled": catalogue.router.enabled,
         "allow_paid": catalogue.router.allow_paid,
-        "upgrade_min_gain": catalogue.router.upgrade_min_gain,
         "configured_count": sum(1 for p in providers if p["configured"]),
         "quality_mix": quality_mix,
         "paid_budget_usd": paid_budget,
@@ -7042,15 +6917,6 @@ async def cache_delete_extracted(url_hash: str):
 async def cache_delete_entry(url_hash: str):
     if app_state.cache_manager:
         app_state.cache_manager.delete_entry(url_hash)
-    return RedirectResponse("/admin/progress", status_code=302)
-
-
-@admin.post("/progress/clear-all")
-async def cache_clear_all():
-    if app_state.cache_manager:
-        app_state.cache_manager.clear_all()
-    deleted = delete_all_communities(_db())
-    log.info("clear_all_data", deleted_communities=deleted)
     return RedirectResponse("/admin/progress", status_code=302)
 
 

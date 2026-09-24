@@ -32,7 +32,7 @@ _RATE_LIMIT = main_mod._ENRICH_RATE_LIMIT_PAUSE_S
 def _stats(**kw):
     """One `enrich_batch` return value. Defaults are a productive round."""
     base = {"enriched": 3, "failed": 0, "pool": 5, "skipped": 0, "no_source": 0,
-            "stopped_at_deadline": False, "stopped_rate_limited": False,
+            "stopped_rate_limited": False,
             "stopped_no_provider": False}
     base.update(kw)
     return base

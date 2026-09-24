@@ -806,26 +806,6 @@ def finish_run(
         conn.commit()
 
 
-def record_run(
-    db_path: Path,
-    started_at: datetime,
-    finished_at: datetime,
-    run_mode: str,
-    success: bool,
-    search_log: str | None = None,
-    new_records: int = 0,
-) -> int:
-    with _connect(db_path) as conn:
-        cur = conn.execute(
-            "INSERT INTO runs (started_at, finished_at, run_mode, success, search_log, new_records) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (started_at.isoformat(), finished_at.isoformat(),
-             run_mode, int(success), search_log, new_records),
-        )
-        conn.commit()
-        return cur.lastrowid
-
-
 def get_last_run_row(db_path: Path) -> dict | None:
     """Return the most recent run row regardless of success/completion."""
     if not db_path.exists():
@@ -842,19 +822,6 @@ def get_last_run_row(db_path: Path) -> dict | None:
     except Exception:
         return None
     return None
-
-
-def get_last_run_mode(db_path: Path) -> str | None:
-    if not db_path.exists():
-        return None
-    try:
-        with _connect(db_path) as conn:
-            row = conn.execute(
-                "SELECT run_mode FROM runs WHERE success=1 ORDER BY id DESC LIMIT 1"
-            ).fetchone()
-            return row[0] if row else None
-    except Exception:
-        return None
 
 
 def get_last_run(db_path: Path) -> datetime | None:
@@ -1280,12 +1247,6 @@ def mark_enrichment_attempted(db_path: Path, record_key: str) -> None:
         d["enrich_attempted_at"] = datetime.now(timezone.utc).isoformat()
         conn.execute("UPDATE communities SET data=? WHERE record_key=?",
                      (json.dumps(d, ensure_ascii=False), record_key))
-        conn.commit()
-
-
-def delete_communities_for_topic(db_path: Path, city: str, topic: str) -> None:
-    with _connect(db_path) as conn:
-        conn.execute("DELETE FROM communities WHERE city=? AND topic=?", (city, topic))
         conn.commit()
 
 
@@ -2027,13 +1988,6 @@ def get_total_community_count(db_path: Path) -> int:
     return row[0] if row else 0
 
 
-def delete_all_communities(db_path: Path) -> int:
-    with _connect(db_path) as conn:
-        cur = conn.execute("DELETE FROM communities")
-        conn.commit()
-        return cur.rowcount
-
-
 # ── Cache pages ───────────────────────────────────────────────────────────────
 
 #: `records_count` for a page that has been scraped but never extracted.
@@ -2188,13 +2142,6 @@ def delete_cache_page(db_path: Path, url_hash: str) -> bool:
         return cur.rowcount > 0
 
 
-def clear_all_cache_pages(db_path: Path) -> int:
-    with _connect(db_path) as conn:
-        cur = conn.execute("DELETE FROM cache_pages")
-        conn.commit()
-        return cur.rowcount
-
-
 def invalidate_extraction_cache(
     db_path: Path,
     city: str | None = None,
@@ -2333,83 +2280,6 @@ def get_cache_index(db_path: Path) -> list[dict]:
             entry[k] = entry[k] or ""
         entries.append(entry)
     return entries
-
-
-def get_all_scraped_cache(db_path: Path) -> list[tuple[str, str, str, str]]:
-    """Returns (url, raw_text, city, topic) for all cached pages with raw_text."""
-    if not db_path.exists():
-        return []
-    with _connect(db_path) as conn:
-        rows = conn.execute(
-            "SELECT data FROM cache_pages WHERE scraped_at IS NOT NULL"
-        ).fetchall()
-    result = []
-    for (data_json,) in rows:
-        try:
-            entry = json.loads(data_json)
-        except Exception:
-            entry = None
-        if isinstance(entry, dict) and entry.get("raw_text"):
-            result.append((
-                entry["url"],
-                entry["raw_text"],
-                entry.get("city", ""),
-                entry.get("topic", ""),
-            ))
-    return result
-
-
-def get_scraped_cache_by_search_pair(db_path: Path) -> list[tuple[str, str, str, str]]:
-    """Return scraped pages attributed by authoritative search-cache URL lists.
-
-    A URL may belong to several pairs, so it may occur more than once. Cached
-    pages absent from search_cache (for example manual submissions) fall back
-    to their denormalized city/topic metadata.
-    """
-    import hashlib
-
-    if not db_path.exists():
-        return []
-    with _connect(db_path) as conn:
-        page_rows = conn.execute(
-            "SELECT url_hash, data FROM cache_pages WHERE scraped_at IS NOT NULL"
-        ).fetchall()
-        search_rows = conn.execute("SELECT city, topic, urls FROM search_cache").fetchall()
-
-    pages: dict[str, tuple[str, str, str, str]] = {}
-    for url_hash, data_json in page_rows:
-        try:
-            entry = json.loads(data_json)
-        except (TypeError, json.JSONDecodeError):
-            continue
-        if isinstance(entry, dict) and entry.get("raw_text") and entry.get("url"):
-            pages[url_hash] = (
-                entry["url"],
-                entry["raw_text"],
-                entry.get("city", ""),
-                entry.get("topic", ""),
-            )
-
-    result: list[tuple[str, str, str, str]] = []
-    linked_hashes: set[str] = set()
-    linked_pairs: set[tuple[str, str, str]] = set()
-    for city, topic, urls_json in search_rows:
-        try:
-            urls = json.loads(urls_json) if urls_json else []
-        except (TypeError, json.JSONDecodeError):
-            continue
-        for url in urls:
-            url_hash = hashlib.sha256(url.encode()).hexdigest()[:16]
-            page = pages.get(url_hash)
-            pair_key = (url_hash, city, topic)
-            if not page or pair_key in linked_pairs:
-                continue
-            result.append((page[0], page[1], city, topic))
-            linked_hashes.add(url_hash)
-            linked_pairs.add(pair_key)
-
-    result.extend(page for url_hash, page in pages.items() if url_hash not in linked_hashes)
-    return result
 
 
 def get_scraped_cache_for_search_pair(
@@ -2680,30 +2550,6 @@ def get_covered_pairs(db_path: Path) -> set[tuple[str, str]]:
     with _connect(db_path) as conn:
         rows = conn.execute("SELECT city, topic FROM search_cache").fetchall()
     return {(r[0], r[1]) for r in rows}
-
-
-def get_cache_cost_stats(db_path: Path) -> dict:
-    """Return counts of work done: search queries issued, pages fetched, AI extractions run."""
-    empty = {"search_queries": 0, "web_reads": 0, "ai_calls": 0, "search_pairs": 0}
-    if not db_path.exists():
-        return empty
-    with _connect(db_path) as conn:
-        search_pairs = conn.execute("SELECT COUNT(*) FROM search_cache").fetchone()[0]
-        search_q = conn.execute(
-            "SELECT COALESCE(SUM(json_array_length(queries)), 0) FROM search_cache"
-        ).fetchone()[0]
-        web_reads = conn.execute(
-            "SELECT COUNT(*) FROM cache_pages WHERE scraped_at IS NOT NULL"
-        ).fetchone()[0]
-        ai_calls = conn.execute(
-            "SELECT COUNT(*) FROM cache_pages WHERE extracted_at IS NOT NULL"
-        ).fetchone()[0]
-    return {
-        "search_pairs": int(search_pairs),
-        "search_queries": int(search_q),
-        "web_reads": int(web_reads),
-        "ai_calls": int(ai_calls),
-    }
 
 
 # ── Venues ────────────────────────────────────────────────────────────────────
@@ -3031,47 +2877,6 @@ def delete_not_community_report(db_path: Path, report_id: int) -> None:
 
 # ── City requests ──────────────────────────────────────────────────────────────
 
-def get_scope_stats(
-    db_path: Path,
-    extract_fp: str,
-    venue_fp: str,
-    person_fp: str,
-    cities: list[str] | None = None,
-) -> dict:
-    """Count pages that need each type of AI processing given current fingerprints."""
-    if not db_path.exists():
-        return {"with_text": 0, "extract_match": 0, "venue_match": 0, "person_match": 0}
-    city_filter = ""
-    city_params: list = []
-    if cities:
-        placeholders = ",".join("?" * len(cities))
-        city_filter = f" WHERE city IN ({placeholders})"
-        city_params = list(cities)
-    with _connect(db_path) as conn:
-        row = conn.execute(f"""
-            SELECT
-                SUM(CASE WHEN scraped_at IS NOT NULL THEN 1 ELSE 0 END),
-                SUM(CASE WHEN scraped_at IS NOT NULL
-                         AND extract_fingerprint = ? THEN 1 ELSE 0 END),
-                SUM(CASE WHEN scraped_at IS NOT NULL
-                         AND venue_fingerprint = ? THEN 1 ELSE 0 END),
-                SUM(CASE WHEN scraped_at IS NOT NULL
-                         AND person_fingerprint = ? THEN 1 ELSE 0 END),
-                SUM(CASE WHEN scraped_at IS NOT NULL
-                         AND extract_fingerprint = ?
-                         AND venue_fingerprint = ?
-                         AND person_fingerprint = ? THEN 1 ELSE 0 END)
-            FROM cache_pages{city_filter}
-        """, (extract_fp, venue_fp, person_fp, extract_fp, venue_fp, person_fp, *city_params)).fetchone()
-    return {
-        "with_text":     int(row[0] or 0),
-        "extract_match": int(row[1] or 0),
-        "venue_match":   int(row[2] or 0),
-        "person_match":  int(row[3] or 0),
-        "fully_matched": int(row[4] or 0),
-    }
-
-
 def save_city_request(db_path: Path, city_name: str, email: str = "") -> None:
     now = datetime.now(timezone.utc).isoformat()
     with _connect(db_path) as conn:
@@ -3080,16 +2885,6 @@ def save_city_request(db_path: Path, city_name: str, email: str = "") -> None:
             (city_name.strip(), email.strip(), now),
         )
         conn.commit()
-
-
-def get_city_requests(db_path: Path) -> list[dict]:
-    if not db_path.exists():
-        return []
-    with _connect(db_path) as conn:
-        rows = conn.execute(
-            "SELECT id, city_name, email, created_at FROM city_requests ORDER BY created_at DESC"
-        ).fetchall()
-    return [{"id": r[0], "city_name": r[1], "email": r[2], "created_at": r[3]} for r in rows]
 
 
 # ── Duplicate candidates ───────────────────────────────────────────────────────
@@ -3826,50 +3621,6 @@ def is_known_community_url(db_path: Path, community_id: str, url: str) -> bool:
     return False
 
 
-def get_outclick_stats(db_path: Path) -> dict:
-    empty: dict = {"total": 0, "total_30d": 0, "top_communities": [], "by_type": []}
-    if not db_path.exists():
-        return empty
-    with _connect(db_path) as conn:
-        tbl = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='outclick_events'"
-        ).fetchone()
-        if not tbl:
-            return empty
-        total = conn.execute("SELECT COUNT(*) FROM outclick_events").fetchone()[0]
-        total_30d = conn.execute(
-            "SELECT COUNT(*) FROM outclick_events WHERE clicked_at >= datetime('now','-30 days')"
-        ).fetchone()[0]
-        top = conn.execute("""
-            SELECT o.community_id,
-                   json_extract(c.data,'$.name') AS name,
-                   json_extract(c.data,'$.city') AS city,
-                   COUNT(*) AS clicks
-            FROM outclick_events o
-            LEFT JOIN communities c ON c.community_id = o.community_id
-            WHERE o.clicked_at >= datetime('now','-30 days')
-            GROUP BY o.community_id
-            ORDER BY clicks DESC
-            LIMIT 15
-        """).fetchall()
-        by_type = conn.execute("""
-            SELECT link_type, COUNT(*) AS cnt
-            FROM outclick_events
-            WHERE clicked_at >= datetime('now','-30 days')
-            GROUP BY link_type
-            ORDER BY cnt DESC
-        """).fetchall()
-    return {
-        "total": total,
-        "total_30d": total_30d,
-        "top_communities": [
-            {"community_id": r[0], "name": r[1] or r[0], "city": r[2] or "", "clicks": r[3]}
-            for r in top
-        ],
-        "by_type": [{"type": r[0], "cnt": r[1]} for r in by_type],
-    }
-
-
 # ── Daily traffic + report ────────────────────────────────────────────────────
 
 def record_pageview(db_path: Path, day: str, site: str, visitor_hash: str) -> None:
@@ -4363,67 +4114,6 @@ def get_extract_failures(db_path: Path, fingerprint: str | None = None,
         except sqlite3.OperationalError:
             return []
     return [dict(r) for r in rows]
-
-
-def get_upgradable_pages(
-    db_path: Path, min_quality: int, limit: int, fingerprint: str,
-    cities: list[str] | None = None,
-) -> list[dict]:
-    """Cached pages whose extraction came from a model scoring below
-    `min_quality` — candidates for re-extraction with a better free model.
-
-    **NULL `extract_quality` is excluded, not treated as zero.** Every page
-    extracted before the router existed (~74K of them) carries NULL, and those
-    came from the paid incumbent, which scores *above* every free model.
-    Ranking them worst-first would have the sweep overwrite good DeepSeek output
-    with weaker free-model output — a downgrade wearing an upgrade's name. A row
-    only becomes a candidate once a router run has recorded what produced it.
-
-    Ordered worst-first so a bounded sweep spends its budget where the gain is
-    largest. Restricted to the current fingerprint: a page at a stale
-    fingerprint is already scheduled for ordinary re-extraction.
-
-    `cities` restricts the query to the caller's city set. It must be applied
-    **in SQL**, before LIMIT: the caller runs one country group at a time, so
-    filtering afterwards can return an empty result while thousands of eligible
-    pages sit further down a globally-ordered list.
-    """
-    where = ["extracted_at IS NOT NULL", "extract_fingerprint = ?",
-             "extract_quality IS NOT NULL", "extract_quality < ?"]
-    params: list = [fingerprint, min_quality]
-    if cities is not None:
-        if not cities:
-            return []
-        where.append(f"city IN ({','.join('?' * len(cities))})")
-        params.extend(cities)
-    params.append(limit)
-    with _connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            f"""
-            SELECT url, url_hash, city, topic, extract_quality AS q
-              FROM cache_pages
-             WHERE {' AND '.join(where)}
-             ORDER BY q ASC, extracted_at ASC
-             LIMIT ?
-            """,
-            params,
-        ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def set_page_extract_quality(
-    db_path: Path, url_hash: str, quality: int, model: str,
-) -> None:
-    """Stamp which model produced a page's cached extraction, and how good it
-    is. Kept out of every cache key on purpose — the fingerprint must stay
-    stable across providers or the done-pair check falls apart."""
-    with _connect(db_path) as conn:
-        conn.execute(
-            "UPDATE cache_pages SET extract_quality=?, extract_model=? WHERE url_hash=?",
-            (quality, model, url_hash),
-        )
-        conn.commit()
 
 
 def get_extraction_quality_mix(db_path: Path, limit: int = 15) -> list[dict]:

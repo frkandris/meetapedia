@@ -140,8 +140,6 @@ class ProviderSpec:
 class RouterSettings:
     enabled: bool = False
     allow_paid: bool = False
-    upgrade_min_gain: int = 8
-    upgrade_max_per_run: int = 500
     #: Hard ceiling on what every paid provider together may spend in one UTC
     #: day. Reached → paid providers are unavailable until midnight and the
     #: fleet finishes the day on free capacity or stops, which is the ordinary
@@ -357,8 +355,6 @@ def load_catalogue(config_dir: Path | None = None) -> ProviderCatalogue:
     router = RouterSettings(
         enabled=bool(router_raw.get("enabled", False)),
         allow_paid=bool(router_raw.get("allow_paid", False)),
-        upgrade_min_gain=int(router_raw.get("upgrade_min_gain", 8) or 0),
-        upgrade_max_per_run=int(router_raw.get("upgrade_max_per_run", 500) or 0),
         daily_budget_usd=_float(router_raw.get("daily_budget_usd")),
     )
 

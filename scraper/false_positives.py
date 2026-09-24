@@ -11,9 +11,6 @@ from .db import (
     upsert_false_positive,
 )
 
-FP_TYPES = ("extraction", "enrichment", "extraction_rule")
-
-
 def load(db_path: Path) -> list[dict]:
     return get_false_positives(db_path)
 

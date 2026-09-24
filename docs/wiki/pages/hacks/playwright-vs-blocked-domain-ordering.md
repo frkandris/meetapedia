@@ -7,6 +7,9 @@ timestamp: 2026-07-10
 resource: scraper/fetch.py
 ---
 
+> **Obsolete (2026-09-24):** the Playwright fetcher was removed; only the blocked-domain check remains.
+
+
 # Blocked Domains Precede Playwright
 
 *Fixed 2026-07-10: Playwright no longer bypasses blocked-domain or SSRF checks.*

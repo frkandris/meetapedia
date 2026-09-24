@@ -7,14 +7,11 @@ import structlog
 
 from .db import (
     bump_extract_failure,
-    clear_all_cache_pages,
     clear_extract_failure,
     clear_person_cache,
     delete_cache_page,
-    get_all_scraped_cache,
     get_cache_index,
     get_extract_failure_counts,
-    get_scraped_cache_by_search_pair,
     get_scraped_cache_for_search_pair,
     load_cache_page,
     update_cache_page,
@@ -189,14 +186,6 @@ class CacheManager:
 
     # ── Bulk read ────────────────────────────────────────────────────────────
 
-    def get_all_scraped(self) -> list[tuple[str, str, str, str]]:
-        """Returns (url, raw_text, city, topic) for all cached scraped pages."""
-        return get_all_scraped_cache(self.db_path)
-
-    def get_scraped_by_search_pair(self) -> list[tuple[str, str, str, str]]:
-        """Returns scraped pages attributed to every search-cache pair using them."""
-        return get_scraped_cache_by_search_pair(self.db_path)
-
     def get_scraped_for_pair(self, city: str, topic: str) -> list[tuple[str, str]]:
         """Return one pair's scraped pages without loading the global raw cache."""
         return get_scraped_cache_for_search_pair(self.db_path, city, topic)
@@ -248,11 +237,6 @@ class CacheManager:
 
     def delete_entry(self, url_hash: str) -> bool:
         return delete_cache_page(self.db_path, url_hash)
-
-    def clear_all(self) -> int:
-        count = clear_all_cache_pages(self.db_path)
-        log.info("cache_cleared_all", deleted=count)
-        return count
 
     def clear_person_extracted(self) -> int:
         count = clear_person_cache(self.db_path)

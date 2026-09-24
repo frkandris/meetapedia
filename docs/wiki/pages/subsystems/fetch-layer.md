@@ -1,8 +1,8 @@
 ---
 type: Subsystem
 title: Fetch Layer
-description: An SSRF-safe httpx/Playwright fetcher validates public DNS and redirects before trafilatura/html2text turns HTML into clean text.
-tags: [fetch, trafilatura, httpx, playwright, blocked-domains]
+description: An SSRF-safe httpx fetcher validates public DNS and redirects before trafilatura/html2text turns HTML into clean text.
+tags: [fetch, trafilatura, httpx, blocked-domains]
 timestamp: 2026-07-10
 resource: scraper/fetch.py
 ---
@@ -19,7 +19,7 @@ Two-tier: `trafilatura.extract(include_comments=False, include_tables=False)` fi
 
 ## Safety gates and ordering
 
-Before either httpx or Playwright runs, `fetch_and_clean` applies [[server-side-url-safety]] and the configured blocked-domain list. A domain present in both `playwright_domains` and `blocked_domains` is blocked; Playwright can no longer bypass the policy. Every HTTP redirect and Playwright request is checked again.
+Before httpx runs, `fetch_and_clean` applies [[server-side-url-safety]] and the configured blocked-domain list. Every HTTP redirect is checked again.
 
 Blocked domains (`twitter, x, facebook, instagram, tiktok, linkedin, youtube, reddit`) are login-walled/bot-hostile and return no useful text. They are still valid as `social_links` values on extracted records. Matching uses exact host/subdomain boundaries through `host_matches_domain`.
 
@@ -27,14 +27,16 @@ Blocked URLs are filtered **twice** (pipeline pre-filter + `_is_blocked` inside 
 
 ## Concurrency
 
-`fetch_many` builds one `asyncio.Semaphore(max_concurrent)` (default 3), wraps each fetch, and truncates to `urls[:max_pages]` (default 5). Only URLs yielding non-empty text return as `(url, text)`.
+The pipeline bounds fetches with one `asyncio.Semaphore(fetch.max_concurrent)` and fetches at most `search.max_pages_per_topic` URLs per pair. (`fetch_many` was removed 2026-09-24 — nothing called it.)
 
-## Playwright fetcher (`playwright_fetch.py`)
+## Encoding and binary bodies
 
-Dormant by default — `playwright_domains: []`, so `pw_fetcher` stays `None`. History lesson (see CHANGELOG 2026-05-15): social domains were moved *out* of `playwright_domains` into `blocked_domains` because launching Chromium for login-walled sites caused 91% CPU / 43 GB disk I/O per run.
+The fetcher offers only `Accept-Encoding: gzip, deflate`. Until 2026-09-24 it also offered `br` without the `brotli` package installed: servers answered in Brotli, httpx passed the bytes through undecoded, html2text accepted them, and ~28% of `cache_pages` were binary noise. `looks_undecoded()` now refuses a body whose U+FFFD share exceeds 2%, and `scripts/repair_undecoded_pages.py` reopens the affected pages.
 
-When enabled: detects login walls via `_LOGIN_MARKERS` (Facebook/Instagram/Reddit strings) and returns `None` (a rendered login wall has no useful content). Waits 3.0 s for `reddit.com`/SPAs vs 1.5 s otherwise. Reuses `fetch._extract_text` via a late import (avoids a circular dependency) and creates a fresh browser context per URL to isolate cookies.
+## Playwright fetcher (removed)
+
+Removed 2026-09-24. It had been dormant since social domains moved to `blocked_domains` (2026-05-15: Chromium on login-walled sites cost 91% CPU / 43 GB disk I/O per run), and the Docker image never installed `playwright`, so enabling it would have crashed every run.
 
 ## Shared User-Agent
 
-The same Chrome 124 UA string is hardcoded in `fetch._HEADERS` and the Playwright fetcher context. Updating it means editing both files — there is no single source of truth.
+The Chrome 124 UA string lives in `fetch._HEADERS`, the one place it is set.

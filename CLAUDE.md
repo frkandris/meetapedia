@@ -28,7 +28,7 @@ PYTHONPATH=. .venv/bin/python scripts/sync_agents_md.py
 The scraper discovers community groups for each `(city, topic)` pair:
 
 1. **Search** (`search.py`): DataForSEO only (`DataForSEOClient`, live or standard mode). Quota errors (`SearchQuotaError`) permanently skip the provider for the run via `FallbackSearchClient` (kept as a single-provider wrapper so a fallback can be re-added with one line).
-2. **Fetch** (`fetch.py`): `httpx` + `trafilatura` to extract clean page text. Blocked domains (Facebook, Instagram, TikTok, LinkedIn, YouTube, Reddit, Twitter/X) return `None` immediately. `playwright_domains` in `settings.yaml` controls Playwright-fetched domains (currently empty — the Playwright fetcher is dormant).
+2. **Fetch** (`fetch.py`): `httpx` + `trafilatura` to extract clean page text. Blocked domains (Facebook, Instagram, TikTok, LinkedIn, YouTube, Reddit, Twitter/X) return `None` immediately. The dormant Playwright fetcher was removed 2026-09-24: the image never installed `playwright`, so enabling it would have crashed every run.
 3. **Extract** (`extract.py`): `FallbackExtractor` is the single failure path (typed errors, circuit breaker, retry). Its `primaries` list comes from `pipeline.build_extractor()` — **the one place a chain is assembled**. With `router.enabled` in `config/providers.yaml` that is the free-tier fleet ordered best-quality-first and vetoed per provider by the persisted quota ledger; otherwise it is the single `DeepSeekExtractor`.
 4. **Store** (`store.py` → `db.py`): Upsert to SQLite `communities` table, merging `source_urls` on conflict.
 
@@ -115,7 +115,6 @@ prompt — also reversed the catalogue's quality ranking, so treat
 | `scraper/web/app.py` | All HTTP routes (~3700 lines) |
 | `scraper/duplicates.py` | Duplicate detection; admin UI at `/admin/duplicates` |
 | `scraper/wrong_city.py` | Wrong-city detection (text mentions another known city); admin UI at `/admin/wrong-city`; both under the "Data quality" nav group |
-| `scraper/playwright_fetch.py` | Playwright-based page fetcher; `playwright_domains` in `settings.yaml` is currently empty (social domains are blocked, not Playwright-fetched) |
 | `scraper/false_positives.py` | CRUD + prompt injection for false positive rules |
 | `scraper/providers.py` | Free-tier LLM provider catalogue loader + generic OpenAI-compatible extractor |
 | `scraper/router.py` | Quota-aware model router: `QuotaLedger` (persisted per-day budget) + `ModelRouter` (pre-generation selection) |
@@ -167,8 +166,6 @@ commit** as the code change that triggered them; validate with
 **Stop/cancel pattern**: long-running routes (pipeline runs) must use `asyncio.create_task()` and store the task in `app_state._run_task`. `BackgroundTasks` (FastAPI) cannot be cancelled. `asyncio.CancelledError` is a `BaseException` in Python 3.8+, so `except Exception` will NOT catch it — always use `finally` for cleanup.
 
 **CSS build**: `scraper/web/static/css/app.css` is gitignored. Docker builds it from `input.css` via `pytailwindcss` at image build time. For local dev, maintain `app.css` manually. Committing `input.css` changes is sufficient for production.
-
-**Playwright vs. blocked ordering**: `fetch_and_clean()` checks `playwright_fetcher.matches(url)` *before* `_is_blocked()`. A domain in both lists gets fetched by Playwright, not blocked. Keep social-media domains out of `playwright_domains` entirely.
 
 **The separate LLM person call is off** (`pipeline.llm_person_extraction: false`, since 2026-09-24). From 2026-08 it ran on every page with communities — about a quarter of all extraction calls, ~40 s each — and saved no one: its prompt never named the `community_name` field `_parse_persons` requires, so every item was dropped silently. People pages are populated by `_persons_from_leaders` from the community record's own `leader` field, which `run_persons` still controls. Re-enabling it needs the prompt fixed first, and a prompt change re-runs it on every page.
 

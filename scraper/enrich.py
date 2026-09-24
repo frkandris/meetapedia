@@ -96,29 +96,19 @@ async def enrich_batch(
     db_path, extractor, city_names: set[str], limit: int = 20,
     dry_run: bool = False, fetch_missing: bool = True,
     blocked_domains: list[str] | None = None,
-    deadline: datetime | None = None,
 ) -> dict:
     """Enrich up to `limit` un-enriched communities in `city_names` (those without a
     long_description). Uses cached source raw_text, or fetches the page fresh when
-    missing (if `fetch_missing`). Returns stats + before/after samples for review.
-
-    `deadline` (UTC) is a hard off-peak cutoff: the managed job passes its
-    window-end so a batch started near the boundary stops issuing paid LLM calls
-    the moment the discount window closes, rather than running a whole `limit`-long
-    round of hundreds of calls into peak pricing (`stopped_at_deadline` in stats)."""
+    missing (if `fetch_missing`). Returns stats + before/after samples for review."""
     limit = max(0, min(limit, MAX_BATCH))
     pool = get_enrichment_candidates(
         db_path, set(city_names), min(MAX_BATCH, max(limit * 3, limit)))
     stats = {"pool": len(pool), "enriched": 0, "skipped": 0, "no_source": 0,
-             "failed": 0, "dry_run": dry_run, "stopped_at_deadline": False,
+             "failed": 0, "dry_run": dry_run,
              "stopped_no_provider": False, "stopped_rate_limited": False,
              "samples": []}
     for c in pool:
         if stats["enriched"] >= limit:
-            break
-        if deadline is not None and datetime.now(timezone.utc) >= deadline:
-            # off-peak window closed mid-round — stop before any further paid call
-            stats["stopped_at_deadline"] = True
             break
         text = c.get("raw_text")
         if not text and fetch_missing:

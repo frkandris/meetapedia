@@ -21,7 +21,7 @@ vocabulary), [faq.md](faq.md) (recurring questions).
 
 - [[persistence-layer]] — db.py owns all SQL, cache.py is a JSON-blob facade over cache_pages, store.py merges/dedups community records before upsert.
 - [[search-layer]] — DataForSEO is the sole search client (live or standard mode) behind the FallbackSearchClient wrapper with per-run exhaustion state.
-- [[fetch-layer]] — An SSRF-safe httpx/Playwright fetcher validates public DNS and redirects before trafilatura/html2text turns HTML into clean text.
+- [[fetch-layer]] — An SSRF-safe httpx fetcher validates public DNS and redirects before trafilatura/html2text turns HTML into clean text.
 - [[extraction-layer]] — DeepSeek LLM extraction of communities, venues, and persons from page text, with four prompt families, live-editable prompts, and fingerprint-keyed caching.
 - [[pipeline-orchestration]] — run_pipeline() sequences mode-specific passes with a done-pair pre-filter; bounded saver jobs walk countries in the configured pipeline.country_priority order.
 - [[duplicate-detection]] — detect_all() finds same-city duplicate communities/venues/persons via URL match and fuzzy name similarity, with a stable canonical key so re-scans are idempotent.

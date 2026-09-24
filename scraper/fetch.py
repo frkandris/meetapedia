@@ -103,7 +103,6 @@ async def fetch_and_clean(
     timeout_seconds: int = 15,
     min_text_length: int = 100,
     semaphore: asyncio.Semaphore | None = None,
-    playwright_fetcher=None,
 ) -> str | None:
     try:
         await assert_safe_public_url(url)
@@ -114,14 +113,6 @@ async def fetch_and_clean(
     if _is_blocked(url, blocked_domains):
         log.debug("fetch_blocked", url=url)
         return None
-
-    if playwright_fetcher and playwright_fetcher.matches(url):
-        async def _playwright_fetch() -> str | None:
-            return await playwright_fetcher.fetch(url, min_text_length=min_text_length)
-        if semaphore:
-            async with semaphore:
-                return await _playwright_fetch()
-        return await _playwright_fetch()
 
     async def _fetch() -> str | None:
         try:
@@ -165,18 +156,3 @@ async def fetch_and_clean(
     return await _fetch()
 
 
-async def fetch_many(
-    urls: list[str],
-    blocked_domains: list[str],
-    max_pages: int = 5,
-    timeout_seconds: int = 15,
-    min_text_length: int = 100,
-    max_concurrent: int = 3,
-) -> list[tuple[str, str]]:
-    semaphore = asyncio.Semaphore(max_concurrent)
-    tasks = [
-        fetch_and_clean(url, blocked_domains, timeout_seconds, min_text_length, semaphore)
-        for url in urls[:max_pages]
-    ]
-    results = await asyncio.gather(*tasks)
-    return [(url, text) for url, text in zip(urls[:max_pages], results) if text]

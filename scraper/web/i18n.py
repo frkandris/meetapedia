@@ -2712,18 +2712,6 @@ for _code in LANGUAGES:
 
 
 # kept for potential future use (lang override by cookie/header)
-def _detect_lang(request: Request) -> str:
-    lang = request.cookies.get("lang", "")
-    if lang in LANGUAGES:
-        return lang
-    accept = request.headers.get("accept-language", "")
-    for part in accept.split(","):
-        code = part.split(";")[0].strip().split("-")[0].lower()
-        if code in LANGUAGES:
-            return code
-    return "en"
-
-
 def _detect_site(request: Request) -> str:
     host = request.headers.get("host", "").lower().removeprefix("www.").split(":")[0]
     return "meetapedia" if "meetapedia" in host else "kozossegek"

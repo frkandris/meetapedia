@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from scraper.db import (get_provider_usage, get_upgradable_pages, init_db,
+from scraper.db import (get_provider_usage, init_db,
                         record_provider_call, update_cache_page)
 from scraper.providers import (ModelSpec, ProviderCatalogue, ProviderSpec,
                                RouterSettings, build_extractors, load_catalogue)
@@ -56,11 +56,9 @@ def _virtual_clock(monkeypatch) -> list[float]:
     return waits
 
 
-def _catalogue(*specs, enabled=True, allow_paid=False, min_gain=8, max_per_run=500):
+def _catalogue(*specs, enabled=True, allow_paid=False):
     return ProviderCatalogue(
-        router=RouterSettings(enabled=enabled, allow_paid=allow_paid,
-                              upgrade_min_gain=min_gain,
-                              upgrade_max_per_run=max_per_run),
+        router=RouterSettings(enabled=enabled, allow_paid=allow_paid),
         providers=tuple(specs),
     )
 
@@ -332,140 +330,6 @@ def test_disabled_router_yields_empty_fleet(tmp_path, monkeypatch):
 
 # ── upgrade policy ───────────────────────────────────────────────────────────
 
-def test_upgrade_threshold_leaves_close_calls_alone(tmp_path, monkeypatch):
-    monkeypatch.setenv("A_KEY", "k")
-    router, _ = _router(tmp_path, _spec("a", env="A_KEY", quality=(60,)), min_gain=8)
-    # Best available is 60, so anything at 52+ is not worth re-spending on.
-    assert router.upgrade_threshold() == 52
-
-
-def test_upgradable_pages_are_worst_first_and_fingerprint_scoped(tmp_path):
-    db = _db(tmp_path)
-    for h, q, fp in (("a", 30, "fp1"), ("b", 10, "fp1"),
-                     ("c", 55, "fp1"), ("d", 5, "OTHER")):
-        update_cache_page(db, h, {
-            "url": f"https://x/{h}", "extracted_at": "2026-08-01T00:00:00+00:00",
-            "extract_fingerprint": fp, "extract_quality": q,
-        }, create={"url": f"https://x/{h}"})
-    rows = get_upgradable_pages(db, min_quality=52, limit=10, fingerprint="fp1")
-    # 'c' scores above the bar; 'd' sits at a different fingerprint and is
-    # already scheduled for ordinary re-extraction.
-    assert [r["url_hash"] for r in rows] == ["b", "a"]
-
-
-def test_never_extracted_page_is_not_an_upgrade_candidate(tmp_path):
-    db = _db(tmp_path)
-    update_cache_page(db, "fresh", {
-        "url": "https://x/fresh", "extract_fingerprint": "fp1",
-    }, create={"url": "https://x/fresh"})
-    assert get_upgradable_pages(db, 52, 10, "fp1") == []
-
-
-def test_pre_router_pages_are_never_upgrade_candidates(tmp_path):
-    # NULL extract_quality means "extracted by the paid incumbent", which scores
-    # ABOVE every free model. Ranking those worst-first would overwrite good
-    # DeepSeek output with weaker free output — a downgrade wearing an
-    # upgrade's name. ~74K existing rows are in exactly this state.
-    db = _db(tmp_path)
-    update_cache_page(db, "old", {
-        "url": "https://x/old", "extracted_at": "2026-01-01T00:00:00+00:00",
-        "extract_fingerprint": "fp1",
-    }, create={"url": "https://x/old"})
-    assert get_upgradable_pages(db, 52, 10, "fp1") == []
-
-
-@pytest.mark.asyncio
-async def test_upgrade_pass_respects_the_topic_tier_freeze(tmp_path, monkeypatch):
-    # core-tier cities run only core_topics; re-extracting a frozen pair spends
-    # quota on work the pipeline deliberately does not do.
-    from scraper.pipeline import CityConfig, TopicConfig, _run_quality_upgrade
-
-    monkeypatch.setenv("A_KEY", "k")
-    db = _db(tmp_path)
-    router, _ = _router(tmp_path, _spec("a", env="A_KEY", quality=(60,)))
-    for h, topic in (("core", "running"), ("frozen", "chess")):
-        update_cache_page(db, h, {
-            "url": f"https://x/{h}", "city": "Kistelepules", "topic": topic,
-            "extracted_at": "2026-08-01T00:00:00+00:00",
-            "extract_fingerprint": "fp1", "extract_quality": 10,
-            "raw_text": "A helyi futóklub minden kedden edz.",
-        }, create={"url": f"https://x/{h}"})
-
-    calls = []
-
-    class _Extractor:
-        router = None
-        last_model = "a-m0"
-        last_quality = 60
-        canonical_fingerprint = "fp1"
-
-        async def extract(self, **kw):
-            calls.append(kw["topic"])
-            return []
-
-    ex = _Extractor()
-    ex.router = router
-
-    class _Cache:
-        def save_extracted(self, *a, **k): pass
-
-    class _Cfg:
-        db_path = db
-        core_topics = ["running"]
-
-    cities = [CityConfig(name="Kistelepules", country="Hungary", locale="hu",
-                         search_variants=[], topic_tier="core")]
-    topics = [TopicConfig(name="running", search_terms={}),
-              TopicConfig(name="chess", search_terms={})]
-    await _run_quality_upgrade(cities, topics, _Cfg(), ex, _Cache(), "fp1")
-    assert calls == ["running"]  # 'chess' is tiered out and must be skipped
-
-
-@pytest.mark.asyncio
-async def test_upgrade_pass_uses_the_city_locale_not_a_hardcoded_one(tmp_path, monkeypatch):
-    # cache_pages rows carry no locale; the old fallback stamped "hu" onto every
-    # record, relabelling German communities as Hungarian in the database.
-    from scraper.pipeline import CityConfig, TopicConfig, _run_quality_upgrade
-
-    monkeypatch.setenv("A_KEY", "k")
-    db = _db(tmp_path)
-    router, _ = _router(tmp_path, _spec("a", env="A_KEY", quality=(60,)))
-    update_cache_page(db, "de", {
-        "url": "https://x/de", "city": "Berlin", "topic": "running",
-        "extracted_at": "2026-08-01T00:00:00+00:00",
-        "extract_fingerprint": "fp1", "extract_quality": 10,
-        "raw_text": "Der Laufclub trifft sich jeden Dienstag.",
-    }, create={"url": "https://x/de"})
-
-    seen = {}
-
-    class _Extractor:
-        router = None
-        last_model = "a-m0"
-        last_quality = 60
-        canonical_fingerprint = "fp1"
-
-        async def extract(self, **kw):
-            seen.update(kw)
-            return []
-
-    ex = _Extractor()
-    ex.router = router
-
-    class _Cache:
-        def save_extracted(self, *a, **k): pass
-
-    class _Cfg:
-        db_path = db
-        core_topics = []
-
-    await _run_quality_upgrade(
-        [CityConfig(name="Berlin", country="Germany", locale="de", search_variants=[])],
-        [TopicConfig(name="running", search_terms={})],
-        _Cfg(), ex, _Cache(), "fp1")
-    assert seen["locale"] == "de"
-
-
 # ── admin page ───────────────────────────────────────────────────────────────
 
 def test_providers_admin_page_lists_the_fleet(tmp_path):
@@ -620,27 +484,6 @@ def test_capacity_can_be_scoped_to_one_requested_model(tmp_path, monkeypatch):
     pinned = [e for e in router.all_extractors() if e.provider == "a"]
     assert router.has_capacity() is True            # 'b' still has budget
     assert router.has_capacity(pinned) is False     # but 'a' does not
-
-
-def test_upgrade_candidates_are_city_scoped_in_sql(tmp_path):
-    """The city filter must run before LIMIT.
-
-    The caller sweeps one country group at a time. Filtering after a global
-    LIMIT can return nothing while thousands of eligible pages sit lower in the
-    ordering.
-    """
-    db = _db(tmp_path)
-    for h, city, q in (("de1", "Berlin", 1), ("de2", "Berlin", 2),
-                       ("hu1", "Szentendre", 30)):
-        update_cache_page(db, h, {
-            "url": f"https://x/{h}", "city": city, "topic": "running",
-            "extracted_at": "2026-08-01T00:00:00+00:00",
-            "extract_fingerprint": "fp1", "extract_quality": q,
-        }, create={"url": f"https://x/{h}"})
-    # Worst-first globally would return the two Berlin rows and drop Szentendre.
-    rows = get_upgradable_pages(db, 52, 2, "fp1", cities=["Szentendre"])
-    assert [r["url_hash"] for r in rows] == ["hu1"]
-    assert get_upgradable_pages(db, 52, 2, "fp1", cities=[]) == []
 
 
 def test_upgrade_pair_log_renders_in_run_detail(tmp_path):
@@ -821,7 +664,7 @@ def test_golden_set_is_stable_across_runs(tmp_path):
     the difference read as a change in model quality (2026-08-16:
     mistral-small appeared to drop 80 -> 55 for this reason alone).
     """
-    from scraper.db import init_db, update_cache_page
+    from scraper.db import init_db
     from scraper.scoring import golden_set
 
     db = tmp_path / "s.db"

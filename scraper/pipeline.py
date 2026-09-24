@@ -17,7 +17,7 @@ from .false_positives import load as load_false_positives
 from .fetch import fetch_and_clean
 from .search import (DataForSEOClient, FallbackSearchClient, SearchQuotaError,
                      SearchUnavailableError, build_queries)
-from .db import get_daily_counters_with_prefix, get_search_cache, save_search_cache, mark_search_collection_complete, get_collected_pairs, get_searched_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs, get_upgradable_pages
+from .db import get_daily_counters_with_prefix, get_search_cache, save_search_cache, mark_search_collection_complete, get_collected_pairs, get_searched_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs
 from .router import build_router
 from .store import save_results
 
@@ -746,7 +746,6 @@ class PipelineConfig:
     fetch_max_concurrent: int
     fetch_blocked_domains: list[str]
     db_path: Path
-    fetch_playwright_domains: list[str] = field(default_factory=list)
     dataforseo_login: str = ""
     dataforseo_password: str = ""
     deepseek_api_key: str = ""
@@ -974,17 +973,9 @@ async def run_pipeline(
     on_pair_start: "Callable[[str, str], None] | None" = None,
     stop_at: "Any | None" = None,
     should_stop: "Callable[[], bool] | None" = None,
-    allow_upgrade: bool = False,
 ) -> tuple[list[dict], int]:
     """stop_at: optional aware datetime (UTC) — pair loops stop gracefully once
-    reached, so a run can be boxed into a time window (e.g. DeepSeek off-peak).
-
-    allow_upgrade: permit the quality-upgrade sweep when this pass finds nothing
-    left to collect. Off by default because `_cron_run` calls run_pipeline once
-    per country group: an already-finished leading group would otherwise start
-    re-extracting and could eat the whole remaining window before the groups
-    behind it — with genuinely uncollected pages — are ever reached. Only the
-    caller knows whether every group is done, so only the caller may enable it."""
+    reached, so a run can be boxed into a time window (e.g. DeepSeek off-peak)."""
     # run_mode="search_only": search + fetch + cache raw text, zero LLM calls.
     # Pairs collect cheaply (DataForSEO standard mode); a later ai_only run
     # extracts the cached pages when DeepSeek is in its off-peak window.
@@ -1063,25 +1054,6 @@ async def run_pipeline(
 
     if not pairs_to_run:
         log.info("pipeline_all_pairs_done", run_mode=run_mode)
-        # Nothing new to collect — the one condition under which spending free
-        # quota on re-extraction is worth it. This is the *only* reachable call
-        # site: every path below this point has new work pending by definition.
-        if allow_upgrade and run_mode == "ai_only" and cache is not None:
-            # The normal preflight sits below this early return, so the sweep
-            # would otherwise get none of it — and it is exactly the pass that
-            # needs it, walking up to upgrade_max_per_run pages that would each
-            # burn a wasted request on a retired model name.
-            try:
-                await extractor.preflight()
-            except Exception as exc:
-                log.warning("quality_upgrade_preflight_failed", error=str(exc))
-                return pair_logs, total_new
-            upgrade_new, upgrade_logs = await _run_quality_upgrade(
-                cities, topics, config, extractor, cache, current_fp,
-                stop_at=stop_at, should_stop=should_stop, on_progress=on_progress,
-            )
-            total_new += upgrade_new
-            pair_logs += upgrade_logs
         _log_throughput(extractor, run_mode, config.db_path)
         return pair_logs, total_new
 
@@ -1289,12 +1261,6 @@ async def _run_full(
     searxng = search_client if search_client is not None else _build_search_client(config)
     semaphore = asyncio.Semaphore(config.fetch_max_concurrent)
 
-    pw_fetcher = None
-    if config.fetch_playwright_domains:
-        from .playwright_fetch import PlaywrightFetcher
-        pw_fetcher = PlaywrightFetcher(config.fetch_playwright_domains)
-        await pw_fetcher.start()
-
     all_fps = load_false_positives(config.db_path)
     enrich_fp_section = build_prompt_section(all_fps, fp_type="enrichment")
     quarantine = _Quarantine(cache, extractor.canonical_fingerprint,
@@ -1332,8 +1298,6 @@ async def _run_full(
             prefetched.update(await _prefetch_searches(
                 searxng, batch, config, concurrency=want))
 
-    # Early exits use this flag instead of return so the Playwright fetcher
-    # cleanup below always runs.
     aborted = False
     # `aborted` means something broke; `stopped` means the window is simply
     # over — the fleet spent its free quota, or every provider is inside a
@@ -1452,7 +1416,6 @@ async def _run_full(
                     url, config.fetch_blocked_domains,
                     config.fetch_timeout, config.fetch_min_text_length,
                     semaphore,
-                    playwright_fetcher=pw_fetcher,
                 )
                 dur = time.monotonic() - t0
                 if on_progress:
@@ -1762,195 +1725,7 @@ async def _run_full(
                     stopped = True
                 break
 
-    if pw_fetcher:
-        await pw_fetcher.stop()
     return total_new, pair_logs
-
-
-async def _run_quality_upgrade(
-    cities: list[CityConfig],
-    topics: list[TopicConfig],
-    config: PipelineConfig,
-    extractor: FallbackExtractor,
-    cache: "CacheManager",
-    fingerprint: str,
-    *,
-    stop_at: "Any | None" = None,
-    should_stop: "Callable[[], bool] | None" = None,
-    on_progress: Callable[[str | None, str | None], None] | None = None,
-) -> tuple[int, list[dict]]:
-    """Re-extract pages whose cached result came from a weaker model.
-
-    The operator's policy, and the one the research supports: **new work always
-    outranks re-work**. Free daily allowances do not roll over, so a request not
-    spent by midnight UTC is simply lost — but a request spent re-doing a page
-    while unprocessed pages exist is worse than lost, because it delays new
-    coverage. Hence the three gates:
-
-      1. Only when the normal pass had nothing left to collect — this function
-         is called from that branch alone.
-      2. Only when an available model beats the cached one by at least
-         `upgrade_min_gain` points — below that the expected gain does not
-         justify the request (the marginal-quality-per-cost condition in
-         arXiv:2605.06350).
-      3. Bounded by `upgrade_max_per_run` and by the run window, so a sweep can
-         never eat into the next day's collection.
-
-    Two exclusions the candidate query cannot express:
-
-    * **Pages with unknown quality are left alone.** ~74K rows predate the
-      router and carry NULL, meaning "extracted by the paid incumbent", which
-      scores *above* every free model. Treating NULL as 0 would have the sweep
-      overwrite good DeepSeek output with weaker free-model output — a
-      downgrade dressed as an upgrade.
-    * **Tier-frozen pairs stay frozen.** `topic_tier: core` cities run only
-      `core_topics`; re-extracting a tiered-out pair spends quota on work the
-      pipeline deliberately does not do.
-
-    A failed re-extraction leaves the existing cached result untouched: the old
-    answer is strictly better than no answer.
-
-    **Known limitation — the sweep can only add, never remove.** `save_results`
-    merges by `record_key` and rewrites the union, so a false positive the
-    better model correctly rejects survives in the database. Dropping bad
-    records is a real reason to re-extract, and this does not deliver it;
-    removals still go through the admin not-community flow. Fixing it means a
-    per-source-URL reconciliation in `store.py`, which is a larger change than
-    this sweep should carry.
-    """
-    router = getattr(extractor, "router", None)
-    if router is None or not getattr(router, "enabled", False):
-        return 0, []
-
-    settings = router.catalogue.router
-    best = router.best_available_quality()
-    if best <= 0:
-        log.info("quality_upgrade_skipped", reason="no free capacity left today")
-        return 0, []
-    threshold = router.upgrade_threshold()
-
-    by_city = {c.name: c for c in cities}
-    candidates = get_upgradable_pages(
-        config.db_path, threshold, max(0, settings.upgrade_max_per_run), fingerprint,
-        cities=list(by_city))
-    if not candidates:
-        log.info("quality_upgrade_nothing_to_do", threshold=threshold, best=best)
-        return 0, []
-
-    # Tier gate, mirroring run_pipeline and _run_full. Pages whose topic is
-    # unknown to this run's config are skipped too: we cannot tell whether they
-    # are frozen. (The city restriction is already applied in SQL.)
-    topic_names = {t.name for t in topics}
-
-    def _allowed(page: dict) -> bool:
-        city = by_city.get(page.get("city") or "")
-        topic = page.get("topic") or ""
-        if city is None or topic not in topic_names:
-            return False
-        return _tier_allows(city, topic, config.core_topics)
-
-    eligible = [p for p in candidates if _allowed(p)]
-    if len(eligible) != len(candidates):
-        log.info("quality_upgrade_tier_filtered",
-                 kept=len(eligible), dropped=len(candidates) - len(eligible))
-    candidates = eligible
-    if not candidates:
-        return 0, []
-
-    log.info("quality_upgrade_start", pages=len(candidates),
-             best_available=best, below_quality=threshold)
-    all_fps = load_false_positives(config.db_path)
-    upgraded = failed = 0
-    total_new = 0
-    pending: dict[tuple[str, str], list] = {}
-
-    stopped: tuple[str, bool] | None = None
-    for page in candidates:
-        if _should_stop(stop_at, should_stop):
-            log.info("quality_upgrade_window_closed", upgraded=upgraded)
-            break
-        # Re-checked every page: the fleet's budget drains as we spend it, and
-        # once the best remaining model no longer clears the bar the sweep must
-        # stop rather than downgrade a page it already extracted well.
-        if router.best_available_quality() - settings.upgrade_min_gain < page["q"]:
-            log.info("quality_upgrade_budget_spent", upgraded=upgraded)
-            break
-        await asyncio.sleep(0)
-        entry = load_cache_page(config.db_path, page["url_hash"])
-        text = (entry or {}).get("raw_text")
-        if not text:
-            continue
-        city, topic = page.get("city") or "", page.get("topic") or ""
-        # cache_pages rows carry no locale, so the old `entry.get("locale")`
-        # always fell through to "hu" — which _parse_communities stamps onto
-        # every record, relabelling German and Indonesian communities as
-        # Hungarian. The city config is the authority, as in _run_full.
-        locale = by_city[city].locale or "en"
-        if on_progress:
-            on_progress("extract", page["url"])
-        try:
-            records, model, quality = await _extract_traced(
-                extractor,
-                text=text, city=city, topic=topic,
-                locale=locale, source_url=page["url"],
-                false_positive_examples=build_prompt_section(all_fps, city=city, topic=topic),
-            )
-        except ExtractorUnavailableError as exc:
-            # Keep the older, weaker result — it beats losing the page entirely.
-            failed += 1
-            log.warning("quality_upgrade_failed", url=page["url"], reason=str(exc))
-            if (_stop := _stop_reason(extractor)):
-                # Walking hundreds more pages against a fleet that has stopped
-                # produces nothing but failure counters, and an outage here was
-                # filed as a mere warning because the sweep has no other place
-                # to record one.
-                log.info("quality_upgrade_stopped", reason=_stop[0])
-                stopped = _stop
-                break
-            continue
-        finally:
-            if on_progress:
-                on_progress(None, None)
-
-        if (quality or 0) <= page["q"]:
-            # Failover handed the call to a model no better than the cached one.
-            # Overwriting would be churn without gain.
-            continue
-        joinable = [r for r in records if r.joinable]
-        await _off_loop(cache.save_extracted, page["url"], joinable, fingerprint=fingerprint,
-                             model=model, quality=quality)
-        if joinable:
-            # Batched, never per page: save_results ends in a full topic
-            # DELETE+reinsert, an O(n^2) dedup and a city-wide duplicate scan.
-            # _run_full carries the same warning — doing it per URL is what made
-            # an earlier version unusable at scale.
-            pending.setdefault((city, topic), []).extend(joinable)
-        upgraded += 1
-
-    log.info("quality_upgrade_complete", upgraded=upgraded, failed=failed,
-             new_records=total_new)
-    for (city, topic), recs in pending.items():
-        # save_results returns the pair's total stock, not the number added, so
-        # the count comes from what we handed in — as at every other call site.
-        await _off_loop(save_results, city, topic, recs, config.db_path)
-        total_new += len(recs)
-
-    if not (upgraded or failed):
-        return total_new, []
-    # Built from _new_pair_log, never hand-rolled: run_detail.html iterates
-    # these keys under strict Jinja Undefined, and a missing one (it compared
-    # `p.records_extracted > 0`) hard-fails the whole admin page.
-    entry = _new_pair_log("—", "quality_upgrade", [])
-    entry.update({
-        "urls_found": len(candidates),
-        "records_extracted": total_new,
-        "extract_failed": failed,
-        "cache_hits_extract": upgraded,
-    })
-    if stopped is not None and stopped[1]:
-        entry["extract_error"] = stopped[0]
-        entry["aborted"] = True
-    return total_new, [entry]
 
 
 async def _run_ai_only(
