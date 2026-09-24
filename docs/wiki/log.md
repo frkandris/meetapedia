@@ -3,6 +3,13 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-24
+- **Fix**: Router quota accounting. `near_daily` counted refusals as calls, so a morning of
+  per-minute 429s read as "near the daily cap" and the next 429 pinned a daily ceiling that later
+  unlearned — 31 learned / 24 unlearned in 36 h, each cycle idling a provider with quota left. It now
+  counts answered calls, and a refusal that names a per-minute limit never teaches a daily one. A
+  refusal block is shared by every ledger in the process (enrichment kept calling a provider the
+  extraction chain had just seen refuse). Groq's second model is its own catalogue entry: its limits
+  are per model, and as one entry the two shared one 200K-token day.
 - **Perf**: Event-loop and lock holders. `_connect` set `busy_timeout = 5000` after
   `timeout=30`, so the real lock wait was 5 s. The fingerprint-column backfill in `init_db` had no
   marker and re-scanned nearly every cache blob on every boot; it now runs once. Corpus-wide cache

@@ -132,6 +132,20 @@ providers:
       # roughly 80 guaranteed 404s a day out of the 746 preflight calls on
       # 2026-09-17. Adding a model needs a reason beyond the shape of the gap
       # left by the one that died.
+
+  # ── Groq, gpt-oss-20b — its own entry since 2026-09-24 ──────────────────
+  # Groq's limits are per model (the table quoted above), but the ledger keys
+  # by catalogue entry: as one entry, the two models shared one 200K-token day,
+  # so half of Groq's daily capacity was never budgeted, and a "tokens per day"
+  # 429 on one model blocked the other. Same split as Gemini's on 2026-09-10.
+  - name: groq_20b
+    enabled: true
+    api_key_env: GROQ_API_KEY
+    base_url: https://api.groq.com/openai/v1
+    rpm: 30
+    rpd: 1000
+    tpd: 200000
+    models:
       - model: openai/gpt-oss-20b
         quality: 67
 

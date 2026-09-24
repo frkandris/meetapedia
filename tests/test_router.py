@@ -887,6 +887,7 @@ async def test_rate_limited_out_clears_on_the_next_call(tmp_path, monkeypatch):
     _Flaky.limited = False
     chain._blocked_until = [0.0]
     router.ledger._row("a")["blocked_until"] = 0.0
+    router.ledger._blocked_until.pop("a", None)
     router.ledger._last_call.pop("a", None)
     assert await chain.extract(text="t", city="c", topic="running", locale="hu",
                                source_url="https://x/2") == []
@@ -1407,3 +1408,40 @@ def test_a_provider_blocked_until_midnight_is_not_capacity(tmp_path, monkeypatch
     ledger.note_call("a", ok=False, billing_blocked=True, error="HTTP 402")
     assert not router.has_capacity()
     assert router.done_for_today(only)
+
+
+def test_per_minute_refusals_do_not_teach_a_daily_ceiling(tmp_path):
+    """`near_daily` counted refusals as calls, so a morning of per-minute 429s
+    read as "near the daily cap"; the next one pinned the ceiling, which later
+    unlearned, and round again — 31 learned / 24 unlearned in 36 h.
+    """
+    db = _db(tmp_path)
+    spec = _spec("p", rpd=100)
+    ledger = QuotaLedger(db, day="2026-09-24")
+    for _ in range(50):
+        ledger.note_call("p", ok=True, spec=spec)
+    for _ in range(35):
+        ledger.note_call("p", ok=False, rate_limited=True, retry_after=60, spec=spec,
+                         error="rate limited")
+    assert ledger._row("p").get("observed_limit") is None
+
+    for _ in range(40):
+        ledger.note_call("p", ok=True, spec=spec)
+    ledger.note_call("p", ok=False, rate_limited=True, retry_after=60, spec=spec,
+                     error="Rate limit reached: requests per minute")
+    assert ledger._row("p").get("observed_limit") is None, "it said per minute"
+
+    ledger.note_call("p", ok=False, rate_limited=True, retry_after=60, spec=spec,
+                     error="Rate limit reached: tokens per day")
+    assert ledger._row("p").get("observed_limit")
+
+
+def test_a_refusal_seen_by_one_ledger_blocks_the_provider_for_all(tmp_path):
+    """Enrichment, the guide writer and the worker each build a ledger; a 429
+    reached the others only on their next reload, every 25 calls.
+    """
+    db = _db(tmp_path)
+    worker, enrichment = QuotaLedger(db, day="2026-09-24"), QuotaLedger(db, day="2026-09-24")
+    assert not enrichment.blocked("p")
+    worker.note_call("p", ok=False, rate_limited=True, retry_after=120, spec=_spec("p"))
+    assert enrichment.blocked("p")

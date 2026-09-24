@@ -17,9 +17,11 @@ def _reset_pacing_clock():
     from scraper.extract import _LAST_SERVED
 
     QuotaLedger._last_call.clear()
+    QuotaLedger._blocked_until.clear()
     _LAST_SERVED.clear()
     yield
     QuotaLedger._last_call.clear()
+    QuotaLedger._blocked_until.clear()
     _LAST_SERVED.clear()
 
 

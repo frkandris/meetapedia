@@ -89,6 +89,13 @@ class QuotaLedger:
     #: In memory rather than in the DB on purpose: a per-minute limit is
     #: meaningless across a restart, unlike the daily counters.
     _last_call: dict[str, float] = {}
+    #: provider -> wall-clock epoch until which a refusal blocks it, shared by
+    #: every ledger in the process for the same reason `_last_call` is: the
+    #: worker, enrichment, the guide writer and each gateway request build
+    #: their own ledger, and a 429 seen by one reached the others only on
+    #: their next reload (every 25 calls) — so enrichment kept calling a
+    #: provider the extraction chain had just seen refuse.
+    _blocked_until: dict[str, float] = {}
 
     def __init__(self, db_path: Path | None, day: str | None = None):
         self.db_path = db_path
@@ -250,7 +257,11 @@ class QuotaLedger:
         `blocked_until` is a wall-clock epoch, not `time.monotonic()`, because
         it has to survive a process restart — monotonic clocks reset.
         """
-        return time.time() < float(self._row(provider).get("blocked_until") or 0)
+        return time.time() < self._block_end(provider)
+
+    def _block_end(self, provider: str) -> float:
+        return max(float(self._row(provider).get("blocked_until") or 0),
+                   self._blocked_until.get(provider, 0.0))
 
     def blocked_for_day(self, provider: str) -> bool:
         """True when the provider is blocked until the next 00:00 UTC.
@@ -258,7 +269,7 @@ class QuotaLedger:
         A 402 or a provider refusing everything is blocked to midnight; that is
         a spent day, not a short back-off, and must read as "no capacity".
         """
-        return float(self._row(provider).get("blocked_until") or 0) >= _next_utc_midnight() - 1
+        return self._block_end(provider) >= _next_utc_midnight() - 1
 
     def paced(self, spec: ProviderSpec) -> bool:
         """False while `rpm` says the next call is too soon."""
@@ -426,14 +437,25 @@ class QuotaLedger:
             # to a heuristic eating its own output, and the worker started
             # buying searches because extraction "had no quota".
             configured = int(spec.rpd) if spec is not None else 0
-            near_daily = configured > 0 and row["calls"] >= 0.8 * configured
+            # Near it by *answered* calls. `calls` counts refusals too, so a
+            # provider 429-ing per minute all morning looked "near its daily
+            # cap" at 80% of rpd in refusals alone; the next per-minute 429
+            # then pinned the ceiling, the pin expired after its TTL, a success
+            # unlearned it, and the cycle repeated (31 learned / 24 unlearned in
+            # 36 h, 2026-09-23..24), idling a provider with quota left each time.
+            answered = int(row["calls"]) - int(row.get("failures") or 0)
+            near_daily = configured > 0 and answered >= 0.8 * configured
             # The provider often says which limit it enforced. "tokens per day"
             # is a daily refusal however short the Retry-After — Groq's was
             # 1,149 seconds, under the 1,800 threshold, so without this the
             # ceiling was never learned and the router kept planning for 14,400
             # requests against a budget that was gone.
-            said_daily = "per day" in (error or "").lower()
-            near_daily = near_daily or said_daily
+            said = (error or "").lower()
+            said_daily = "per day" in said
+            # And the reverse: a provider that names a per-minute limit has
+            # told us this is not the daily one, however close we are to rpd.
+            said_minute = "per minute" in said and not said_daily
+            near_daily = (near_daily and not said_minute) or said_daily
             if wait >= self._DAILY_429_RETRY_AFTER or near_daily:
                 observed_limit = row["calls"]
                 prev = row.get("observed_limit")
@@ -450,6 +472,9 @@ class QuotaLedger:
                             wait_s=round(wait, 1))
             else:
                 log.info("provider_minute_limit", provider=provider, wait_s=round(wait, 1))
+        if blocked_until:
+            QuotaLedger._blocked_until[provider] = max(
+                QuotaLedger._blocked_until.get(provider, 0.0), float(blocked_until))
         # Measured, not estimated: the response says exactly what it cost, and
         # a token ceiling is only useful if the number counted against it is the
         # provider's own.
