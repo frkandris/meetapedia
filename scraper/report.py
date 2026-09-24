@@ -8,6 +8,7 @@ POST /admin/api/send-daily-report.
 from __future__ import annotations
 
 import html as html_lib
+import asyncio
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -425,7 +426,17 @@ def build_report_html(day: str, summary: dict, traffic: dict,
 
 
 async def send_daily_report(db_path: Path, hu_cities: set, day: str | None = None) -> dict:
-    """Build and send the report for one UTC day (default: yesterday)."""
+    """Build and send the report for one UTC day (default: yesterday).
+
+    In a worker thread: every step is blocking — the whole-corpus SQL
+    aggregations, the GA4 token refresh and query, the Resend call — and on
+    the event loop the site stopped answering for the ~45 s the report took
+    (04:30:00 → `daily_report_sent` at 04:30:45).
+    """
+    return await asyncio.to_thread(_send_daily_report, db_path, hu_cities, day)
+
+
+def _send_daily_report(db_path: Path, hu_cities: set, day: str | None) -> dict:
     api_key = os.environ.get("RESEND_API_KEY", "")
     recipient = os.environ.get("REPORT_EMAIL", "") or os.environ.get("FEEDBACK_EMAIL", "")
     sender = os.environ.get("RESEND_FROM", "onboarding@resend.dev")

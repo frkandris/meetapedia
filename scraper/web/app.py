@@ -25,6 +25,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ..config import load_config
 from ..db import (
+    count_cache_pages,
     get_sitemap_communities,
     find_community_by_id,
     get_extraction_quality_mix,
@@ -4261,14 +4262,6 @@ def _topic_from_url_slug(slug: str, locale: str) -> str | None:
     return None
 
 
-def _find_community_by_slug(city_name: str, name_slug: str) -> dict | None:
-    for r in get_communities_for_city(_db(), city_name):
-        r = _ensure_community_id(r)
-        if _slugify(r.get("name", "")) == name_slug:
-            return r
-    return None
-
-
 def _load_communities(city: str, topic: str) -> list[dict]:
     return [_ensure_community_id(r) for r in get_communities(_db(), city, topic)]
 
@@ -4952,7 +4945,9 @@ async def public_subscribe(
         try:
             import resend
             resend.api_key = _RESEND_API_KEY
-            resend.Emails.send({
+            # Off the loop: a blocking HTTPS round-trip to Resend stalled every
+            # request on the site for its duration.
+            await asyncio.to_thread(resend.Emails.send, {
                 "from": _RESEND_FROM,
                 "to": _FEEDBACK_EMAIL,
                 "subject": f"[kozossegek.com] Új feliratkozás — {city}",
@@ -4993,7 +4988,9 @@ async def public_feedback(
             safe_page_url = html.escape(page_url, quote=True)
             safe_message = html.escape(message).replace("\n", "<br>")
             reply_line = f"<b>Reply-to:</b> {safe_user_email}<br>" if user_email else ""
-            resend.Emails.send({
+            # Off the loop: a blocking HTTPS round-trip to Resend stalled every
+            # request on the site for its duration.
+            await asyncio.to_thread(resend.Emails.send, {
                 "from": _RESEND_FROM,
                 "to": _FEEDBACK_EMAIL,
                 "reply_to": user_email or None,
@@ -5041,7 +5038,9 @@ async def public_claim_community(
             import resend
             resend.api_key = _RESEND_API_KEY
             safe_page = html.escape(page_url, quote=True)
-            resend.Emails.send({
+            # Off the loop: a blocking HTTPS round-trip to Resend stalled every
+            # request on the site for its duration.
+            await asyncio.to_thread(resend.Emails.send, {
                 "from": _RESEND_FROM,
                 "to": _FEEDBACK_EMAIL,
                 "reply_to": claimant_email or None,
@@ -5079,7 +5078,9 @@ async def public_report_not_community(
             import resend
             resend.api_key = _RESEND_API_KEY
             safe_page = html.escape(page_url, quote=True)
-            resend.Emails.send({
+            # Off the loop: a blocking HTTPS round-trip to Resend stalled every
+            # request on the site for its duration.
+            await asyncio.to_thread(resend.Emails.send, {
                 "from": _RESEND_FROM,
                 "to": _FEEDBACK_EMAIL,
                 "subject": f"[kozossegek.com] Nem közösség — {community_name}",
@@ -5139,7 +5140,9 @@ async def public_suggest_edit(
             new_val_clean = new_value.strip()
             notes_clean = notes.strip()
             email_clean = email.strip()
-            resend.Emails.send({
+            # Off the loop: a blocking HTTPS round-trip to Resend stalled every
+            # request on the site for its duration.
+            await asyncio.to_thread(resend.Emails.send, {
                 "from": _RESEND_FROM,
                 "to": _FEEDBACK_EMAIL,
                 "reply_to": email_clean or None,
@@ -6729,13 +6732,12 @@ async def api_progress():
     })
 
 
-@admin.get("/api/cache-entries")
-async def api_cache_entries():
-    """Return fresh cache entries as JSON for live table refresh."""
-    entries = []
-    if app_state.cache_manager:
-        entries = app_state.cache_manager.get_index()
-    return JSONResponse(entries)
+@admin.get("/api/cache-count")
+async def api_cache_count():
+    """How many pages are cached — what the progress page polls for."""
+    count = await asyncio.to_thread(count_cache_pages, app_state.db_path) \
+        if app_state.db_path else 0
+    return JSONResponse({"count": count})
 
 
 @admin.get("/cache")
@@ -6761,7 +6763,8 @@ async def cache_page(
 ):
     entries = []
     if app_state.cache_manager:
-        entries = app_state.cache_manager.get_index()
+        # Off the loop: it reads a row per cached page (~207K).
+        entries = await asyncio.to_thread(app_state.cache_manager.get_index)
     url_counts = get_venue_person_counts_by_url(_db())
 
     all_cities = sorted({e.get("city") for e in entries if e.get("city")})
@@ -6879,7 +6882,7 @@ async def cache_detail(request: Request, url_hash: str):
     related_entries: list[dict] = []
     if city and topic:
         related_entries = [
-            e for e in app_state.cache_manager.get_index()
+            e for e in await asyncio.to_thread(app_state.cache_manager.get_index)
             if e.get("city") == city and e.get("topic") == topic and e.get("url_hash") != url_hash
         ]
 
@@ -7685,7 +7688,10 @@ async def public_search(request: Request):
     results: dict = {"communities": [], "venues": [], "persons": []}
     if app_state.db_path and len(q) >= 2:
         init_db(app_state.db_path)
-        results = search_all(app_state.db_path, q)
+        # Off the loop: a LIKE over every community blob, and public.
+        results = await asyncio.to_thread(
+            search_all, app_state.db_path, q, 20,
+            {c.name for c in _site_cities(request)})
     seen_ids: set = set()
     communities = []
     for c in results["communities"]:
@@ -7880,28 +7886,31 @@ async def public_city_segment(
         return await _render_explore(
             request, city=city_name, topic=[actual_topic], subscribed=subscribed
         )
-    record = _find_community_by_slug(city_name, segment)
+    # One read of the city, off the loop, used twice: to find this community
+    # and for its neighbours. The lookup used to read the whole city again,
+    # synchronously on the event loop, on every one of ~42k community pages.
+    _city_records = await asyncio.to_thread(get_communities_for_city, _db(), city_name)
+    record = next((_ensure_community_id(r) for r in _city_records
+                   if _slugify(r.get("name", "")) == segment), None)
     if record:
         _page_lang = lang_context(request)
         schema_json = records_to_jsonld(
             [record],
             f"{_canonical_base(request, city_name)}/{city_slug}"
             f"/{_slugify(record.get('name', ''))}")
-        history = get_community_history(app_state.db_path, record.get("community_id", ""))
         rec_topic = record.get("topic", "")
         city_locale = _city_locale(city_name)
         public_topic = rec_topic if rec_topic in topic_names else None
         topic_url_slugs = {t.name: _topic_url_slug(t.name, city_locale) for t in (app_state.topics or [])}
-        community_venue = get_venue_for_community(
-            app_state.db_path, record.get("community_id", ""), city_name
-        ) if app_state.db_path else None
-        community_persons = get_persons_for_community(
-            app_state.db_path, record["name"], city_name
-        ) if app_state.db_path else []
-        # One query for the whole city, sliced two ways. Off the loop because a
-        # large city is a real read and the loop also serves everyone else.
-        _city_records = await asyncio.to_thread(
-            get_communities_for_city, app_state.db_path, city_name)
+
+        def _community_extras():
+            if not app_state.db_path:
+                return [], None, []
+            cid = record.get("community_id", "")
+            return (get_community_history(app_state.db_path, cid),
+                    get_venue_for_community(app_state.db_path, cid, city_name),
+                    get_persons_for_community(app_state.db_path, record["name"], city_name))
+        history, community_venue, community_persons = await asyncio.to_thread(_community_extras)
         related = related_communities(
             _city_records,
             exclude_key=_community_record_key(record["name"], city_name, rec_topic),

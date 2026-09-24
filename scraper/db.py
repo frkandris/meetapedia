@@ -24,8 +24,10 @@ _wal_enabled: set[str] = set()
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
+    # One lock wait, set once. `timeout=30` used to be followed by
+    # `busy_timeout = 5000`, which silently overrode it: any write held for
+    # more than 5 s surfaced as "database is locked" in the worker.
     conn = sqlite3.connect(db_path, timeout=30)
-    conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("PRAGMA foreign_keys = ON")
     key = str(db_path)
     if key not in _wal_enabled:
@@ -43,6 +45,9 @@ def _connect(db_path: Path) -> sqlite3.Connection:
             log.warning("wal_enable_failed", error=str(exc))
         _wal_enabled.add(key)
     return conn
+
+
+_FINGERPRINT_BACKFILL_MIGRATION = "cache_pages_fingerprint_columns_v1"
 
 
 def _migrate_unicode_record_keys(conn: sqlite3.Connection) -> None:
@@ -343,15 +348,26 @@ def init_db(db_path: Path, force: bool = False) -> None:
             conn.execute("ALTER TABLE cache_pages ADD COLUMN records_count INTEGER")
         except sqlite3.OperationalError:
             pass
-        # Backfill fingerprint columns from JSON blob (runs once, skips already-set rows)
-        conn.execute("""
-            UPDATE cache_pages
-            SET venue_fingerprint  = json_extract(data, '$.venue_fingerprint'),
-                person_fingerprint = json_extract(data, '$.person_fingerprint')
-            WHERE venue_fingerprint IS NULL AND person_fingerprint IS NULL
-              AND (json_extract(data, '$.venue_fingerprint') IS NOT NULL
-                OR json_extract(data, '$.person_fingerprint') IS NOT NULL)
-        """)
+        # Backfill fingerprint columns from the JSON blob — once. It was meant
+        # to run once but had no marker, and most pages keep both columns NULL
+        # forever (no communities, so no venues or persons), so every process
+        # start opened nearly every ~30 KB blob under the write lock before the
+        # server came up. Every write since keeps the columns in sync.
+        conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations"
+                     " (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)")
+        if not conn.execute("SELECT 1 FROM schema_migrations WHERE name=?",
+                            (_FINGERPRINT_BACKFILL_MIGRATION,)).fetchone():
+            conn.execute("""
+                UPDATE cache_pages
+                SET venue_fingerprint  = json_extract(data, '$.venue_fingerprint'),
+                    person_fingerprint = json_extract(data, '$.person_fingerprint')
+                WHERE venue_fingerprint IS NULL AND person_fingerprint IS NULL
+                  AND (json_extract(data, '$.venue_fingerprint') IS NOT NULL
+                    OR json_extract(data, '$.person_fingerprint') IS NOT NULL)
+            """)
+            conn.execute("INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)",
+                         (_FINGERPRINT_BACKFILL_MIGRATION,
+                          datetime.now(timezone.utc).isoformat()))
         # The done-pair filter reads three small columns from every scraped
         # page and nothing else, so give it an index that carries all three.
         # Without it SQLite scans the table, and the table is ~30 KB a row over
@@ -1266,7 +1282,7 @@ def get_community_lastmods(db_path: Path) -> dict[tuple[str, str], str]:
 
     Keyed by public slug and ordered by (topic, id) with first-wins, so the date
     is the one for the exact record the public URL resolves to (see
-    `_find_community_by_slug` / `get_communities_for_city`) — even when a name
+    the community page, first match in `get_communities_for_city`) — even when a name
     exists under multiple topics or two names share a slug. `updated_at` only
     advances on real content changes (see `_bulk_upsert_communities`), so it is a
     stable <lastmod>. One query for the whole sitemap.
@@ -2142,6 +2158,31 @@ def delete_cache_page(db_path: Path, url_hash: str) -> bool:
         return cur.rowcount > 0
 
 
+def _update_cache_pages_in_chunks(conn: sqlite3.Connection, set_sql: str,
+                                  where_sql: str, chunk: int = 2000) -> int:
+    """Apply one UPDATE to `cache_pages` a rowid range at a time, committing
+    between ranges.
+
+    As one statement a corpus-wide `json_remove` rewrote ~6 GB of blobs in a
+    single transaction: the write lock was held for minutes, every other writer
+    (ledger, counters, cache saves) failed with "database is locked", and the
+    WAL grew by roughly the size of the corpus.
+    """
+    total, last = 0, 0
+    while True:
+        upper = conn.execute(
+            "SELECT MAX(rowid) FROM (SELECT rowid FROM cache_pages WHERE rowid > ?"
+            " ORDER BY rowid LIMIT ?)", (last, chunk)).fetchone()[0]
+        if upper is None:
+            return total
+        cur = conn.execute(
+            f"UPDATE cache_pages SET {set_sql} WHERE rowid > ? AND rowid <= ? AND ({where_sql})",
+            (last, upper))
+        total += max(0, cur.rowcount)
+        conn.commit()
+        last = upper
+
+
 def invalidate_extraction_cache(
     db_path: Path,
     city: str | None = None,
@@ -2176,18 +2217,16 @@ def invalidate_extraction_cache(
 
     with _connect(db_path) as conn:
         if city is None:
-            cur = conn.execute(
-                # records_count follows $.records out of the blob. The done-pair
-                # verdict is already correct without this — extract_fingerprint
-                # is NULL, which fails the currency check first — but a column
-                # that disagrees with the blob it mirrors is a trap for the next
-                # reader, and the backfill will not repair it (it only fills NULLs).
-                f"UPDATE cache_pages SET extracted_at=NULL, extract_fingerprint=NULL, "
-                f"records_count={_NOT_EXTRACTED}, "
-                f"data=json_remove(data, {json_paths}) WHERE {stale_predicate}"
-            )
-            conn.commit()
-            return cur.rowcount
+            # records_count follows $.records out of the blob. The done-pair
+            # verdict is already correct without this — extract_fingerprint
+            # is NULL, which fails the currency check first — but a column
+            # that disagrees with the blob it mirrors is a trap for the next
+            # reader, and the backfill will not repair it (it only fills NULLs).
+            return _update_cache_pages_in_chunks(
+                conn,
+                f"extracted_at=NULL, extract_fingerprint=NULL, "
+                f"records_count={_NOT_EXTRACTED}, data=json_remove(data, {json_paths})",
+                stale_predicate)
 
         target_hashes = {
             row[0]
@@ -2236,18 +2275,19 @@ def invalidate_extraction_cache(
 def clear_person_cache(db_path: Path) -> int:
     """Strip person extraction fields from all cache entries, forcing re-extraction."""
     with _connect(db_path) as conn:
-        cur = conn.execute("""
-            UPDATE cache_pages SET data = json_remove(
-                json_remove(json_remove(json_remove(data,
-                    '$.person_extracted_at'),
-                    '$.person_fingerprint'),
-                    '$.person_model'),
-                    '$.persons_data')
-            WHERE json_extract(data, '$.person_extracted_at') IS NOT NULL
-        """)
-        conn.execute("UPDATE cache_pages SET person_fingerprint=NULL")
-        conn.commit()
-        return cur.rowcount
+        return _update_cache_pages_in_chunks(
+            conn,
+            "person_fingerprint=NULL, data=json_remove(data, '$.person_extracted_at',"
+            " '$.person_fingerprint', '$.person_model', '$.persons_data')",
+            "person_fingerprint IS NOT NULL"
+            " OR json_extract(data, '$.person_extracted_at') IS NOT NULL")
+
+
+def count_cache_pages(db_path: Path) -> int:
+    if not db_path.exists():
+        return 0
+    with _connect(db_path) as conn:
+        return conn.execute("SELECT COUNT(*) FROM cache_pages").fetchone()[0]
 
 
 def get_cache_index(db_path: Path) -> list[dict]:
@@ -2767,36 +2807,42 @@ def search_all(
     db_path: Path,
     query: str,
     limit: int = 20,
+    cities: "set[str] | None" = None,
 ) -> dict[str, list[dict]]:
     """Search communities, venues, and persons by name or description.
 
     Returns a dict with lists of matching records from each table.
     Empty query returns empty results. Hidden communities are excluded.
+    `cities` limits results to one site's cities: kozossegek.com's search
+    returned foreign results whose links bounced to its home page, and they
+    used up the result limit.
     """
     if not db_path.exists() or not query.strip():
         return {"communities": [], "venues": [], "persons": []}
 
     escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     pattern = f"%{escaped}%"
+    scope = " AND city IN (SELECT value FROM json_each(?))" if cities is not None else ""
+    scope_args = (json.dumps(sorted(cities)),) if cities is not None else ()
     with _connect(db_path) as conn:
         community_rows = conn.execute(
             "SELECT data FROM communities WHERE hidden=0 AND ("
             "  json_extract(data,'$.name') LIKE ? ESCAPE '\\' OR"
             "  json_extract(data,'$.description') LIKE ? ESCAPE '\\'"
-            ") ORDER BY city, id LIMIT ?",
-            (pattern, pattern, limit),
+            f"){scope} ORDER BY city, id LIMIT ?",
+            (pattern, pattern, *scope_args, limit),
         ).fetchall()
         venue_rows = conn.execute(
             "SELECT data FROM venues WHERE ("
             "  json_extract(data,'$.name') LIKE ? ESCAPE '\\' OR"
             "  json_extract(data,'$.description') LIKE ? ESCAPE '\\'"
-            ") ORDER BY city, id LIMIT ?",
-            (pattern, pattern, limit),
+            f"){scope} ORDER BY city, id LIMIT ?",
+            (pattern, pattern, *scope_args, limit),
         ).fetchall()
         person_rows = conn.execute(
             "SELECT data FROM persons WHERE"
-            "  json_extract(data,'$.name') LIKE ? ESCAPE '\\' ORDER BY city, id LIMIT ?",
-            (pattern, limit),
+            f"  json_extract(data,'$.name') LIKE ? ESCAPE '\\'{scope} ORDER BY city, id LIMIT ?",
+            (pattern, *scope_args, limit),
         ).fetchall()
 
     return {

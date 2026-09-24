@@ -96,3 +96,31 @@ def test_config_editors_refuse_instead_of_losing_the_edit(tmp_path, monkeypatch)
                                              follow_redirects=False)
             assert r.status_code in (302, 303) and "error" in r.headers["location"]
     assert (config_dir / "cities.yaml").read_text(encoding="utf-8") == "cities: []\n"
+
+
+def test_progress_page_renders_and_polls_a_count(tmp_path, monkeypatch):
+    """The page polled every cache entry (~207K rows) every 8 s; it now polls
+    a count. Rendered here because nothing else loads this template.
+    """
+    import base64
+    from unittest.mock import patch
+
+    from fastapi.testclient import TestClient
+
+    from scraper.cache import CacheManager
+    from scraper.db import init_db
+    from scraper.web import app as web_app
+    from scraper.web.state import app_state
+
+    db = tmp_path / "scraper.db"
+    init_db(db)
+    cache = CacheManager(db)
+    cache.save_scraped("https://x.test/a", "text", "Pécs", "running")
+    monkeypatch.setattr(app_state, "db_path", db)
+    monkeypatch.setattr(app_state, "cache_manager", cache)
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:testpass").decode()}
+    with patch("scraper.web.app._ADMIN_PASSWORD", "testpass"):
+        client = TestClient(web_app.app)
+        page = client.get("/admin/progress", headers=auth)
+        assert page.status_code == 200 and "/admin/api/cache-count" in page.text
+        assert client.get("/admin/api/cache-count", headers=auth).json() == {"count": 1}

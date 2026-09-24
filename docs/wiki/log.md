@@ -3,6 +3,14 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-24
+- **Perf**: Event-loop and lock holders. `_connect` set `busy_timeout = 5000` after
+  `timeout=30`, so the real lock wait was 5 s. The fingerprint-column backfill in `init_db` had no
+  marker and re-scanned nearly every cache blob on every boot; it now runs once. Corpus-wide cache
+  invalidations (a global false-positive rule, "clear person cache") commit in rowid chunks instead
+  of rewriting ~6 GB in one transaction. Off the event loop now: the daily report (~45 s at 04:30),
+  the five public form emails to Resend, public search (also scoped to the site's cities — kozossegek
+  returned foreign results that bounced), and the community page's lookups (it read its city twice,
+  once synchronously). The admin progress page polls a count instead of every cache entry each 8 s.
 - **Deprecation**: Dead code removed after grep-verifying no callers: `scraper/vcs.py`,
   `scraper/migrate_json.py` (a one-off JSON import that would overwrite current cache rows if
   run), `scraper/fix_leaked_names.py`, the dormant Playwright fetcher (its package was never in

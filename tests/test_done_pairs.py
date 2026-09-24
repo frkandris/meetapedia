@@ -651,3 +651,28 @@ def test_the_answer_does_not_change_across_the_migration(tmp_path):
     after = get_fully_processed_pairs(db, "community-v2")
 
     assert before == midway == after == {("Budapest", "running")}
+
+
+def test_corpus_wide_invalidation_commits_in_chunks_and_misses_nothing(tmp_path):
+    """One UPDATE over ~200K blobs held the write lock for minutes; chunks
+    must still cover every row, including the last partial range.
+    """
+    import sqlite3
+
+    from scraper.cache import CacheManager
+    from scraper.db import _connect, _update_cache_pages_in_chunks, init_db
+
+    db = tmp_path / "chunks.db"
+    init_db(db)
+    cache = CacheManager(db)
+    for i in range(10):
+        cache.save_scraped(f"https://x.test/{i}", "text", "Pécs", "running")
+        cache.save_extracted(f"https://x.test/{i}", [], fingerprint="fp")
+    with _connect(db) as conn:
+        changed = _update_cache_pages_in_chunks(
+            conn, "extract_fingerprint=NULL, data=json_remove(data, '$.records')",
+            "extract_fingerprint IS NOT NULL", chunk=3)
+    assert changed == 10
+    with sqlite3.connect(db) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM cache_pages"
+                            " WHERE extract_fingerprint IS NOT NULL").fetchone()[0] == 0

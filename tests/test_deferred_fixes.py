@@ -410,3 +410,24 @@ def test_healthz_stays_green_when_the_database_is_slow(tmp_path, monkeypatch):
     finally:
         app_state.db_path = old
         web_app._HEALTH_COUNT_CACHE = (0, 0.0)
+
+
+def test_lock_wait_is_the_thirty_seconds_it_claims(tmp_path):
+    """`busy_timeout = 5000` silently overrode `timeout=30` (review, 2026-09-24)."""
+    from scraper.db import _connect, init_db
+    db = tmp_path / "t.db"
+    init_db(db)
+    with _connect(db) as conn:
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 30000
+
+
+def test_the_fingerprint_backfill_is_recorded_so_it_runs_once(tmp_path):
+    """It had no marker, so every boot re-scanned nearly every cache blob."""
+    import sqlite3
+
+    from scraper.db import _FINGERPRINT_BACKFILL_MIGRATION, init_db
+    db = tmp_path / "t.db"
+    init_db(db)
+    with sqlite3.connect(db) as conn:
+        assert conn.execute("SELECT 1 FROM schema_migrations WHERE name=?",
+                            (_FINGERPRINT_BACKFILL_MIGRATION,)).fetchone()
