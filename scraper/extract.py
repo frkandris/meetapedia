@@ -460,6 +460,14 @@ def _message_text(data: dict) -> str:
     return ""
 
 
+def _answer_content(data: dict) -> str:
+    """The `content` field alone — empty when the answer lives only in reasoning."""
+    try:
+        return ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+    except (AttributeError, IndexError):
+        return ""
+
+
 def _embedded_json_object(text: str) -> dict | None:
     """The first complete JSON object anywhere in `text`.
 
@@ -508,6 +516,12 @@ def _json_items(raw: str, key: str, kind: str, source_url: str) -> list:
             # Third and last chance: a complete object embedded in whatever
             # else the model emitted. See _embedded_json_object.
             payload = _embedded_json_object(raw)
+            if payload is not None and key not in payload:
+                # The first object in free text is only the answer if it has
+                # the answer's shape. A reasoning model restating its schema,
+                # or a nested `{}` inside a truncated answer, decodes too — and
+                # read as "nothing here" it would be cached as an empty page.
+                payload = None
             if payload is None:
                 log.warning("llm_json_parse_failed", kind=kind, source_url=source_url,
                             error=str(exc), raw=raw[:200])
@@ -885,13 +899,21 @@ class _ApiExtractor:
         """
         truncated = self._was_truncated(data, label)
         try:
-            return parse()
+            result = parse()
         except ExtractorContentError as exc:
             if truncated:
                 raise ExtractorContentError(
                     f"answer truncated at max_output_tokens="
                     f"{self.max_output_tokens} ({exc})") from exc
             raise
+        if not result and (truncated or not _answer_content(data)):
+            # "Nothing here" is cached permanently under the fingerprint, so
+            # it must come from a finished answer. An empty list recovered from
+            # a cut-off answer or from the model's reasoning text is at least
+            # as likely to be the schema restated as a verdict about the page.
+            raise ExtractorContentError(
+                "empty result from a truncated or reasoning-only answer")
+        return result
 
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self.api_key}"}
@@ -942,8 +964,10 @@ class _ApiExtractor:
                 headers=self._headers(),
             )
         except Exception as exc:
-            log.warning("api_request_failed", provider=self.__class__.__name__, label=label, error=str(exc))
-            raise ExtractorUnavailableError(f"{self.__class__.__name__}: {exc}") from exc
+            log.warning("api_request_failed", provider=getattr(self, "provider", "?"),
+                        model=self.model, label=label, error=str(exc))
+            raise ExtractorUnavailableError(
+                f"{getattr(self, 'provider', '?')}:{self.model}: {exc}") from exc
         if resp.status_code == 402:
             raise ExtractorQuotaError(f"{self.__class__.__name__} billing limit (HTTP 402)")
         if resp.status_code == 429:
@@ -978,15 +1002,43 @@ class _ApiExtractor:
                         status=resp.status_code, body=resp.text[:200])
             raise ExtractorModelError(
                 f"{getattr(self, 'provider', '?')}:{self.model} HTTP {resp.status_code}")
+        who = f"{getattr(self, 'provider', '?')}:{self.model}"
         if resp.status_code >= 400:
             _CALL_TOKENS.set(0)
             _CALL_PROMPT_TOKENS.set(0)
             _CALL_COMPLETION_TOKENS.set(0)
-            log.warning("api_request_failed", provider=self.__class__.__name__, label=label,
-                        status=resp.status_code, body=resp.text[:200])
-            raise ExtractorUnavailableError(
-                f"{self.__class__.__name__}: HTTP {resp.status_code}")
+            body = resp.text or ""
+            log.warning("api_request_failed", provider=getattr(self, "provider", "?"),
+                        model=self.model, label=label,
+                        status=resp.status_code, body=body[:200])
+            if resp.status_code in (401, 403):
+                # A revoked key or a model we are not entitled to: retrying on
+                # the next page cannot fix it, so retire it for the run.
+                raise ExtractorModelError(f"{who} HTTP {resp.status_code}")
+            if resp.status_code == 400 and ("json_validate_failed" in body
+                                            or "failed_generation" in body):
+                # Groq's answer when the model wrote invalid JSON under
+                # `response_format`. The model answered and the answer was
+                # unusable — a content failure, so the chain moves on to the
+                # next model instead of retrying the whole fleet as if the
+                # network had failed. Until 2026-09-24 this surfaced as an
+                # outage and deferred the entire daily guide step.
+                raise ExtractorContentError(f"{who} produced invalid JSON (HTTP 400)")
+            raise ExtractorUnavailableError(f"{who} HTTP {resp.status_code}")
         data = resp.json()
+        error = data.get("error") if isinstance(data, dict) else None
+        if error and not data.get("choices"):
+            # HTTP 200 carrying a provider error (OpenRouter's free models do
+            # this). Parsed as an answer it read as empty text — a *content*
+            # failure — and counted toward the page's quarantine for what was
+            # an outage upstream.
+            code = error.get("code") if isinstance(error, dict) else None
+            message = str(error.get("message") if isinstance(error, dict) else error)[:200]
+            log.warning("api_error_in_body", provider=getattr(self, "provider", "?"),
+                        model=self.model, label=label, code=code, error=message)
+            if code == 429:
+                raise ExtractorRateLimitError(float(_API_RETRY_DEFAULT_WAIT), message)
+            raise ExtractorUnavailableError(f"{who} error in body: {message}")
         self._note_usage(data)
         return data
 
@@ -1120,6 +1172,7 @@ class _ApiExtractor:
             "model": self.model,
             "messages": [{"role": "user", "content": user_msg}],
             "temperature": temperature,
+            **self._budgeted(),
         }
         data = await self._post(payload, label="chat")
         return data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
@@ -1145,6 +1198,10 @@ class _ApiExtractor:
         payload = {k: v for k, v in params.items() if k in self._PASSTHROUGH_FIELDS}
         payload["model"] = self.model
         payload["messages"] = messages
+        if "max_tokens" not in payload and "max_completion_tokens" not in payload:
+            # No cap means the provider reserves the model's maximum against
+            # its per-minute token window — see CLAUDE.md on `max_tokens`.
+            payload.update(self._budgeted())
         if payload.get("response_format") and not self.json_mode:
             # This provider rejects the field outright; the prompt still asks
             # for JSON, so drop it rather than fail the request.
@@ -1177,9 +1234,13 @@ class _ApiExtractor:
         try:
             obj = json.loads(raw)
         except (TypeError, json.JSONDecodeError):
-            return {}
-        if not isinstance(obj, dict):
-            return {}
+            obj = _embedded_json_object(_unfenced(raw or ""))
+        if not isinstance(obj, dict) or not obj.get("long_description"):
+            # Returned as `{}` this counted as a success: no failover to the
+            # next model, and the record was marked attempted and never retried.
+            raise ExtractorContentError(
+                "truncated description" if self._was_truncated(data, name)
+                else "unusable description JSON")
         return {
             "short_description": str(obj.get("short_description") or "").strip(),
             "long_description": str(obj.get("long_description") or "").strip(),
@@ -1548,10 +1609,14 @@ class FallbackExtractor:
         # at the end: `_call` retries transient errors a second round, so
         # counting per attempt would silently halve the configured threshold.
         failed_here: dict[int, int] = {}
+        # A provider whose answer was unusable is not asked again in round 2:
+        # the identical prompt will not fit the cap now either, and each retry
+        # is charged in full. Round 2 exists for the transient failures.
+        content_failed: set[int] = set()
         for round_no in range(2):
             transient_seen = False
             for i, primary in enumerate(self.primaries):
-                if not self._available(i):
+                if not self._available(i) or i in content_failed:
                     continue
                 # Claim the slot before the await, not after it returns: while
                 # a call is in flight the provider otherwise still looks idle,
@@ -1643,6 +1708,7 @@ class FallbackExtractor:
                     real_failure_seen = True
                     if isinstance(exc, ExtractorContentError):
                         content_failures += 1
+                        content_failed.add(i)
                         # Not retried within the call: the second round sends
                         # the identical prompt to the same fleet, and an answer
                         # that did not fit the cap will not fit it now either.

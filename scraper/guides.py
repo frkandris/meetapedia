@@ -13,6 +13,7 @@ from .db import (bump_daily_counter, count_data_guides_published_on,
                  get_daily_counters_with_prefix,
                  get_guide_candidate_groups, get_stale_data_guides,
                  init_db, replace_data_guide)
+from .extract import ExtractorContentError, _message_text
 from .identity import public_slug
 from .web.i18n import display_languages, get_topic_labels, topic_phrase
 
@@ -97,8 +98,9 @@ Style rules, each of which is checked mechanically before the article is kept:
 Return one JSON object only, with string fields: orientation, practicalities,
 choosing_advice, gaps, plus used_dimensions, an array containing only field
 names from FACT_PACKET.comparison_dimensions that you actually discussed. Each
-section must be at least {min_section} words and the four together at most
-{max_words}; at least {min_named} different group names from the packet must
+section must be at least {min_section} words, and the four together between
+{min_words} and {max_words} words — about {section_target} per section; at least
+{min_named} different group names from the packet must
 appear in them. Say what the packet supports and then stop — padding to a length
 is rejected, and so is repeating yourself to fill space. Before returning,
 silently verify every number and group name against the packet, and check that
@@ -113,23 +115,9 @@ def writer_system_prompt() -> str:
     fleet call to learn what the prompt could have said.
     """
     return _WRITER_SYSTEM.format(min_section=_MIN_SECTION_WORDS,
-                                 max_words=_MAX_WORDS,
+                                 min_words=_MIN_WORDS, max_words=_MAX_WORDS,
+                                 section_target=_MIN_WORDS // len(_SECTIONS) + 20,
                                  min_named=_MIN_NAMED_GROUPS)
-
-
-def _message_text(response: dict) -> str:
-    """The answer, wherever the provider put it.
-
-    A reasoning model out of budget mid-thought returns an empty `content` with
-    the text in `reasoning`; `extract.py` learned this on 2026-09-20 and the
-    guide writer calls the same providers through the same chain.
-    """
-    message = (response or {}).get("choices", [{}])[0].get("message", {}) or {}
-    for field in ("content", "reasoning_content", "reasoning"):
-        value = message.get(field)
-        if isinstance(value, str) and value.strip():
-            return value
-    return ""
 
 
 def _sentences(text: str) -> list[str]:
@@ -200,8 +188,12 @@ def _decode_article(raw: str, allowed_dimensions: set[str],
 
     body = " ".join(obj[k] for k in _SECTIONS)
     word_count = len(body.split())
-    if not _MIN_WORDS <= word_count <= _MAX_WORDS:
-        return None, "word_count"
+    # Two reasons, not one: "word_count" was the most common refusal for three
+    # days running and could not say which way the drafts missed.
+    if word_count < _MIN_WORDS:
+        return None, "too_few_words"
+    if word_count > _MAX_WORDS:
+        return None, "too_many_words"
     if any(len(obj[k].split()) < _MIN_SECTION_WORDS for k in _SECTIONS):
         return None, "thin_section"
 
@@ -497,6 +489,12 @@ async def _draft_guide(db_path: Path, city: str, topic: str, meta, writer, *,
                 packet, ensure_ascii=False, separators=(",", ":"))},
         ], temperature=0.3, max_tokens=_WRITER_MAX_TOKENS,
            response_format={"type": "json_object"})
+    except ExtractorContentError:
+        # Every model that answered wrote something unusable (Groq's
+        # `json_validate_failed`, a truncated draft). That is a verdict on this
+        # draft, like a gate refusal — not an outage, which would defer the
+        # whole day's step and retry the same candidate first next time.
+        response = {}
     finally:
         # Refused and failed calls spend allowance too, and one routed
         # completion may try multiple providers before returning.

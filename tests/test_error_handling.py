@@ -1,5 +1,6 @@
 """Provider-failure handling: typed errors, no empty-result caching, retries."""
 import asyncio
+import json
 import os
 from unittest.mock import patch
 
@@ -846,3 +847,123 @@ def test_the_log_survives_a_directory_it_cannot_write(tmp_path):
     b.add_line({"event": "still_works", "log_level": "info"})
     assert b.get_all()[-1]["text"] == "still_works"
     assert b.history(limit=10)[-1]["text"] == "still_works"   # falls back to the ring
+
+
+def _http_extractor(status: int, body: str):
+    import httpx
+
+    from scraper.providers import OpenAICompatExtractor
+
+    ex = OpenAICompatExtractor(provider="groq", base_url="https://x.test",
+                               api_key="k", model="gpt-oss", quality=50)
+
+    class _Resp:
+        status_code = status
+        text = body
+        headers: dict = {}
+
+        def json(self):
+            import json as _json
+            return _json.loads(body)
+
+    async def _fake_post(*a, **kw):
+        return _Resp()
+
+    return ex, patch.object(httpx.AsyncClient, "post", _fake_post)
+
+
+def test_invalid_json_under_response_format_is_a_content_failure():
+    """Groq's 400 `json_validate_failed`: the model answered badly. Read as an
+    outage it deferred the whole daily guide step (2026-09-22..24).
+    """
+    from scraper.extract import ExtractorContentError
+
+    ex, patched = _http_extractor(
+        400, '{"error":{"code":"json_validate_failed","failed_generation":"ma"}}')
+    with patched, pytest.raises(ExtractorContentError, match="groq:gpt-oss"):
+        asyncio.run(ex._post({"messages": []}, "label"))
+
+
+def test_revoked_key_retires_the_model_for_the_run():
+    from scraper.extract import ExtractorModelError
+
+    ex, patched = _http_extractor(401, '{"error":"invalid api key"}')
+    with patched, pytest.raises(ExtractorModelError):
+        asyncio.run(ex._post({"messages": []}, "label"))
+
+
+def test_http_200_carrying_an_error_is_an_outage_not_an_empty_answer():
+    """Parsed as an answer it read as empty text and counted toward quarantine."""
+    from scraper.extract import (ExtractorContentError, ExtractorRateLimitError,
+                                 ExtractorUnavailableError)
+
+    ex, patched = _http_extractor(200, '{"error":{"code":502,"message":"upstream"}}')
+    with patched, pytest.raises(ExtractorUnavailableError) as info:
+        asyncio.run(ex._post({"messages": []}, "label"))
+    assert not isinstance(info.value, ExtractorContentError)
+
+    ex, patched = _http_extractor(200, '{"error":{"code":429,"message":"slow down"}}')
+    with patched, pytest.raises(ExtractorRateLimitError):
+        asyncio.run(ex._post({"messages": []}, "label"))
+
+
+def test_an_empty_answer_recovered_from_reasoning_is_never_a_verdict():
+    """"Nothing here" is cached forever. From a reasoning model that ran out of
+    budget restating its schema, it is not a verdict about the page.
+    """
+    from scraper.extract import ExtractorContentError
+
+    ex, patched = _http_extractor(200, json.dumps({"choices": [{
+        "finish_reason": "length",
+        "message": {"content": "",
+                    "reasoning": 'I must output {"communities": []} if none'}}]}))
+    with patched, pytest.raises(ExtractorContentError):
+        asyncio.run(ex.extract("text", "Pécs", "running", "hu", "https://p.test"))
+
+    # A finished answer saying "nothing here" is still a legitimate empty page.
+    ex, patched = _http_extractor(200, json.dumps({"choices": [{
+        "finish_reason": "stop", "message": {"content": '{"communities": []}'}}]}))
+    with patched:
+        assert asyncio.run(ex.extract("text", "Pécs", "running", "hu",
+                                      "https://p.test")) == []
+
+
+def test_an_object_embedded_in_free_text_must_have_the_answers_shape():
+    from scraper.extract import ExtractorContentError, _json_items
+
+    with pytest.raises(ExtractorContentError):
+        _json_items('prefix {"note": 1} trailing', "communities", "community", "u")
+    assert _json_items('{\n{"communities": [{"name": "A"}]}', "communities",
+                       "community", "u") == [{"name": "A"}]
+
+
+def test_an_unusable_description_fails_over_instead_of_counting_as_success():
+    from scraper.extract import ExtractorContentError
+
+    ex, patched = _http_extractor(200, json.dumps({"choices": [{
+        "finish_reason": "stop", "message": {"content": "Sure! Here it is"}}]}))
+    with patched, pytest.raises(ExtractorContentError):
+        asyncio.run(ex.write_descriptions("A", "Pécs", "running", "hu", "text"))
+
+
+def test_round_two_does_not_repeat_a_content_failure():
+    """Round 2 exists for transient errors; an answer that did not fit will not
+    fit now either, and each retry is charged in full.
+    """
+    from scraper.extract import (ExtractorContentError, ExtractorUnavailableError,
+                                 FallbackExtractor)
+
+    class _P:
+        def __init__(self, model, exc):
+            self.model, self.exc, self.calls = model, exc, 0
+
+        async def completion(self, messages, **params):
+            self.calls += 1
+            raise self.exc
+
+    bad = _P("bad-json", ExtractorContentError("invalid JSON"))
+    flaky = _P("flaky", ExtractorUnavailableError("HTTP 502"))
+    chain = FallbackExtractor(primaries=[bad, flaky])
+    with pytest.raises(ExtractorUnavailableError):
+        asyncio.run(chain.completion([]))
+    assert bad.calls == 1 and flaky.calls == 2

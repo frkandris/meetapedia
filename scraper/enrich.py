@@ -21,6 +21,7 @@ from .db import (
     mark_enrichment_attempted,
     update_community_enrichment,
 )
+from .extract import ExtractorContentError
 from .fetch import fetch_and_clean
 
 log = structlog.get_logger()
@@ -151,6 +152,15 @@ async def enrich_batch(
         try:
             res = await extractor.write_descriptions(
                 c["name"], c["city"], c["topic"], c.get("locale", "hu"), text)
+        except ExtractorContentError as exc:
+            # Every model that answered wrote something unusable for this page.
+            # Same verdict as an answer that fails `validate`: mark it, so the
+            # next batch does not pay the whole fleet to learn it again.
+            log.info("enrich_unusable_answer", name=c["name"], city=c["city"], error=str(exc))
+            stats["skipped"] += 1
+            if not dry_run:
+                mark_enrichment_attempted(db_path, c["record_key"])
+            continue
         except Exception as exc:
             log.warning("enrich_call_failed", name=c["name"], city=c["city"], error=str(exc))
             stats["failed"] += 1

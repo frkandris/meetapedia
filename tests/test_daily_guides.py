@@ -7,7 +7,7 @@ import pytest
 
 from scraper.db import (bump_daily_counter, get_daily_counter,
                         get_data_guides, init_db)
-from scraper.guides import (_DIMENSIONS, _MAX_WORDS, _MIN_NAMED_GROUPS,
+from scraper.guides import (_DIMENSIONS, _MAX_WORDS, _MIN_NAMED_GROUPS, _MIN_WORDS,
                             _MIN_SECTION_WORDS, _PACKET_BUDGET_CHARS,
                             _decode_article, _fact_packet, _message_text,
                             publish_daily_guides, writer_system_prompt)
@@ -279,6 +279,10 @@ def test_prompt_states_the_limits_the_validator_enforces():
     """A model refused for a rule it was never told costs a call to learn it."""
     prompt = writer_system_prompt()
     assert str(_MIN_SECTION_WORDS) in prompt and str(_MAX_WORDS) in prompt
+    # The total floor too: for three days (2026-09-22..24) the prompt stated
+    # only the per-section floor, four 40-word sections sum to 160, and
+    # "word_count" was the gate's most common refusal.
+    assert str(_MIN_WORDS) in prompt
     assert str(_MIN_NAMED_GROUPS) in prompt
     assert "{" not in prompt, "an unfilled placeholder reached the model"
 

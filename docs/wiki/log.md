@@ -2,6 +2,23 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-24
+- **Fix**: LLM failure classification, from a whole-repo review against production logs. Groq's HTTP
+  400 `json_validate_failed` (the model wrote invalid JSON under `response_format`) was read as an
+  outage: the chain retried the whole fleet in a second round, the page could never be quarantined,
+  and in the guide writer it deferred the entire day's step — the "completion unavailable: HTTP 400"
+  of 2026-09-22..24. It is now `ExtractorContentError`; 401/403 retire the model for the run; an
+  HTTP 200 whose body is a provider error is an outage (429 → rate limit), not an empty answer
+  counted toward quarantine. Round 2 of a call no longer re-asks a provider whose answer was
+  unusable. An empty result from a truncated or reasoning-only answer, or an embedded object
+  without the expected key, is refused instead of being cached as "0 communities" — the one path to
+  permanent silent loss the review found. Descriptions decode tolerantly and fail over instead of
+  returning `{}` as a success; the gateway and admin chat now send a `max_tokens` cap.
+- **Fix**: The guide writer's prompt never stated the 260-word article floor — only 40 words per
+  section, which sums to 160 — and `word_count` was the gate's most common refusal for three days.
+  The refusal is now split into `too_few_words` / `too_many_words`, and a content failure refuses
+  one candidate instead of deferring the day.
+
 ## 2026-09-22
 - **Fix**: A review of the day's own commits found the guide retry had broken the daily budget three
   ways. The worker judged the day by one pass's `len(published)`, so a 4 + 6 day never counted as
