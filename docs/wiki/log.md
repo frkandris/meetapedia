@@ -3,6 +3,10 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-24
+- **Fix**: Enrichment wrote SEO descriptions from cached page text of 300+ characters — including
+  the undecoded Brotli pages — and now skips text that `looks_undecoded`. Its candidate query
+  filters city, the `long_description` marker and the retry cutoff in SQL and runs off the event
+  loop; it read every visible community (~110 MB of JSON) into Python each round.
 - **Cost**: DataForSEO, for when collection runs again. A standard task still queued when the
   25-minute poll window closed was forgotten and posted — and paid for — again on the next pass; it
   is now remembered and resumed. 40102 "No Search Results" kept the poll going for the whole window

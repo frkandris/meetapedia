@@ -1186,9 +1186,17 @@ def get_enrichment_candidates(
     cutoff = (datetime.now(timezone.utc) - timedelta(days=retry_after_days)).isoformat()
     out: list[dict] = []
     with _connect(db_path) as conn:
+        # Filtered in SQL and read lazily: this used to fetchall() every visible
+        # community (~110 MB of JSON) and filter in Python, every round.
         rows = conn.execute(
-            "SELECT record_key, data FROM communities WHERE hidden=0 ORDER BY id"
-        ).fetchall()
+            "SELECT record_key, data FROM communities WHERE hidden=0"
+            " AND city IN (SELECT value FROM json_each(?))"
+            # already enriched (durable marker)
+            " AND TRIM(COALESCE(json_extract(data, '$.long_description'), '')) = ''"
+            # attempted recently and failed — retry later, not now
+            " AND COALESCE(json_extract(data, '$.enrich_attempted_at'), '') <= ?"
+            " ORDER BY id",
+            (json.dumps(sorted(city_names)), cutoff))
         for record_key, data_str in rows:
             if len(out) >= limit:
                 break
@@ -1196,10 +1204,6 @@ def get_enrichment_candidates(
                 d = json.loads(data_str)
             except (TypeError, json.JSONDecodeError):
                 continue
-            if d.get("city") not in city_names or (d.get("long_description") or "").strip():
-                continue  # already enriched (durable marker) or out of scope
-            if (d.get("enrich_attempted_at") or "") > cutoff:
-                continue  # attempted recently and failed — retry later, not now
             urls = d.get("source_urls") or ([d["source_url"]] if d.get("source_url") else [])
             if not urls:
                 continue

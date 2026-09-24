@@ -395,3 +395,20 @@ def test_a_description_that_never_reached_a_provider_counts_zero(tmp_path):
 
     _count_attempts(db, -1)         # never happens, but must not decrement
     assert _counter(db) == 3
+
+
+def test_a_description_is_never_written_from_undecoded_bytes(tmp_path):
+    """~28% of cached pages were undecoded Brotli (2026-09-24), and enrichment
+    reused any cached text of 300+ characters.
+    """
+    db = _setup(tmp_path, raw_text="�\x07k��Z\x13�" * 100)
+    ex = FakeExtractor()
+    stats = asyncio.run(enrich_batch(db, ex, HU, limit=10, fetch_missing=False))
+    assert ex.calls == 0 and stats["enriched"] == 0
+
+
+def test_recently_attempted_and_enriched_records_are_not_candidates(tmp_path):
+    from scraper.db import mark_enrichment_attempted, _community_record_key
+    db = _setup(tmp_path)
+    mark_enrichment_attempted(db, _community_record_key("Zenei Kör", "Budapest", "music"))
+    assert get_enrichment_candidates(db, HU, limit=10) == []

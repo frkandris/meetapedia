@@ -12,6 +12,7 @@ a human reviews output before scaling.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 import structlog
@@ -22,7 +23,7 @@ from .db import (
     update_community_enrichment,
 )
 from .extract import ExtractorContentError
-from .fetch import fetch_and_clean
+from .fetch import fetch_and_clean, looks_undecoded
 
 log = structlog.get_logger()
 
@@ -101,7 +102,8 @@ async def enrich_batch(
     long_description). Uses cached source raw_text, or fetches the page fresh when
     missing (if `fetch_missing`). Returns stats + before/after samples for review."""
     limit = max(0, min(limit, MAX_BATCH))
-    pool = get_enrichment_candidates(
+    pool = await asyncio.to_thread(
+        get_enrichment_candidates,
         db_path, set(city_names), min(MAX_BATCH, max(limit * 3, limit)))
     stats = {"pool": len(pool), "enriched": 0, "skipped": 0, "no_source": 0,
              "failed": 0, "dry_run": dry_run,
@@ -111,6 +113,10 @@ async def enrich_batch(
         if stats["enriched"] >= limit:
             break
         text = c.get("raw_text")
+        if text and looks_undecoded(text):
+            # Undecoded Brotli cached as text (2026-09-24): a description
+            # written from it would be invented, not summarised.
+            text = None
         if not text and fetch_missing:
             # try each source in turn — the first may be blocked/dead while a
             # later one is reachable
