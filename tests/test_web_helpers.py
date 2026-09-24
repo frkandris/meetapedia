@@ -124,3 +124,35 @@ def test_progress_page_renders_and_polls_a_count(tmp_path, monkeypatch):
         page = client.get("/admin/progress", headers=auth)
         assert page.status_code == 200 and "/admin/api/cache-count" in page.text
         assert client.get("/admin/api/cache-count", headers=auth).json() == {"count": 1}
+
+
+def test_a_global_extraction_rule_needs_explicit_confirmation(tmp_path, monkeypatch):
+    """Adding or removing one re-extracts every cached page; a stray click did
+    it silently (review, 2026-09-24).
+    """
+    import base64
+    from unittest.mock import patch
+
+    from fastapi.testclient import TestClient
+
+    from scraper.db import init_db
+    from scraper.false_positives import get_false_positives
+    from scraper.web import app as web_app
+    from scraper.web.state import app_state
+
+    db = tmp_path / "scraper.db"
+    init_db(db)
+    monkeypatch.setattr(app_state, "db_path", db)
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:testpass").decode(),
+            "Origin": "http://testserver"}
+    with patch("scraper.web.app._ADMIN_PASSWORD", "testpass"):
+        client = TestClient(web_app.app)
+        first = client.post("/admin/prompts/nc-accept", headers=auth,
+                            data={"rule_text": "Ne vedd fel az iskolákat."}).json()
+        assert first == {"ok": False, "needs_confirm": True, "pages": 0}
+        assert not get_false_positives(db)
+        second = client.post("/admin/prompts/nc-accept", headers=auth,
+                             data={"rule_text": "Ne vedd fel az iskolákat.",
+                                   "confirm": "re-extract-all"}).json()
+        assert second == {"ok": True}
+    assert len(get_false_positives(db)) == 1

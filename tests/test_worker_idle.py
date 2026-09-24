@@ -220,3 +220,24 @@ def test_the_deadline_does_not_replace_the_mode_s_own_condition():
     # …but not while extraction is still parked after an empty pass.
     assert not worker_should_stop(mode=WORKER_COLLECT, quota=True,
                                   extract_ready=False, past_deadline=False)
+
+
+def test_the_collector_gets_turns_while_quota_never_runs_out():
+    """The local GPU has no daily limit, so "collect when extraction is done"
+    meant never: nothing was collected from 2026-09-17 to 2026-09-24.
+    """
+    from scraper.pipeline import (WORKER_COLLECT, WORKER_EXTRACT, next_worker_action,
+                                  worker_should_stop)
+
+    kw = dict(is_running=False, paused=False, quota=True, extract_ready=True)
+    assert next_worker_action(**kw) == WORKER_EXTRACT
+    assert next_worker_action(**kw, collect_due=True) == WORKER_COLLECT
+    # A collector turn is not ended by extraction being possible — only by its
+    # own time box.
+    assert not worker_should_stop(mode=WORKER_COLLECT, quota=True, extract_ready=True,
+                                  past_deadline=False, alternating=True)
+    assert worker_should_stop(mode=WORKER_COLLECT, quota=True, extract_ready=True,
+                              past_deadline=True, alternating=True)
+    # Outside a turn the old rule holds: quota back means extraction resumes.
+    assert worker_should_stop(mode=WORKER_COLLECT, quota=True, extract_ready=True,
+                              past_deadline=False)

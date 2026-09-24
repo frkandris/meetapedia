@@ -374,10 +374,22 @@ async function ncAccept() {
   const fd = new FormData();
   fd.append('rule_text', text);
   try {
-    const r = await fetch('/admin/prompts/nc-accept', { method: 'POST', body: fd });
-    const d = await r.json();
+    const d = await postConfirmingReextract('/admin/prompts/nc-accept', fd);
     if (d.ok) document.getElementById('nc-accepted-msg').classList.remove('hidden');
   } catch (e) {}
+}
+
+// A global rule change re-extracts every cached page. The server refuses the
+// first request and says how many pages that is; only an explicit yes resends.
+async function postConfirmingReextract(url, fd) {
+  let d = await (await fetch(url, { method: 'POST', body: fd })).json();
+  if (d.needs_confirm) {
+    const ok = confirm(`Ez az összes kinyerést érvényteleníti: ${d.pages} oldalt kell újra feldolgozni, ami hetekig tarthat. Folytatod?`);
+    if (!ok) return { ok: false };
+    fd.append('confirm', 're-extract-all');
+    d = await (await fetch(url, { method: 'POST', body: fd })).json();
+  }
+  return d;
 }
 
 async function removeRule(btn, name) {
@@ -385,7 +397,8 @@ async function removeRule(btn, name) {
   const fd = new FormData();
   fd.append('name', name);
   try {
-    await fetch('/admin/prompts/nc-rule-remove', { method: 'POST', body: fd });
+    const d = await postConfirmingReextract('/admin/prompts/nc-rule-remove', fd);
+    if (!d.ok) return;
     row.style.opacity = '0.3';
     setTimeout(() => row.remove(), 300);
   } catch (e) {}

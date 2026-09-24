@@ -25,6 +25,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ..config import load_config
 from ..db import (
+    count_extracted_pages,
     count_cache_pages,
     get_sitemap_communities,
     find_community_by_id,
@@ -6004,11 +6005,26 @@ async def prompts_nc_assist(notes: str = Form("")):
         return JSONResponse({"ok": False, "suggestion": f"Error: {exc}"})
 
 
+async def _global_rule_needs_confirm(confirm: str) -> JSONResponse | None:
+    """A global extraction rule invalidates every cached extraction.
+
+    Adding or removing one re-extracts the whole corpus (~200K pages, weeks of
+    the fleet's work), so the admin must confirm with the number in front of
+    them; a stray click used to do it silently.
+    """
+    if confirm == "re-extract-all":
+        return None
+    pages = await asyncio.to_thread(count_extracted_pages, _db())
+    return JSONResponse({"ok": False, "needs_confirm": True, "pages": pages})
+
+
 @admin.post("/prompts/nc-accept")
-async def prompts_nc_accept(rule_text: str = Form(...)):
+async def prompts_nc_accept(rule_text: str = Form(...), confirm: str = Form("")):
     """Save an AI-generated extraction rule into the prompt."""
     if not app_state.db_path or not rule_text.strip():
         return JSONResponse({"ok": False})
+    if (refusal := await _global_rule_needs_confirm(confirm)):
+        return refusal
     from ..false_positives import add as fp_add
     fp_add(
         _db(),
@@ -6023,10 +6039,12 @@ async def prompts_nc_accept(rule_text: str = Form(...)):
 
 
 @admin.post("/prompts/nc-rule-remove")
-async def prompts_nc_rule_remove(name: str = Form(...)):
+async def prompts_nc_rule_remove(name: str = Form(...), confirm: str = Form("")):
     """Remove an AI-generated extraction rule."""
     if not app_state.db_path:
         return JSONResponse({"ok": False})
+    if (refusal := await _global_rule_needs_confirm(confirm)):
+        return refusal
     from ..false_positives import remove as fp_remove
     fp_remove(_db(), name=name, city="", topic="", fp_type="extraction_rule")
     return JSONResponse({"ok": True})

@@ -420,6 +420,9 @@ async def main() -> None:
     #: is cheap by construction: finished pairs are persisted, the done-pair
     #: pre-filter skips them, and unfinished work is simply pending again.
     _WORKER_MAX_RUN_SECONDS = 2 * 3600
+    #: The collector's turn between extraction passes. Short, because the local
+    #: GPU is the bottleneck and the collector only has to stay ahead of it.
+    _WORKER_COLLECT_TURN_SECONDS = 30 * 60
 
     #: The quota answer is cached for this long. `should_stop` is consulted
     #: between every pair, and building a router parses the provider catalogue
@@ -465,6 +468,8 @@ async def main() -> None:
         extract_idle_until = 0.0
         empty_extractions = 0
         empty_collections = 0
+        collect_day = ""
+        last_mode = ""
         guides_checked_day = ""
         guides_retry_at = 0.0
         log.info("worker_started")
@@ -534,17 +539,29 @@ async def main() -> None:
 
                 quota = _free_quota_available()
                 extract_ready = _time.monotonic() >= extract_idle_until
+                if collect_day != utc_day:
+                    # A collector that found nothing yesterday may have work
+                    # today (an import, a repair); give it its turns back.
+                    collect_day, empty_collections = utc_day, 0
+                # After each extraction pass the collector gets a turn, until
+                # it has come back empty `_WORKER_EMPTY_LIMIT` times in a row.
+                collect_due = (last_mode == "ai_only"
+                               and empty_collections < _WORKER_EMPTY_LIMIT)
                 mode = next_worker_action(
                     is_running=False, paused=False,
-                    quota=quota, extract_ready=extract_ready)
-                pass_deadline = _time.monotonic() + _WORKER_MAX_RUN_SECONDS
+                    quota=quota, extract_ready=extract_ready,
+                    collect_due=collect_due)
+                alternating = mode == "search_only" and quota and extract_ready
+                pass_deadline = _time.monotonic() + (
+                    _WORKER_COLLECT_TURN_SECONDS if alternating else _WORKER_MAX_RUN_SECONDS)
 
                 def _preempt() -> bool:
                     return worker_should_stop(
                         mode=mode,
                         quota=_free_quota_available(),
                         extract_ready=_time.monotonic() >= extract_idle_until,
-                        past_deadline=_time.monotonic() >= pass_deadline)
+                        past_deadline=_time.monotonic() >= pass_deadline,
+                        alternating=alternating)
 
                 finished = asyncio.Event()
                 outcome: dict = {}
@@ -623,7 +640,10 @@ async def main() -> None:
                     extract_idle_until = (
                         _time.monotonic() + after.extract_cooldown
                         if after.extract_cooldown else 0.0)
-                if after.sleep:
+                last_mode = mode
+                if after.sleep and not alternating:
+                    # A turn that found nothing hands straight back to
+                    # extraction; sleeping would idle a working GPU.
                     await asyncio.sleep(after.sleep)
             except asyncio.CancelledError:
                 log.info("worker_stopped")

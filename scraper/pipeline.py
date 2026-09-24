@@ -487,7 +487,7 @@ WORKER_WAIT, WORKER_EXTRACT, WORKER_COLLECT = "wait", "ai_only", "search_only"
 
 
 def next_worker_action(*, is_running: bool, paused: bool, quota: bool,
-                       extract_ready: bool) -> str:
+                       extract_ready: bool, collect_due: bool = False) -> str:
     """Choose the next action from the four facts that decide it.
 
     Extracted from the worker loop so the choice can be tested as a choice.
@@ -496,15 +496,22 @@ def next_worker_action(*, is_running: bool, paused: bool, quota: bool,
     logic is wrong and fails when a variable is renamed.
 
     The rule itself: free quota expires at midnight and collection costs money,
-    so extraction goes first whenever there is budget and work to spend it on.
+    so extraction goes first whenever there is budget and work to spend it on
+    — except when `collect_due` gives the collector its turn. Since the local
+    GPU joined the fleet (no daily limit) the quota never runs out, so
+    "collect when extraction is done" meant never: nothing was collected
+    from 2026-09-17 on. The worker now alternates the two while collection
+    still finds work.
     """
     if is_running or paused:
         return WORKER_WAIT
-    return WORKER_EXTRACT if (quota and extract_ready) else WORKER_COLLECT
+    if quota and extract_ready and not collect_due:
+        return WORKER_EXTRACT
+    return WORKER_COLLECT
 
 
 def worker_should_stop(*, mode: str, quota: bool, extract_ready: bool,
-                       past_deadline: bool) -> bool:
+                       past_deadline: bool, alternating: bool = False) -> bool:
     """Whether a pass in flight should hand the loop back now.
 
     Extracted from the worker for the same reason as `next_worker_action`: it
@@ -527,6 +534,10 @@ def worker_should_stop(*, mode: str, quota: bool, extract_ready: bool,
         return True
     if mode == WORKER_EXTRACT:
         return not quota
+    if alternating:
+        # The collector's turn is bounded by its own shorter time box; that
+        # extraction could run is exactly why it was a turn and not an idle.
+        return False
     return quota and extract_ready
 
 

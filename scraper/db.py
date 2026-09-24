@@ -2287,6 +2287,15 @@ def clear_person_cache(db_path: Path) -> int:
             " OR json_extract(data, '$.person_extracted_at') IS NOT NULL")
 
 
+def count_extracted_pages(db_path: Path) -> int:
+    """Pages holding a cached community extraction."""
+    if not db_path.exists():
+        return 0
+    with _connect(db_path) as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM cache_pages WHERE extract_fingerprint IS NOT NULL").fetchone()[0]
+
+
 def count_cache_pages(db_path: Path) -> int:
     if not db_path.exists():
         return 0

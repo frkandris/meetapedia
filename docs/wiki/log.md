@@ -3,6 +3,13 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-24
+- **Change**: The worker alternates. After each extraction pass the collector gets a turn of at most
+  30 minutes, until it has come back empty three times that UTC day. `localgpu` has no daily limit,
+  so "collect once the free quota is gone" meant never: no `search_only` pass ran from 2026-09-17,
+  11,677 pairs waited for a search, and re-downloading the undecoded pages needs the collector. A
+  turn that finds nothing hands straight back to extraction instead of sleeping.
+- **Guard**: A global extraction rule re-extracts the whole corpus, so adding or removing one now
+  needs an explicit confirmation that shows the number of pages affected.
 - **Fix**: Enrichment wrote SEO descriptions from cached page text of 300+ characters — including
   the undecoded Brotli pages — and now skips text that `looks_undecoded`. Its candidate query
   filters city, the `long_description` marker and the retry cutoff in SQL and runs off the event
