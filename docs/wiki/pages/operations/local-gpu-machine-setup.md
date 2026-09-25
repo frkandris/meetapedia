@@ -44,8 +44,11 @@ costs a redeploy and buys nothing.
 ## The sequence
 
 ```bash
-brew install llama.cpp cloudflared
-mkdir -p ~/models && hf download unsloth/Qwen3.5-4B-GGUF Qwen3.5-4B-Q4_K_M.gguf --local-dir ~/models
+brew install cloudflared
+# llama.cpp: the official release binary (brew lagged at b11146); production runs b11189
+mkdir -p ~/opt && cd ~/opt   # unpack llama-bNNNNN-bin-macos-arm64.zip here, verify its sha256
+hf auth login                 # a read token; anonymous downloads are throttled to ~0.5-1.5 MB/s
+mkdir -p ~/models && hf download unsloth/Qwen3.5-4B-GGUF Qwen3.5-4B-Q6_K.gguf --local-dir ~/models
 mkdir -p ~/.meetapedia && chmod 700 ~/.meetapedia
 # write the server's LOCAL_GPU_KEY value (Coolify → env) into this file:
 chmod 600 ~/.meetapedia/localgpu.key
@@ -57,11 +60,10 @@ argument, so the literal key would be visible to any process on the machine.
 Two launchd agents in `~/Library/LaunchAgents`, both `RunAtLoad` + `KeepAlive`, both
 wrapped in `caffeinate -i`, logging to `~/Library/Logs/meetapedia/`:
 
-- `com.meetapedia.llama` → `caffeinate -i llama-server -m ~/models/Qwen3.5-4B-Q4_K_M.gguf
-  --alias qwen3.5-4b-q4km --host 127.0.0.1 --port 8080 -c 20480 -np 2 -fa on
-  -ctk q8_0 -ctv q8_0 -ngl 99
-  --api-key-file ~/.meetapedia/localgpu.key
-  --chat-template-kwargs '{"enable_thinking":false}'`
+- `com.meetapedia.llama` → `caffeinate -i ~/opt/llama-b11189/llama-b11189/llama-server
+  -m ~/models/Qwen3.5-4B-Q6_K.gguf --alias qwen3.5-4b-q6k --host 127.0.0.1 --port 8080
+  -c 20480 -np 2 -fa on -ctk q8_0 -ctv q8_0 -ngl 99
+  --api-key-file ~/.meetapedia/localgpu.key --reasoning off`
 - `com.meetapedia.tunnel` → `caffeinate -i cloudflared tunnel --config
   ~/.cloudflared/config.yml run`, with `config.yml` routing `gpu.meetapedia.com` to
   `http://127.0.0.1:8080`.
@@ -142,6 +144,22 @@ small sample; it has served production since 19:15 UTC with `--alias qwen3.5-4b-
 of the plist and `providers.yaml` changes did not matter). The Qwen3-4B plist is kept as
 `com.meetapedia.llama.plist.qwen3-4b.bak`; restoring it is `cp`, bootout, bootstrap. No machine paged with either
 candidate on 16 GB (0 swapouts while loaded).
+
+Later that evening, on a 40-page sample (`d4d72f4c9327`): Q6_K 79 (40/40, no truncation,
+7 min 8 s) against Q4_K_M 78 (39/40, one runaway truncated at 4,000 tokens, 10 min 45 s).
+Production runs **Q6_K** with `--alias qwen3.5-4b-q6k`; the Q4_K_M plist is kept as
+`com.meetapedia.llama.plist.qwen3.5-q4km.bak`.
+
+## Remote access for the server session
+
+The server-side Claude session operates this machine over SSH through the same tunnel:
+`ssh-gpu.meetapedia.com` → `ssh://localhost:22` in `~/.cloudflared/config.yml`, reached with
+`cloudflared access ssh` (host alias `meetapedia-gpu`). Remote Login is on for `ptothandras`
+only; `/etc/ssh/sshd_config.d/100-meetapedia.conf` disables password and keyboard-interactive
+login and sets `AllowUsers ptothandras`; the one authorized key is restricted with
+`no-agent-forwarding,no-X11-forwarding,no-port-forwarding`. A model swap is a `PlistBuddy`
+edit of `ProgramArguments`, then bootout/bootstrap, then `/props` — whose JSON carries raw
+control characters in the chat template, so parse it leniently (`strict=False`).
 
 ## The machine is a provider, so absence must stay legible
 
