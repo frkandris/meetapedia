@@ -122,3 +122,29 @@ def test_a_broken_ledger_does_not_break_a_scoring_run(tmp_path):
               "text": "szöveg", "expected": frozenset()}]
     out = asyncio.run(score_model(_Ex(), pages, router=_AngryRouter()))
     assert out["answered"] == 1, "the run completed despite the ledger failing"
+
+
+def test_the_golden_set_reads_past_empty_and_foreign_pages_until_it_is_full(tmp_path):
+    """It took the first `limit * 8` rows and filtered afterwards, so 16
+    requested Hungarian pages became 7 (2026-09-25)."""
+    import hashlib
+    import json
+    import sqlite3
+
+    from scraper.db import init_db
+    from scraper.scoring import golden_set
+
+    db = tmp_path / "g.db"
+    init_db(db)
+    with sqlite3.connect(db) as conn:
+        for i in range(200):
+            hungarian_with_names = i % 10 == 0
+            records = ([{"name": f"Klub {i}", "locale": "hu"}]
+                       if hungarian_with_names else [])
+            conn.execute(
+                "INSERT INTO cache_pages (url_hash, url, city, topic, domain, scraped_at,"
+                " extracted_at, records_count, data) VALUES (?,?,?,?,?,?,?,?,?)",
+                (hashlib.sha256(str(i).encode()).hexdigest()[:16], f"https://x.test/{i}",
+                 "Pécs", "running", "x.test", "2026-01-01", "2026-01-01", len(records),
+                 json.dumps({"raw_text": "szöveg " * 50, "records": records})))
+    assert len(golden_set(db, limit=16, locale="hu")) == 16

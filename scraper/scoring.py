@@ -317,7 +317,6 @@ def golden_set(db_path: Path, limit: int = 12,
     """
     if not Path(db_path).exists():
         raise FileNotFoundError(f"no database at {db_path}")
-    out: list[dict] = []
     with _connect(db_path) as conn:
         # ORDER BY url_hash, NOT extracted_at: the pipeline rewrites
         # extracted_at continuously, so a "most recently extracted" sample is a
@@ -326,16 +325,24 @@ def golden_set(db_path: Path, limit: int = 12,
         # which is exactly what happened on 2026-08-16, where mistral-small
         # appeared to fall 80 -> 55 between runs. url_hash is stable, so the
         # sample only drifts as the corpus itself grows.
+        # Filtered in SQL and read until `limit` qualify. It used to take the
+        # first `limit * 8` rows and filter afterwards; with ~44% of pages
+        # yielding no community and ~70% not Hungarian, 16 requested pages
+        # became 7 (2026-09-25) — too few to separate models a few points apart.
         rows = conn.execute(
             """
             SELECT url, city, topic, data
               FROM cache_pages
-             WHERE extracted_at IS NOT NULL
+             WHERE extracted_at IS NOT NULL AND (records_count > 0 OR records_count IS NULL)
              ORDER BY url_hash
-             LIMIT ?
             """,
-            (limit * 8,),
-        ).fetchall()
+        )
+        rows = _collect(rows, limit, locale)
+    return rows
+
+
+def _collect(rows, limit: int, locale: str | None) -> list[dict]:
+    out: list[dict] = []
     for url, city, topic, blob in rows:
         try:
             entry = json.loads(blob)

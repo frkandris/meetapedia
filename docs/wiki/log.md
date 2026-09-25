@@ -3,6 +3,10 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-25
+- **Fix**: `scoring.golden_set` took the first `limit * 8` cached pages and filtered afterwards, so
+  with ~44% of pages yielding no community and ~70% not Hungarian, 16 requested Hungarian pages
+  became 7 — too few to separate models a few points apart. It now filters in SQL and reads until the
+  requested number qualify. Samples change fingerprint as a result; compare only within one.
 - **Decision**: `localgpu` switches to Qwen3.5-4B (quality 77). On the same 7 Hungarian pages it
   scored 77 against Qwen3-4B's 54 and Gemma 4 E4B's 41 at the same speed; see
   [[our-own-gpu-in-the-fleet]]. Measured with the worker paused, coordinated on `/admin/board`.
