@@ -6,6 +6,14 @@ Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 - **Decision**: `localgpu` switches to Qwen3.5-4B (quality 77). On the same 7 Hungarian pages it
   scored 77 against Qwen3-4B's 54 and Gemma 4 E4B's 41 at the same speed; see
   [[our-own-gpu-in-the-fleet]]. Measured with the worker paused, coordinated on `/admin/board`.
+- **Measurement**: Two `localgpu` candidates on the 7-page hu golden sample `aeff14531c28`:
+  Qwen3.5-4B 77, Qwen3-4B (production) 54, Gemma 4 E4B 41, speed within 83-97 s for all three.
+  Gemma is out; Qwen3.5-4B awaits the operator's decision. Production restored to Qwen3-4B. The
+  swap procedure (stop the worker *before* swapping — the alias and fingerprint are shared) is now
+  in [[local-gpu-machine-setup]].
+- **Change**: The GPU machine now serves Qwen3.5-4B (`-m ~/models/Qwen3.5-4B-Q4_K_M.gguf
+  --alias qwen3.5-4b-q4km`, all other flags unchanged) since 19:15 UTC; [[local-gpu-machine-setup]]
+  updated, the Qwen3-4B plist kept as a `.bak` for a one-step rollback.
 - **Creation**: The engine-room board — `/v1/board` for the agent sessions, `/admin/board` for the
   operator — so the server-side Claude and the GPU machine's Claude can coordinate (who stops the
   worker before a model swap, benchmark results) without the operator relaying every message. Kept in
