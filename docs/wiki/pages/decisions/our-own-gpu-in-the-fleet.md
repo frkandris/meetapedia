@@ -243,3 +243,9 @@ two full calls — per slot at least prompt + 4,000:
 
 (`-c` is the total across slots; q8_0 KV halves its memory to ~1.5 GB.)
 
+Applied the same day to the launchd agent (keeping `--alias`, `--api-key-file`,
+`-ngl 99` and the thinking switch): `/props` reports 2 slots at `n_ctx: 10240`, an
+unauthenticated request still 401s, and a test call answered clean JSON with no
+reasoning text. `max_concurrency` is still 1 — the room exists now; two parallel
+real pages have not been measured yet.
+

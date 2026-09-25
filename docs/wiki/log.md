@@ -3,6 +3,11 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-25
+- **Change**: The `com.meetapedia.llama` launchd agent now runs `-c 20480 -np 2 -fa on -ctk q8_0
+  -ctv q8_0` (was `-c 8192`): two slots of 10,240 tokens, verified via `/props`; auth and the
+  thinking switch unchanged. `max_concurrency` stays 1 until two parallel pages are measured.
+  [[local-gpu-machine-setup]] corrected: `kickstart -k` does not re-read an edited plist — bootout +
+  bootstrap. CLAUDE.md updated.
 - **Fix**: The pipeline was extracting our own site. Search results include kozossegek.com listing
   pages; 1,018 were cached and re-extracted (e.g. `kozossegek.com/veszprem`, 35 communities),
   importing our own records back as new sources, errors included — 146 communities cite us. Both

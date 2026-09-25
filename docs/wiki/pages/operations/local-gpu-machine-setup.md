@@ -3,7 +3,7 @@ type: Runbook
 title: Setting Up the Local GPU Machine From Scratch
 description: Exact steps to turn a freshly installed Apple Silicon Mac back into the `localgpu` provider — llama.cpp, the model, two launchd agents, and retaking the existing named tunnel.
 tags: [operations, local-inference, llama-cpp, cloudflare-tunnel, launchd, providers]
-timestamp: 2026-09-17
+timestamp: 2026-09-25
 resource: config/providers.yaml
 ---
 
@@ -59,7 +59,8 @@ Two launchd agents in `~/Library/LaunchAgents`, both `RunAtLoad` + `KeepAlive`, 
 wrapped in `caffeinate -i`, logging to `~/Library/Logs/meetapedia/`:
 
 - `com.meetapedia.llama` → `caffeinate -i llama-server -m ~/models/Qwen3-4B-Q4_K_M.gguf
-  --alias qwen3-4b-q4km --host 127.0.0.1 --port 8080 -c 8192 -ngl 99
+  --alias qwen3-4b-q4km --host 127.0.0.1 --port 8080 -c 20480 -np 2 -fa on
+  -ctk q8_0 -ctv q8_0 -ngl 99
   --api-key-file ~/.meetapedia/localgpu.key
   --chat-template-kwargs '{"enable_thinking":false}'`
 - `com.meetapedia.tunnel` → `caffeinate -i cloudflared tunnel --config
@@ -70,8 +71,15 @@ wrapped in `caffeinate -i`, logging to `~/Library/Logs/meetapedia/`:
 `localgpu:qwen3-4b-q4km` resolves at the gateway. `--host 127.0.0.1` because the tunnel
 is the only intended door in.
 
-Load them with `launchctl bootstrap gui/$(id -u) <plist>`; after editing one,
-`launchctl kickstart -k gui/$(id -u)/com.meetapedia.llama` restarts it in place.
+`-c` is the total shared by the `-np` slots (10,240 each: a ~4.6K-token prompt plus
+`max_output_tokens: 4000`); `-fa on` is required for the q8_0 V cache. Changed from
+`-c 8192` on 2026-09-25 — see [[our-own-gpu-in-the-fleet]].
+
+Load them with `launchctl bootstrap gui/$(id -u) <plist>`. `launchctl kickstart -k
+gui/$(id -u)/com.meetapedia.llama` restarts one with the arguments launchd already
+holds, so after **editing** a plist, `launchctl bootout gui/$(id -u)/com.meetapedia.llama`
+and bootstrap it again (retry the bootstrap if it answers error 5: the bootout has not
+finished).
 
 ## Verifying, in the order that isolates faults
 
