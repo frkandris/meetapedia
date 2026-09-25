@@ -3,6 +3,10 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-25
+- **Decision**: `localgpu` runs Qwen3.5-4B **Q6_K** on llama.cpp b11189 with `--reasoning off`. On 40
+  Hungarian pages Q6_K scored 79 (40/40, no truncation, 7 min 8 s) against Q4_K_M's 78 (39/40, one
+  runaway truncated at 4,000 tokens, 10 min 45 s); see [[our-own-gpu-in-the-fleet]]. The machine is
+  now operated over SSH through its Cloudflare tunnel, key-only.
 - **Deprecation**: The engine-room board (`/v1/board`, `/admin/board`) is removed, the same day it was
   added. The server-side session now reaches the GPU machine directly over SSH, through the machine's
   existing Cloudflare tunnel (`ssh-gpu.meetapedia.com`, key-only, password login disabled), so a

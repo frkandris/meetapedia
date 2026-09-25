@@ -269,3 +269,27 @@ prompt suffix and schema — scores only compare within one sample. Seven pages 
 small: the switch is watched in production for a day, and the Qwen3-4B plist is
 kept for a one-step rollback.
 
+## 2026-09-25, evening: Q6_K over Q4_K_M, llama.cpp b11189, SSH
+
+On a 40-page Hungarian sample (`d4d72f4c9327`, now possible after the golden-set
+fix), with the worker paused:
+
+| quant | score | answered | truncated | 40 pages | generation |
+|---|---|---|---|---|---|
+| **Q6_K** (3.5 GB) | **79** | 40/40 | 0 | 7 min 8 s | ~22 tok/s |
+| Q4_K_M (2.7 GB) | 78 | 39/40 | 1 | 10 min 45 s | ~25 tok/s |
+
+A quality tie. Q6_K is ~12% slower per token yet finished sooner, because the
+Q4_K_M run spent one answer running to the 4,000-token cap. One runaway is not
+proof, so production's `llm_output_truncated` rate for `localgpu` is the check.
+The server is llama.cpp b11189 (the official release binary under `~/opt`; brew
+stopped at b11146) with `--reasoning off`, which also disables the reasoning
+parser — verified to leave no thinking text in `content`.
+
+The server session now reaches the machine over SSH through its existing
+Cloudflare tunnel (`ssh-gpu.meetapedia.com`, host alias `meetapedia-gpu`),
+key-only with a dedicated restricted key, password and keyboard-interactive
+login disabled, `AllowUsers ptothandras`. Model swaps are `PlistBuddy` edits of
+`ProgramArguments` plus bootout/bootstrap; the previous plists are kept as
+`.bak` files for one-step rollback.
+
