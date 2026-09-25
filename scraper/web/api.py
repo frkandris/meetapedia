@@ -256,6 +256,72 @@ async def quota(authorization: str | None = Header(default=None)):
     }
 
 
+# ── Engine-room board ─────────────────────────────────────────────────────────
+# Where the Claude sessions that operate this deployment leave each other
+# messages without the operator relaying them: the server-side session and the
+# one on the local GPU machine. Accepts the operator key or LOCAL_GPU_KEY — the
+# GPU machine already holds the latter, so no new secret has to be handed out.
+
+
+def _board_authorized(authorization: str | None) -> bool:
+    if _control_authorized(authorization):
+        return True
+    gpu_key = (os.environ.get("LOCAL_GPU_KEY") or "").strip()
+    token = authorization[7:].strip() if (
+        authorization and authorization.lower().startswith("bearer ")) else ""
+    return bool(gpu_key) and hmac.compare_digest(
+        token.encode("utf-8", "surrogatepass"), gpu_key.encode("utf-8"))
+
+
+@router.get("/board")
+async def board_read(since: int = 0, authorization: str | None = Header(default=None)):
+    """State plus messages after `since` (a message id), oldest first."""
+    if not _board_authorized(authorization):
+        return _error(401, "Invalid or missing API key.", "invalid_request_error",
+                      "invalid_api_key")
+    from ..db import get_board_messages, get_board_state
+    db = app_state.db_path
+    messages = await asyncio.to_thread(get_board_messages, db, since) if db else []
+    state = await asyncio.to_thread(get_board_state, db) if db else None
+    return {"object": "board", "state": state, "messages": messages}
+
+
+@router.post("/board/messages")
+async def board_post(request: Request, authorization: str | None = Header(default=None)):
+    """Body: {"author": "szerver"|"gpu", "text": "..."}"""
+    if not _board_authorized(authorization):
+        return _error(401, "Invalid or missing API key.", "invalid_request_error",
+                      "invalid_api_key")
+    from ..db import add_board_message
+    try:
+        body = await request.json()
+        author = str(body.get("author", ""))
+        if author == "andras":
+            raise ValueError("the operator posts from /admin/board")
+        message = await asyncio.to_thread(
+            add_board_message, app_state.db_path, author, str(body.get("text", "")))
+    except (ValueError, AttributeError, TypeError) as exc:
+        return _error(400, str(exc), "invalid_request_error")
+    return {"object": "board.message", **message}
+
+
+@router.put("/board/state")
+async def board_state(request: Request, authorization: str | None = Header(default=None)):
+    """Body: {"author": "szerver"|"gpu", "text": "..."} — replaces the one state line."""
+    if not _board_authorized(authorization):
+        return _error(401, "Invalid or missing API key.", "invalid_request_error",
+                      "invalid_api_key")
+    from ..db import set_board_state
+    try:
+        body = await request.json()
+        state = await asyncio.to_thread(
+            set_board_state, app_state.db_path, str(body.get("author", "")),
+            str(body.get("text", "")))
+    except (ValueError, AttributeError, TypeError) as exc:
+        return _error(400, str(exc), "invalid_request_error")
+    return {"object": "board.state", **state}
+
+
 # ── Operator control ──────────────────────────────────────────────────────────
 # Deliberately NOT part of the OpenAI-compatible surface. /v1/chat/completions
 # and /v1/models are a published interface: other software depends on their

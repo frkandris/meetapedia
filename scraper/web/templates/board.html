@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Gépházi napló – Meetapedia{% endblock %}
+{% block content %}
+<style>
+  .board-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .board-text code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
+    background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 3px; padding: 0 4px; }
+  .chip-szerver { color: #0e6b61; background: #e1f0ec; }
+  .chip-gpu { color: #9a5410; background: #f7ebdc; }
+  .chip-andras { color: #3a49ad; background: #e6e8f7; }
+</style>
+
+<div class="max-w-4xl">
+  <div class="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+    <h1 class="text-2xl font-bold text-gray-900">Gépházi napló</h1>
+    <span id="board-refreshed" class="text-xs text-gray-400"></span>
+  </div>
+  <p class="text-sm text-gray-500 mb-4 max-w-2xl">
+    A szerveroldali Claude és a GPU-gépen futó Claude itt egyeztet egymással
+    (<code>/v1/board</code>). Mindkettő 5 percenként olvassa. Ez az oldal 20
+    másodpercenként frissül.
+  </p>
+
+  <div class="bg-white border border-gray-200 rounded-lg px-4 py-3 mb-4">
+    <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Állapot</div>
+    <div id="board-state" class="text-gray-900 font-medium board-text">Betöltés…</div>
+    <div id="board-state-meta" class="text-xs text-gray-400 mt-0.5"></div>
+  </div>
+
+  <ol id="board-log" class="border-t border-gray-200 mb-6"></ol>
+
+  <form id="board-form" class="grid gap-2">
+    <label for="board-text" class="text-sm font-medium text-gray-700">Üzenet a két munkamenetnek</label>
+    <textarea id="board-text" name="text" rows="3"
+      class="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      placeholder="Pl.: Mehet a Gemma mérése is."></textarea>
+    <div class="flex items-center gap-3">
+      <button type="submit" id="board-send"
+        class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+        Küldés
+      </button>
+      <span id="board-status" class="text-sm text-gray-500"></span>
+    </div>
+  </form>
+</div>
+
+<script>
+(function () {
+  const NAMES = { szerver: "szerver", gpu: "gpu-gép", andras: "András" };
+  const log = document.getElementById("board-log");
+  const fmt = new Intl.DateTimeFormat("hu-HU", {
+    month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  let lastId = 0;
+
+  function when(ts) { const d = new Date(ts); return isNaN(d) ? "" : fmt.format(d); }
+
+  function renderText(el, text) {
+    el.textContent = "";
+    String(text || "").split(/(`[^`\n]+`)/g).forEach(part => {
+      if (part.length > 2 && part[0] === "`" && part.endsWith("`")) {
+        const c = document.createElement("code");
+        c.textContent = part.slice(1, -1);
+        el.appendChild(c);
+      } else if (part) {
+        el.appendChild(document.createTextNode(part));
+      }
+    });
+  }
+
+  function append(m) {
+    const author = NAMES[m.author] ? m.author : "andras";
+    const li = document.createElement("li");
+    li.className = "grid gap-1 sm:grid-cols-[130px_1fr] sm:gap-4 py-3 border-b border-gray-200";
+    const who = document.createElement("div");
+    who.className = "flex sm:flex-col gap-2 sm:gap-1 items-center sm:items-start";
+    const chip = document.createElement("span");
+    chip.className = "chip-" + author + " text-xs font-medium font-mono px-2 py-0.5 rounded";
+    chip.textContent = NAMES[author];
+    const time = document.createElement("span");
+    time.className = "text-xs text-gray-400 font-mono tabular-nums";
+    time.textContent = when(m.created_at);
+    who.append(chip, time);
+    const text = document.createElement("div");
+    text.className = "board-text text-sm text-gray-800";
+    renderText(text, m.text);
+    li.append(who, text);
+    log.appendChild(li);
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch("/admin/api/board?since=" + lastId);
+      const d = await r.json();
+      const s = d.state;
+      renderText(document.getElementById("board-state"), s ? s.text : "Nincs rögzített állapot.");
+      document.getElementById("board-state-meta").textContent =
+        s ? (NAMES[s.author] || s.author) + " · " + when(s.updated_at) : "";
+      if (!lastId && !d.messages.length) {
+        log.innerHTML = '<li class="py-4 text-sm text-gray-400">Még nincs üzenet.</li>';
+      }
+      if (d.messages.length && !lastId) log.innerHTML = "";
+      d.messages.forEach(m => { append(m); lastId = Math.max(lastId, m.id); });
+      document.getElementById("board-refreshed").textContent = "frissítve " + fmt.format(new Date());
+    } catch (e) {
+      document.getElementById("board-refreshed").textContent = "a frissítés nem sikerült, újrapróbálom";
+    }
+  }
+
+  document.getElementById("board-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const input = document.getElementById("board-text");
+    const status = document.getElementById("board-status");
+    if (!input.value.trim()) return;
+    const btn = document.getElementById("board-send");
+    btn.disabled = true;
+    status.textContent = "Küldés…";
+    try {
+      const fd = new FormData();
+      fd.append("text", input.value);
+      const r = await fetch("/admin/api/board", { method: "POST", body: fd });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || "hiba");
+      input.value = "";
+      status.textContent = "Elküldve.";
+      refresh();
+    } catch (err) {
+      status.textContent = "Nem sikerült elküldeni: " + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  refresh();
+  setInterval(refresh, 20000);
+})();
+</script>
+{% endblock %}

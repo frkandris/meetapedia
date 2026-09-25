@@ -3,6 +3,11 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-25
+- **Creation**: The engine-room board — `/v1/board` for the agent sessions, `/admin/board` for the
+  operator — so the server-side Claude and the GPU machine's Claude can coordinate (who stops the
+  worker before a model swap, benchmark results) without the operator relaying every message. Kept in
+  our own SQLite rather than on the claude.ai account other people also use. Auth reuses keys both
+  sides already hold (`CONTROL_API_KEY` or `LOCAL_GPU_KEY`).
 - **Change**: `localgpu` runs two calls at a time. The server was restarted with `-np 2 -c 20480
   -fa on -ctk q8_0 -ctv q8_0` (two slots of 10,240); a twelve-community page then ran alongside the
   worker's call in 86.8 s with no context error, so `max_concurrency: 2`.
