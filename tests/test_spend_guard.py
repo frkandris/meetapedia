@@ -457,11 +457,15 @@ async def test_unlimited_by_default_so_hosted_apis_are_unaffected():
 
 
 def test_the_shipped_catalogue_limits_our_own_gpu():
-    """The one provider where concurrency costs rather than buys."""
+    """The one provider where concurrency is bounded by hardware: its cap is
+    the llama-server's slot count (`-np 2`), never more, and it streams so a
+    slower concurrent call outlasts Cloudflare's 100 s.
+    """
     from scraper.providers import load_catalogue
 
     by = {p.name: p for p in load_catalogue().providers}
-    assert by["localgpu"].max_concurrency == 1
+    assert by["localgpu"].max_concurrency == 2
+    assert by["localgpu"].stream
     assert all(p.max_concurrency is None
                for n, p in by.items() if n != "localgpu")
 

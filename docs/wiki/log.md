@@ -3,9 +3,12 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-25
+- **Change**: `localgpu` runs two calls at a time. The server was restarted with `-np 2 -c 20480
+  -fa on -ctk q8_0 -ctv q8_0` (two slots of 10,240); a twelve-community page then ran alongside the
+  worker's call in 86.8 s with no context error, so `max_concurrency: 2`.
 - **Change**: The `com.meetapedia.llama` launchd agent now runs `-c 20480 -np 2 -fa on -ctk q8_0
   -ctv q8_0` (was `-c 8192`): two slots of 10,240 tokens, verified via `/props`; auth and the
-  thinking switch unchanged. `max_concurrency` stays 1 until two parallel pages are measured.
+  thinking switch unchanged.
   [[local-gpu-machine-setup]] corrected: `kickstart -k` does not re-read an edited plist — bootout +
   bootstrap. CLAUDE.md updated.
 - **Fix**: The pipeline was extracting our own site. Search results include kozossegek.com listing

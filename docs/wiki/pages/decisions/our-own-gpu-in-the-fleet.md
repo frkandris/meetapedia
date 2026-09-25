@@ -234,8 +234,8 @@ Changed the same day, all measured on the same real pages:
   empty fields, no indentation. 1,488 → 1,219, 422 → 194 and 321 → 282 output
   tokens, same communities found. Output tokens are most of a call's time here.
 
-Still `max_concurrency: 1`. Raising it needs the server restarted with room for
-two full calls — per slot at least prompt + 4,000:
+Restarted that way the same day, and `max_concurrency` raised to 2 after a
+concurrent call ran clean (86.8 s, twelve communities). The command:
 
     llama-server -m ~/models/Qwen3-4B-Q4_K_M.gguf --jinja \
       --chat-template-kwargs '{"enable_thinking":false}' \
@@ -246,6 +246,7 @@ two full calls — per slot at least prompt + 4,000:
 Applied the same day to the launchd agent (keeping `--alias`, `--api-key-file`,
 `-ngl 99` and the thinking switch): `/props` reports 2 slots at `n_ctx: 10240`, an
 unauthenticated request still 401s, and a test call answered clean JSON with no
-reasoning text. `max_concurrency` is still 1 — the room exists now; two parallel
-real pages have not been measured yet.
+reasoning text. Then measured: a twelve-community page sent while the worker's
+own call held the other slot finished in 86.8 s with no context error, so
+`max_concurrency: 2` — never above the server's `total_slots`.
 

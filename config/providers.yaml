@@ -449,15 +449,20 @@ providers:
     # below is what keeps a single call comfortably inside it; this number only
     # has to be larger than that ceiling.
     timeout_seconds: 600
-    # ONE call at a time. Not a politeness setting — the GPU is the bottleneck,
-    # so four concurrent pages do not return four answers in the time of one;
-    # they return four answers each about four times slower (measured 27 tok/s
-    # alone against 1.85 tok/s with four slots busy). Nothing is gained, and on
-    # 2026-09-06 the quadrupled latency pushed every call past Cloudflare's
-    # 100-second origin timeout: HTTP 524 on extractions that were working.
-    # `pipeline.extract_concurrency: 4` is right for hosted APIs, where the wait
-    # is network latency and overlapping is free; this is the exception.
-    max_concurrency: 1
+    # TWO calls at a time, matching the server's two slots. The server must be
+    # started with room for both: `-np 2 -c 20480` (the total, so 10,240 per
+    # slot — a 4.6K-token prompt plus a 4,000-token answer). The old "one at a
+    # time" rule came from a four-slot server whose slots shared a single
+    # 8,192-token cache: two prompts did not fit, which read as the GPU being
+    # the bottleneck (27 tok/s alone, 1.85 with four slots). Measured
+    # 2026-09-25 after the restart: a twelve-community page ran alongside the
+    # worker's own call in 86.8 s, with no context error. Streaming (below) is
+    # what lets a slower concurrent call outlast Cloudflare's 100 s.
+    #
+    # The queue still belongs on our side of the wire: a third request would
+    # wait in the server's queue with its connection open. Never set this
+    # above the server's `total_slots`.
+    max_concurrency: 2
     # 4,000, against the free fleet's 1,500 — the one place that rule inverts.
     # The 1,500 exists because Groq reserves `prompt + max_tokens` against an
     # 8,000-token minute window *before* generating. Nothing is reserved here
