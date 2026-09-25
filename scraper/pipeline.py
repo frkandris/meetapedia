@@ -1790,6 +1790,11 @@ async def _run_ai_only(
             pages = await asyncio.to_thread(
                 cache.get_scraped_for_pair, city.name, topic.name
             )
+            # The blocked list applies to pages cached before a domain joined
+            # it, too: 1,018 of our own kozossegek.com pages were cached and
+            # re-extracted, importing our own listings back as new sources.
+            pages = [(u, t) for u, t in pages
+                     if not _is_blocked(u, config.fetch_blocked_domains)]
             # Built from _new_pair_log, not by hand: run_detail.html iterates
             # these keys with strict Undefined, so a hand-written subset
             # renders as an error the moment the template touches a key this

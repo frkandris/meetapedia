@@ -3,6 +3,12 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-25
+- **Fix**: The pipeline was extracting our own site. Search results include kozossegek.com listing
+  pages; 1,018 were cached and re-extracted (e.g. `kozossegek.com/veszprem`, 35 communities),
+  importing our own records back as new sources, errors included — 146 communities cite us. Both
+  our domains are now in `fetch.blocked_domains`, and `ai_only` applies the blocked list to pages
+  cached before a domain joined it. Also observed after the streaming deploy: pages with dozens of
+  communities that used to die at Cloudflare's 100 s now finish (173 s for 35 communities).
 - **Update**: [[our-own-gpu-in-the-fleet]] — measured the running llama-server from outside: its
   four slots share one 8,192-token KV cache (two concurrent prompts → HTTP 500 "Context size has
   been exceeded"), which explains the old four-slot measurement. `localgpu` now streams (a

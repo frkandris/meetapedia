@@ -62,6 +62,11 @@ fetch:
     - linkedin.com
     - youtube.com
     - reddit.com
+    # Our own sites. Search results include our listing pages, and extracting
+    # them imported our own records back as "new sources" — errors and all
+    # (1,018 cached pages, 146 communities citing us, found 2026-09-25).
+    - kozossegek.com
+    - meetapedia.com
 
 pipeline:
   # Order the worker walks countries in. A run ends when the work signal flips

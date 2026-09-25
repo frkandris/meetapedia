@@ -1087,3 +1087,23 @@ def test_a_streamed_http_error_is_classified_like_any_other(monkeypatch):
     ex, _ = _sse_extractor(monkeypatch, '{"error":{"message":"Context size has been exceeded."}}', 500)
     with pytest.raises(ExtractorUnavailableError, match="HTTP 500"):
         asyncio.run(ex.extract("szöveg", "Pécs", "running", "hu", "https://p.test"))
+
+
+def test_ai_only_never_extracts_a_cached_page_from_a_blocked_domain(tmp_path):
+    """Our own listing pages were cached from search results and re-extracted,
+    importing our records back as new sources (1,018 pages, 2026-09-25).
+    """
+    from scraper.cache import CacheManager
+    from scraper.db import save_search_cache
+    from scraper.pipeline import _run_ai_only
+
+    db, cfg, cities, topics = _pipeline_fixtures(tmp_path)
+    cfg.fetch_blocked_domains = ["kozossegek.com"]
+    cache = CacheManager(db)
+    own = "https://kozossegek.com/budapest"
+    cache.save_scraped(own, "Elég hosszú oldalszöveg a teszthez.", "Budapest", "running")
+    save_search_cache(db, "Budapest", "running", [own], ["q"])
+    primary = StubPrimary([[]])
+    asyncio.run(_run_ai_only(cities, topics, cfg, FallbackExtractor(primaries=[primary]),
+                             cache, True, {}, None, run_venues=False, run_persons=False))
+    assert primary.calls == 0
