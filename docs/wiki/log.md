@@ -2,6 +2,14 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-09-25
+- **Update**: [[our-own-gpu-in-the-fleet]] — measured the running llama-server from outside: its
+  four slots share one 8,192-token KV cache (two concurrent prompts → HTTP 500 "Context size has
+  been exceeded"), which explains the old four-slot measurement. `localgpu` now streams (a
+  twelve-community page took ~96 s against Cloudflare's 100 s limit), sends the extraction schema as
+  a grammar, and all providers are asked for compact output without empty fields (12-54% fewer
+  output tokens, same communities). Concurrency stays 1 until the server is restarted with
+  `-np 2 -c 20480`.
 ## 2026-09-24
 - **Change**: The worker alternates. After each extraction pass the collector gets a turn of at most
   30 minutes, until it has come back empty three times that UTC day. `localgpu` has no daily limit,

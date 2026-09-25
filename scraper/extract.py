@@ -700,6 +700,12 @@ def _parse_communities(
 _API_EXTRACT_SUFFIX = (
     "\n\nRespond ONLY with a valid JSON object: "
     "{\"communities\": [{\"name\": \"...\", \"confidence\": 0.9, \"joinable\": true, ...}]}"
+    # Output tokens are most of a call's time on our own GPU and what the free
+    # tiers meter. Omitting empty fields cut the answer 12-54% on the same
+    # pages with the same communities found (measured 2026-09-25). Outside the
+    # fingerprint on purpose: an omitted field and a null one parse the same.
+    "\nOmit every field you have no value for; never output null, empty strings"
+    " or empty lists. Output compact JSON with no indentation."
 )
 _API_ENRICH_SUFFIX = (
     "\n\nRespond ONLY with a valid JSON object with exactly these keys: "
@@ -827,6 +833,15 @@ class _ApiExtractor:
     def _json_format(self) -> dict:
         return {"response_format": {"type": "json_object"}} if self.json_mode else {}
 
+    def _community_format(self) -> dict:
+        """`json_schema` where the server enforces it (llama.cpp compiles it to
+        a grammar, so the answer cannot be malformed JSON); `json_object`
+        elsewhere — hosted providers vary in what they accept."""
+        if getattr(self, "json_schema", False):
+            return {"response_format": {"type": "json_schema", "json_schema": {
+                "name": "communities", "schema": EXTRACTION_SCHEMA}}}
+        return self._json_format()
+
     @property
     def last_tokens(self) -> int:
         """What the call *this task* just made reported it cost.
@@ -951,6 +966,60 @@ class _ApiExtractor:
         async with slot:
             return await self._post_now(payload, label)
 
+    async def _post_streaming(self, payload: dict):
+        """POST with `stream: true` and reassemble one OpenAI response body.
+
+        For an endpoint behind Cloudflare, which answers 524 when the origin
+        sends nothing for 100 s. Our GPU takes ~95 s on a page with a dozen
+        communities (measured 2026-09-25), so non-streamed answers were at the
+        edge of the ceiling; streamed, bytes flow from the first token and the
+        limit no longer applies. Returns `(response, body)`; `body` is None on
+        an HTTP error, whose text is read so the caller can classify it.
+        """
+        body = {**payload, "stream": True, "stream_options": {"include_usage": True}}
+        client = _shared_client(self.timeout_seconds)
+        content: list[str] = []
+        reasoning: list[str] = []
+        finish = None
+        usage: dict = {}
+        head: dict = {}
+        async with client.stream("POST", f"{self._BASE_URL}/chat/completions",
+                                 json=body, headers=self._headers()) as resp:
+            if resp.status_code >= 400:
+                await resp.aread()
+                return resp, None
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                chunk = line[5:].strip()
+                if chunk == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(chunk)
+                except json.JSONDecodeError:
+                    continue
+                if obj.get("error"):
+                    return resp, obj
+                if not head:
+                    head = {k: obj[k] for k in ("id", "created", "model") if k in obj}
+                if obj.get("usage"):
+                    usage = obj["usage"]
+                for choice in obj.get("choices") or []:
+                    delta = choice.get("delta") or {}
+                    if delta.get("content"):
+                        content.append(delta["content"])
+                    thought = delta.get("reasoning_content") or delta.get("reasoning")
+                    if thought:
+                        reasoning.append(thought)
+                    if choice.get("finish_reason"):
+                        finish = choice["finish_reason"]
+        message = {"role": "assistant", "content": "".join(content)}
+        if reasoning:
+            message["reasoning_content"] = "".join(reasoning)
+        return resp, {**head, "object": "chat.completion",
+                      "choices": [{"index": 0, "message": message, "finish_reason": finish}],
+                      "usage": usage}
+
     async def _post_now(self, payload: dict, label: str) -> dict:
         await self._rate_limit()
         # Clear the task's usage before the attempt, not only after a 4xx. A
@@ -966,11 +1035,15 @@ class _ApiExtractor:
             # flight this opened a socket per LLM request, and on 2026-08-18 the
             # container ran out of file descriptors — SQLite could not open the
             # database because HTTP clients had taken every handle.
-            resp = await _shared_client(self.timeout_seconds).post(
-                f"{self._BASE_URL}/chat/completions",
-                json=payload,
-                headers=self._headers(),
-            )
+            streamed = None
+            if getattr(self, "stream", False):
+                resp, streamed = await self._post_streaming(payload)
+            else:
+                resp = await _shared_client(self.timeout_seconds).post(
+                    f"{self._BASE_URL}/chat/completions",
+                    json=payload,
+                    headers=self._headers(),
+                )
         except Exception as exc:
             log.warning("api_request_failed", provider=getattr(self, "provider", "?"),
                         model=self.model, label=label, error=str(exc))
@@ -1033,7 +1106,7 @@ class _ApiExtractor:
                 # outage and deferred the entire daily guide step.
                 raise ExtractorContentError(f"{who} produced invalid JSON (HTTP 400)")
             raise ExtractorUnavailableError(f"{who} HTTP {resp.status_code}")
-        data = resp.json()
+        data = streamed if streamed is not None else resp.json()
         error = data.get("error") if isinstance(data, dict) else None
         if error and not data.get("choices"):
             # HTTP 200 carrying a provider error (OpenRouter's free models do
@@ -1070,7 +1143,7 @@ class _ApiExtractor:
                 {"role": "user",   "content": user_message},
             ],
             "temperature": self.temperature,
-            **self._json_format(),
+            **self._community_format(),
             **self._budgeted(),
         }
         data = await self._post(payload, label=source_url)

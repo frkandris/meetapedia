@@ -1035,3 +1035,55 @@ def test_preflight_skips_a_model_that_served_real_work_recently():
     chain.router = router  # preflight probes a fleet only when it is routed
     asyncio.run(chain.preflight())
     assert (busy.probes, idle.probes) == (1, 1)
+
+
+def _sse_extractor(monkeypatch, body: str, status: int = 200):
+    import httpx
+
+    from scraper.providers import OpenAICompatExtractor
+
+    seen = {}
+
+    def handler(request):
+        seen["payload"] = json.loads(request.content)
+        return httpx.Response(status, text=body,
+                              headers={"content-type": "text/event-stream"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr("scraper.extract._shared_client", lambda timeout: client)
+    ex = OpenAICompatExtractor(provider="localgpu", base_url="https://gpu.test/v1",
+                               api_key="k", model="qwen3-4b", quality=73,
+                               stream=True, json_schema=True)
+    return ex, seen
+
+
+def test_a_streamed_answer_is_reassembled_into_one_response(monkeypatch):
+    """Cloudflare 524s an origin silent for 100 s; our GPU took ~95 s on a
+    dozen-community page. Streamed, the first token resets that clock.
+    """
+    chunks = [
+        {"id": "c1", "model": "qwen3-4b", "choices": [{"delta": {"content": '{"communities": [{"name": '}}]},
+        {"choices": [{"delta": {"content": '"Pécsi Futók", "confidence": 0.9, "joinable": true}]}'}}]},
+        {"choices": [{"delta": {}, "finish_reason": "stop"}]},
+        {"choices": [], "usage": {"prompt_tokens": 4200, "completion_tokens": 30, "total_tokens": 4230}},
+    ]
+    body = "".join(f"data: {json.dumps(c, ensure_ascii=False)}\n\n" for c in chunks) + "data: [DONE]\n\n"
+    ex, seen = _sse_extractor(monkeypatch, body)
+    async def _run():
+        found = await ex.extract("szöveg", "Pécs", "running", "hu", "https://p.test")
+        return found, ex.last_tokens  # a ContextVar: read inside the task
+
+    records, tokens = asyncio.run(_run())
+    assert [r.name for r in records] == ["Pécsi Futók"]
+    assert tokens == 4230
+    assert seen["payload"]["stream"] is True
+    # And the schema went as a grammar-enforced response format.
+    assert seen["payload"]["response_format"]["type"] == "json_schema"
+
+
+def test_a_streamed_http_error_is_classified_like_any_other(monkeypatch):
+    from scraper.extract import ExtractorUnavailableError
+
+    ex, _ = _sse_extractor(monkeypatch, '{"error":{"message":"Context size has been exceeded."}}', 500)
+    with pytest.raises(ExtractorUnavailableError, match="HTTP 500"):
+        asyncio.run(ex.extract("szöveg", "Pécs", "running", "hu", "https://p.test"))

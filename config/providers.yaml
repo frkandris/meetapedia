@@ -463,6 +463,14 @@ providers:
     # 8,000-token minute window *before* generating. Nothing is reserved here
     # and nothing is billed, so the cap costs only the seconds actually spent.
     max_output_tokens: 4000
+    # Streamed, because Cloudflare answers 524 when the origin sends nothing for
+    # 100 s, and a page with a dozen communities took ~95 s here (2026-09-25).
+    # Streamed, the first token resets that clock and the ceiling is gone.
+    stream: true
+    # The extraction schema as a llama.cpp grammar: the answer cannot be
+    # malformed JSON, which is what sends a page to quarantine. Measured on the
+    # same pages: valid every time, same communities found.
+    json_schema: true
     models:
       # llama-server ignores the `model` field and serves whichever GGUF it was
       # started with, so this name is a label — for our logs and for the

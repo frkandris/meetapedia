@@ -88,6 +88,12 @@ class ProviderSpec:
     #: nothing and multiplies every call's latency — see `max_concurrency` in
     #: extract.py for what that cost on 2026-09-06.
     max_concurrency: int | None = None
+    #: Stream responses. For an endpoint behind a proxy with an idle timeout
+    #: (Cloudflare: 100 s to first byte) and a model slow enough to reach it.
+    stream: bool = False
+    #: Send the community extraction schema as `response_format: json_schema`.
+    #: Only where the server enforces it as a grammar (llama.cpp does).
+    json_schema: bool = False
     #: Seconds to wait for this provider's answer, overriding the global
     #: `deepseek.timeout_seconds`. None → the global.
     #:
@@ -191,6 +197,8 @@ class OpenAICompatExtractor(_ApiExtractor):
         fingerprint_model: str | None = None,
         usd_per_1m_in: float = 0.0,
         usd_per_1m_out: float = 0.0,
+        stream: bool = False,
+        json_schema: bool = False,
     ):
         super().__init__(
             api_key, model, temperature, timeout_seconds, max_text_chars,
@@ -198,6 +206,8 @@ class OpenAICompatExtractor(_ApiExtractor):
         )
         self.max_output_tokens = max_output_tokens
         self.max_concurrency = max_concurrency
+        self.stream = stream
+        self.json_schema = json_schema
         self.provider = provider
         self.quality = quality
         self.json_mode = json_mode
@@ -379,6 +389,8 @@ def load_catalogue(config_dir: Path | None = None) -> ProviderCatalogue:
             max_output_tokens=_opt_int(entry.get("max_output_tokens")),
             timeout_seconds=_opt_int(entry.get("timeout_seconds")),
             max_concurrency=_opt_int(entry.get("max_concurrency")),
+            stream=bool(entry.get("stream", False)),
+            json_schema=bool(entry.get("json_schema", False)),
         ))
     return ProviderCatalogue(router=router, providers=tuple(providers))
 
@@ -434,6 +446,8 @@ def build_extractors(
                                    or max_output_tokens),
                 rate_limit_seconds=rate_limit_seconds,
                 max_concurrency=spec.max_concurrency,
+                stream=spec.stream,
+                json_schema=spec.json_schema,
                 fingerprint_model=fingerprint_model,
                 usd_per_1m_in=m.usd_per_1m_in,
                 usd_per_1m_out=m.usd_per_1m_out,

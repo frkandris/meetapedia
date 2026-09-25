@@ -3,7 +3,7 @@ type: Decision
 title: Our Own GPU in the Fleet
 description: A laptop running Qwen3-4B scores 73 on our task — above the 8B and the 20B — and its allowance never runs out, which is the hole it fills.
 tags: [providers, router, local-inference, llama-cpp, quota, measurement]
-timestamp: 2026-09-17
+timestamp: 2026-09-25
 resource: config/providers.yaml
 ---
 
@@ -213,3 +213,33 @@ mean opposite things.
   their own) rather than one flag. The failure it prevents is already *recovered*
   by `_json_items` unwrapping fences; the gain is preventing them instead, which
   does not justify an unreviewed change to that path.
+
+## 2026-09-25: the server, measured from the outside
+
+Read from the running `llama-server` (`/props`, `/slots`, build b10964):
+`total_slots: 4`, every slot reporting `n_ctx: 8192` — and two concurrent
+4.3-4.6K-token prompts answered **HTTP 500 "Context size has been exceeded."**
+within seven seconds. The four slots share one 8,192-token KV cache. That, not
+the GPU, is what the 2026-09-06 "1.85 tok/s with four slots" measured, and it
+also means one long page can run out of room on its own: a 4,570-token prompt
+plus `max_output_tokens: 4000` is 8,570.
+
+Changed the same day, all measured on the same real pages:
+
+- **Streaming** (`stream: true`). A page with twelve communities took 95-97 s,
+  at Cloudflare's 100 s silent-origin limit; streamed, the first token resets it.
+- **Grammar-enforced schema** (`json_schema: true` → `response_format:
+  json_schema` with `EXTRACTION_SCHEMA`). Every answer valid, same communities.
+- **Compact output** (in `_API_EXTRACT_SUFFIX`, outside the fingerprint): omit
+  empty fields, no indentation. 1,488 → 1,219, 422 → 194 and 321 → 282 output
+  tokens, same communities found. Output tokens are most of a call's time here.
+
+Still `max_concurrency: 1`. Raising it needs the server restarted with room for
+two full calls — per slot at least prompt + 4,000:
+
+    llama-server -m ~/models/Qwen3-4B-Q4_K_M.gguf --jinja \
+      --chat-template-kwargs '{"enable_thinking":false}' \
+      -np 2 -c 20480 -fa on -ctk q8_0 -ctv q8_0
+
+(`-c` is the total across slots; q8_0 KV halves its memory to ~1.5 GB.)
+
