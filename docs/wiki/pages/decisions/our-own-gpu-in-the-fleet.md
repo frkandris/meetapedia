@@ -250,3 +250,21 @@ reasoning text. Then measured: a twelve-community page sent while the worker's
 own call held the other slot finished in 86.8 s with no context error, so
 `max_concurrency: 2` — never above the server's `total_slots`.
 
+## 2026-09-25: Qwen3.5-4B replaces Qwen3-4B
+
+Measured on the same 7 Hungarian golden pages (sample `aeff14531c28`), with the
+worker paused so no candidate answer could reach the cache, coordinated between
+the server-side and GPU-machine sessions on `/admin/board`:
+
+| model | score | 7 pages | server RSS |
+|---|---|---|---|
+| **Qwen3.5-4B Q4_K_M** | **77** | 90 s | 3.5 GB |
+| Qwen3-4B Q4_K_M | 54 | 83 s | — |
+| Gemma 4 E4B Q4_0 | 41 | 97 s | 4.5 GB |
+
+All answered 7/7 with valid JSON; no text leaked between reused slots. The
+incumbent's 54 (not 73) is the same model on a different sample with the new
+prompt suffix and schema — scores only compare within one sample. Seven pages is
+small: the switch is watched in production for a day, and the Qwen3-4B plist is
+kept for a one-step rollback.
+

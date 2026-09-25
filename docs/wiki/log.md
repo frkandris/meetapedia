@@ -3,6 +3,9 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-25
+- **Decision**: `localgpu` switches to Qwen3.5-4B (quality 77). On the same 7 Hungarian pages it
+  scored 77 against Qwen3-4B's 54 and Gemma 4 E4B's 41 at the same speed; see
+  [[our-own-gpu-in-the-fleet]]. Measured with the worker paused, coordinated on `/admin/board`.
 - **Creation**: The engine-room board — `/v1/board` for the agent sessions, `/admin/board` for the
   operator — so the server-side Claude and the GPU machine's Claude can coordinate (who stops the
   worker before a model swap, benchmark results) without the operator relaying every message. Kept in

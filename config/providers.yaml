@@ -488,8 +488,14 @@ providers:
       # unparseable. That raises ExtractorContentError, which is exactly what
       # `_Quarantine` counts: three per page retires a real page for good. The
       # first scored run with the wrong flag failed all 16 pages this way.
-      - model: qwen3-4b-q4km
-        quality: 73
+      #
+      # Qwen3.5-4B since 2026-09-25, measured against the incumbent and one
+      # other candidate on the same 7 Hungarian pages (sample aeff14531c28),
+      # with the streaming/schema/compact setup: Qwen3.5-4B 77, Qwen3-4B 54,
+      # Gemma 4 E4B 41, all at ~25 tok/s. A small sample — watch production.
+      # The Qwen3-4B plist is kept on the machine for a one-step rollback.
+      - model: qwen3.5-4b-q4km
+        quality: 77
 
   # ── GitHub Models ─────────────────────────────────────────────────────────
   # DISABLED 2026-08-16: the API answers 410 with
