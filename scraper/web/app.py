@@ -6451,31 +6451,6 @@ async def api_restamp_fingerprints():
     return {"updated": updated, "fingerprint": current_fp}
 
 
-@admin.get("/board", response_class=HTMLResponse)
-async def board_page(request: Request):
-    """The engine-room log the agent sessions write to, via /v1/board."""
-    return templates.TemplateResponse(request, "board.html", {})
-
-
-@admin.get("/api/board")
-async def board_api(since: int = 0):
-    from ..db import get_board_messages, get_board_state
-    return JSONResponse({
-        "state": await asyncio.to_thread(get_board_state, _db()),
-        "messages": await asyncio.to_thread(get_board_messages, _db(), since),
-    })
-
-
-@admin.post("/api/board")
-async def board_post_admin(text: str = Form("")):
-    from ..db import add_board_message
-    try:
-        message = await asyncio.to_thread(add_board_message, _db(), "andras", text)
-    except ValueError as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-    return JSONResponse({"ok": True, "message": message})
-
-
 @admin.get("/logs", response_class=HTMLResponse)
 async def logs_page(request: Request):
     return templates.TemplateResponse(request, "logs.html", {})

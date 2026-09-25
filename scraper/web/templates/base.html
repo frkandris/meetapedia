@@ -198,7 +198,7 @@
         </div>
       </div>
       {# System dropdown #}
-      {% set _sys_active = _p.startswith('/admin/progress') or _p == '/admin/logs' or _p == '/admin/board' or _p.startswith('/admin/config') or _p == '/admin/prompts' %}
+      {% set _sys_active = _p.startswith('/admin/progress') or _p == '/admin/logs' or _p.startswith('/admin/config') or _p == '/admin/prompts' %}
       <div class="relative" id="nav-sys-wrap">
         <button onclick="document.getElementById('nav-sys-menu').classList.toggle('hidden')"
           class="px-2.5 py-1 rounded-lg text-sm transition-colors flex items-center gap-1
@@ -211,9 +211,6 @@
           </a>
           <a href="/admin/logs" class="flex items-center gap-2 px-3 py-2 text-sm {% if _p == '/admin/logs' %}text-gray-900 font-semibold bg-gray-50{% else %}text-gray-600 hover:bg-gray-50{% endif %}">
             <i class="ph ph-scroll" style="font-size:14px"></i> Logs
-          </a>
-          <a href="/admin/board" class="flex items-center gap-2 px-3 py-2 text-sm {% if _p == '/admin/board' %}text-gray-900 font-semibold bg-gray-50{% else %}text-gray-600 hover:bg-gray-50{% endif %}">
-            <i class="ph ph-chats-circle" style="font-size:14px"></i> Gépházi napló
           </a>
           <a href="/admin/config" class="flex items-center gap-2 px-3 py-2 text-sm {% if _p.startswith('/admin/config') %}text-gray-900 font-semibold bg-gray-50{% else %}text-gray-600 hover:bg-gray-50{% endif %}">
             <i class="ph ph-sliders" style="font-size:14px"></i> Config
@@ -282,7 +279,6 @@
       <p class="px-2.5 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">System</p>
       {{ navlink('/admin/progress',      'Progress',      _p.startswith('/admin/progress')) }}
       {{ navlink('/admin/logs',          'Logs',          _p == '/admin/logs') }}
-      {{ navlink('/admin/board',         'Gépházi napló', _p == '/admin/board') }}
       {{ navlink('/admin/config',        'Config',        _p.startswith('/admin/config')) }}
       {{ navlink('/admin/prompts',       'Prompts',       _p == '/admin/prompts') }}
       {{ navlink('/admin/providers',     'AI providers',  _p == '/admin/providers') }}

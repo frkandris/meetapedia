@@ -658,25 +658,6 @@ def init_db(db_path: Path, force: bool = False) -> None:
         # a number for it the report divided *every* successful call by the
         # pages extracted and called the result a per-page cost. Modified
         # records cannot stand in for it — a re-extraction modifies records too.
-        # The engine-room log: where the Claude sessions that operate this
-        # deployment (the server-side one and the one on the local GPU machine)
-        # leave each other messages, readable by the operator at /admin/board.
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS board_messages (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                author     TEXT NOT NULL,
-                text       TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS board_state (
-                key        TEXT PRIMARY KEY,
-                text       TEXT NOT NULL,
-                author     TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-        """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS daily_counters (
                 day   TEXT NOT NULL,
@@ -4369,64 +4350,3 @@ def get_funnel_counts(db_path: Path, days: int = 30) -> dict:
                 " FROM persons"
                 " WHERE COALESCE(json_extract(data,'$.email'),'') <> ''")
     return out
-
-
-# ── Engine-room board ────────────────────────────────────────────────────────
-
-#: Who may write to the board. The two agent sessions and the operator.
-BOARD_AUTHORS = ("szerver", "gpu", "andras")
-_BOARD_MAX_TEXT = 8000
-
-
-def add_board_message(db_path: Path, author: str, text: str) -> dict:
-    if author not in BOARD_AUTHORS:
-        raise ValueError(f"unknown author {author!r}")
-    text = (text or "").strip()[:_BOARD_MAX_TEXT]
-    if not text:
-        raise ValueError("empty message")
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    with _connect(db_path) as conn:
-        cur = conn.execute(
-            "INSERT INTO board_messages (author, text, created_at) VALUES (?, ?, ?)",
-            (author, text, now))
-        conn.commit()
-        return {"id": cur.lastrowid, "author": author, "text": text, "created_at": now}
-
-
-def get_board_messages(db_path: Path, since_id: int = 0, limit: int = 200) -> list[dict]:
-    """Messages after `since_id`, oldest first; the newest `limit` when since_id is 0."""
-    if not db_path.exists():
-        return []
-    with _connect(db_path) as conn:
-        if since_id:
-            rows = conn.execute(
-                "SELECT id, author, text, created_at FROM board_messages"
-                " WHERE id > ? ORDER BY id LIMIT ?", (since_id, limit)).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT id, author, text, created_at FROM (SELECT * FROM board_messages"
-                " ORDER BY id DESC LIMIT ?) ORDER BY id", (limit,)).fetchall()
-    return [{"id": r[0], "author": r[1], "text": r[2], "created_at": r[3]} for r in rows]
-
-
-def set_board_state(db_path: Path, author: str, text: str) -> dict:
-    if author not in BOARD_AUTHORS:
-        raise ValueError(f"unknown author {author!r}")
-    text = (text or "").strip()[:_BOARD_MAX_TEXT]
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    with _connect(db_path) as conn:
-        conn.execute(
-            "INSERT INTO board_state (key, text, author, updated_at) VALUES ('current', ?, ?, ?)"
-            " ON CONFLICT(key) DO UPDATE SET text=excluded.text, author=excluded.author,"
-            " updated_at=excluded.updated_at", (text, author, now))
-        conn.commit()
-    return {"text": text, "author": author, "updated_at": now}
-
-
-def get_board_state(db_path: Path) -> dict | None:
-    if not db_path.exists():
-        return None
-    with _connect(db_path) as conn:
-        row = conn.execute(
-            "SELECT text, author, updated_at FROM board_state WHERE key='current'").fetchone()
-    return {"text": row[0], "author": row[1], "updated_at": row[2]} if row else None

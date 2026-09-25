@@ -3,6 +3,10 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-09-25
+- **Deprecation**: The engine-room board (`/v1/board`, `/admin/board`) is removed, the same day it was
+  added. The server-side session now reaches the GPU machine directly over SSH, through the machine's
+  existing Cloudflare tunnel (`ssh-gpu.meetapedia.com`, key-only, password login disabled), so a
+  second agent session and a relay between them are no longer needed.
 - **Fix**: `scoring.golden_set` took the first `limit * 8` cached pages and filtered afterwards, so
   with ~44% of pages yielding no community and ~70% not Hungarian, 16 requested Hungarian pages
   became 7 — too few to separate models a few points apart. It now filters in SQL and reads until the

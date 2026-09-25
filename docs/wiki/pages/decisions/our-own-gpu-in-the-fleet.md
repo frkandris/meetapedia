@@ -254,7 +254,8 @@ own call held the other slot finished in 86.8 s with no context error, so
 
 Measured on the same 7 Hungarian golden pages (sample `aeff14531c28`), with the
 worker paused so no candidate answer could reach the cache, coordinated between
-the server-side and GPU-machine sessions on `/admin/board`:
+the server-side and GPU-machine sessions on a message board (since removed; the
+server session now operates the machine directly over SSH):
 
 | model | score | 7 pages | server RSS |
 |---|---|---|---|
