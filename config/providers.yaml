@@ -443,11 +443,10 @@ providers:
     # as a failure, so the wrong number here would not report a slow provider —
     # it would retire a working one through the circuit breaker.
     #
-    # Note this is NOT the binding limit. Cloudflare's proxy gives an origin
-    # 100 seconds on every non-Enterprise plan and answers 524 after that, so
-    # the real ceiling is 100 s no matter what is set here. `max_concurrency: 1`
-    # below is what keeps a single call comfortably inside it; this number only
-    # has to be larger than that ceiling.
+    # Cloudflare's proxy gives an origin 100 seconds of silence on every
+    # non-Enterprise plan and answers 524 after that. `stream: true` below is
+    # what keeps a long call alive past it (the first token resets the clock);
+    # a page with 35 communities finished in 173 s that way on 2026-09-25.
     timeout_seconds: 600
     # TWO calls at a time, matching the server's two slots. The server must be
     # started with room for both: `-np 2 -c 20480` (the total, so 10,240 per
