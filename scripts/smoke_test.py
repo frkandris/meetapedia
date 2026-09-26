@@ -93,7 +93,10 @@ def run(base_hu: str, base_intl: str, expect_version: str = "") -> Checks:
     c.check("kozossegek cities", f"{base_hu}/varosok", must_contain="data-name=")
     c.check("kozossegek search widget", f"{base_hu}/", must_contain="/static/js/listing.js")
     c.check("meetapedia home", f"{base_intl}/", must_contain="</html>")
-    c.check("sitemap", f"{base_hu}/sitemap.xml", must_contain="<urlset")
+    # An index of parts above 45,000 URLs (both sites are), a plain urlset
+    # below it; either way part 1 is a urlset.
+    c.check("sitemap", f"{base_hu}/sitemap.xml", must_contain="sitemaps.org/schemas/sitemap")
+    c.check("sitemap part", f"{base_hu}/sitemap-1.xml", must_contain="<urlset")
     c.check("static asset", f"{base_hu}/static/js/listing.js", must_contain="MpAutocomplete")
 
     print("Auth boundaries (these MUST refuse):")
