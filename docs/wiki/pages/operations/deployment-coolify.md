@@ -3,7 +3,7 @@ type: Runbook
 title: Deployment (Coolify / Hetzner)
 description: Docker on Coolify; persist only /app/data and /app/config; required and optional env vars.
 tags: [operations, deployment, coolify, docker, env]
-timestamp: 2026-07-10
+timestamp: 2026-10-03
 resource: Dockerfile
 ---
 
@@ -27,6 +27,27 @@ Persist only the runtime dirs, never the whole `/app` tree (that would hide upda
   deploys verify YOUR commit SHA in the Deployments list, not just app health
   (see [[2026-07-ga4-env-buildtime-failure]]).
 - Deploy-heavy days fill the disk with stale images — runbook: [[coolify-disk-cleanup]].
+
+## TLS between Cloudflare and the origin
+
+Both zones run **Full (strict)** since 2026-10-03, against **Cloudflare Origin CA certificates**
+(`kozossegek.com` + `*.kozossegek.com` to 2041-05-09, `meetapedia.com` + `*.meetapedia.com` to
+2041-09-29) in `/data/coolify/proxy/certs/`, loaded by `/data/coolify/proxy/dynamic/tls.yml`
+(`tls.certificates`). The directory is root-only; the `claude` SSH user reaches it through
+`docker run --rm -v /data/coolify/proxy:/p alpine …`.
+
+Why: Traefik's Let's Encrypt HTTP-01 renewal cannot work behind the orange cloud. kozossegek's LE
+certificate expired on 2026-08-11 unnoticed, because that zone was plain Full; meetapedia's would
+have expired 2026-12-11 under Full (strict) — a 526 on the whole site. An Origin CA certificate for
+the same host was already on disk since May, but `tls.yml` was a broken heredoc (indented, with a
+trailing `EOF`) and never loaded.
+
+Two traps: **a router's ACME certificate beats a file certificate for the same host**, so the LE
+entries for `kozossegek.com` and `meetapedia.com` were removed from `acme.json` (backup
+`acme.json.bak-20261003`) before a proxy restart; with a matching file certificate Traefik no longer
+requests one. And **`docker restart coolify-proxy` answers 404 for a few seconds** — Google's live
+URL test hit exactly that on 2026-10-03. `www` on meetapedia is a Cloudflare Redirect Rule, not a
+Traefik route.
 
 ## Environment variables
 
