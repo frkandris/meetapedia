@@ -9,6 +9,8 @@ resource: scraper/web/app.py
 
 # Search Console Findings on 2026-09-05
 
+*Superseded as the baseline by [[search-console-2026-10-03]], pulled from the API.*
+
 *The two domains need different diagnoses; the earlier fixes are present, but kozossegek's search visibility has not recovered.*
 
 ## Sources and scope

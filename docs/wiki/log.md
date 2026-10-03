@@ -3,6 +3,7 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-10-03
+- **Creation**: [[search-console-2026-10-03]] — API baseline: kozossegek 5 clicks / 55 impressions in 90 days, 1 of 120 sampled URLs indexed, guides unknown to Google, sitemap not fetched since 09-05; 145 of meetapedia's 154 clicks land on HU pages indexed before the 301.
 - **Creation**: [[bot-crawl-audit-2026-10-03]] — a no-JavaScript crawl of both live sitemaps; canonicals, titles and H1s clean; www.meetapedia.com answers 526; 8,477 of 34,222 person rows led a group not listed in their town, and "Jane Smith" (the prompt's example) was a published person in 39 towns.
 - **Creation**: [[answer-engines]] — `Content-Signal` in robots.txt, a counted `/llms.txt` built from the About page's strings, a Markdown twin of every public page for `Accept: text/markdown`, and daily IndexNow submissions behind `INDEXNOW_KEY`.
 - **Update**: [[person-record]] — a person is published only with a real name and a group listed in that town (`get_publishable_persons`); unknown person URLs answer 404. [[indexing-strategy]] robots section.

@@ -107,6 +107,7 @@ vocabulary), [faq.md](faq.md) (recurring questions).
 ## SEO
 
 - [[daily-data-guides]] — The worker materializes at most ten AI-written, fact-grounded city-topic guides per UTC day, following country priority across both domains without new search spend.
+- [[search-console-2026-10-03]] — First API-pulled baseline — kozossegek has one indexed page in a 120-URL sample and 55 impressions in 90 days, while 94% of meetapedia's clicks come from Hungarian pages Google indexed before the July 301 and has not recrawled since.
 - [[search-console-2026-09-05]] — Fresh exports distinguish kozossegek's persistent indexing collapse from meetapedia's crawl backlog and weak search visibility, without proving a single algorithmic cause.
 - [[answer-engines]] — What an AI assistant's crawler gets from both domains — robots content signals, a counted llms.txt, a Markdown twin of every public page, and daily IndexNow pushes to the index ChatGPT search reads.
 - [[bot-crawl-audit-2026-10-03]] — A plain-HTTP, no-JavaScript crawl of a stratified sample of both sitemaps found clean canonicals and titles, a broken www host, missing AI-readable surfaces, and a quarter of all person pages making claims the corpus does not support.

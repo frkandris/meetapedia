@@ -15,7 +15,8 @@ Added 2026-10-03 after a bot's-eye audit of both sitemaps ([[bot-crawl-audit-202
 following a published playbook in which an answer engine became a SaaS's largest acquisition
 channel within a week. The audit found AI crawlers were *not* blocked (GPTBot, OAI-SearchBot,
 ChatGPT-User, ClaudeBot, PerplexityBot all get 200 through Cloudflare), so the work was about
-what they read, not whether they may.
+what they read, not whether they may. The search side of the same day is in
+[[search-console-2026-10-03]].
 
 ## robots.txt content signals
 
