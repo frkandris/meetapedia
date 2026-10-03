@@ -4956,6 +4956,10 @@ async def public_source_page(request: Request, url_hash: str):
     })
 
 
+#: Deliberately loose: one "@", a dot in the domain, no whitespace, RFC length.
+_EMAIL_RE = re.compile(r"(?=.{3,254}$)[^@\s]+@[^@\s]+\.[^@\s]+")
+
+
 @_fastapi.post("/subscribe")
 async def public_subscribe(
     request: Request,
@@ -4963,6 +4967,15 @@ async def public_subscribe(
     city: str = Form(...),
     topics: list[str] = Form(default=[]),
 ):
+    # Only values the site itself offers. An SQL-injection scanner (2026-10-03)
+    # turned each probe into a stored row and a notification e-mail; the insert
+    # is parameterised, so nothing ran, but a probe is not a subscription.
+    known_topics = {t.name for t in (app_state.topics or [])}
+    topics = [t for t in topics if t in known_topics]
+    if not any(c.name == city for c in (app_state.cities or [])):
+        city = ""
+    if not _EMAIL_RE.fullmatch(email or ""):
+        email = ""
     city_sl = _slugify(city) if city else ""
     city_locale = _city_locale(city) if city else "en"
     if not app_state.db_path or not email or not city or not topics:

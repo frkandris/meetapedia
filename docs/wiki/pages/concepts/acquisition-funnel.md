@@ -72,6 +72,9 @@ Consequences, and they are not negotiable:
   about a named city and topic. Mail to it must stay within what they asked
   for, and every message needs the working unsubscribe (`/unsubscribe?token=`,
   already built, `Disallow`ed in robots.txt).
+  Since 2026-10-03 `/subscribe` stores only a known city, known topics and a
+  plausible address — a scanner's probes had been rows
+  ([[2026-10-sqli-scanner-subscribe]]).
 - `records_with_email` in the funnel exists to size what an opt-in channel
   *could* reach, not to build a list from. Since 2026-09-17 the same question is
   answered for `persons` (a named leader or contact) and in **distinct addresses**
