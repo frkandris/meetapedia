@@ -17,6 +17,58 @@ def _coerce_str(v):
     return v
 
 
+#: Names the extraction writes into `leader` when the page names nobody.
+#: "Jane Smith" is the example in the extraction prompt's own description of
+#: that field (extract.py), and weak models copy it: on 2026-10-03 it was a
+#: published person page in 39 towns, attached to 66 different groups, and the
+#: `member` of each of those groups in their structured data. The prompt is not
+#: changed instead, because the prompt is half the extraction fingerprint and
+#: rewording one example would re-extract the whole corpus.
+_PLACEHOLDER_NAMES = frozenset({
+    "jane smith", "john doe", "jane doe", "john smith", "max mustermann",
+    "erika mustermann", "not specified", "not mentioned", "not stated",
+    "nincs megadva", "nem ismert", "ismeretlen", "unknown", "n/a",
+    "keine angabe", "unbekannt", "ej angivet", "okänd",
+})
+
+#: A description of a group of people where a name belongs: "Local organizers"
+#: (159 person pages), "Local community leaders", "Az alapítvány vezetői".
+#: A personal name does not open with an article or with "local".
+_GROUP_DESCRIPTOR_RE = re.compile(
+    r"^(?:local|various|several|the|our|az?|die|der|den|det)\s", re.IGNORECASE)
+
+
+def is_placeholder_name(name: str | None) -> bool:
+    """True when `name` stands in for a person instead of naming one."""
+    s = (name or "").strip()
+    if not s:
+        return True
+    return s.casefold() in _PLACEHOLDER_NAMES or bool(_GROUP_DESCRIPTOR_RE.match(s))
+
+
+def is_placeholder_leader(leader: str | None) -> bool:
+    """True when a community's free-text `leader` names nobody.
+
+    The field reads "Name, role" or just a name, so the part before the first
+    comma is what has to be a person ("Jane Smith, conductor" is the prompt's
+    example verbatim).
+    """
+    if not leader or not leader.strip():
+        return False
+    return is_placeholder_name(leader.split(",")[0])
+
+
+def is_publishable_person_name(name: str | None) -> bool:
+    """Whether `name` may head a public person page.
+
+    On top of the placeholders, a name with unbalanced parentheses is a cut
+    — "Babinszki Tamás (papságra készülő", "Liszt-díjas karnagy)" — where the
+    leader-field parser split inside a role; 132 rows on 2026-10-03.
+    """
+    s = (name or "").strip()
+    return not is_placeholder_name(s) and s.count("(") == s.count(")")
+
+
 class SearchResult(BaseModel):
     url: str
     title: str
@@ -64,7 +116,7 @@ class CommunityRecord(BaseModel):
     _NULL_STRINGS: frozenset = frozenset({
         "nincs megadva", "n/a", "nem ismert", "unknown", "none",
         "not provided", "not available", "-", "–", "na", "ismeretlen",
-        "keine angabe", "unbekannt",
+        "keine angabe", "unbekannt", "not specified", "not mentioned",
     })
 
     # Matches leaked JSON tail: `", 0.9, true, ...` or `", 2025", 0.9, true, ...`
@@ -96,6 +148,8 @@ class CommunityRecord(BaseModel):
             v = getattr(self, field, None)
             if isinstance(v, str) and v.strip().lower() in self._NULL_STRINGS:
                 setattr(self, field, None)
+        if is_placeholder_leader(self.leader):
+            self.leader = None
 
         # Normalize website: add https:// if no scheme present, and drop what is
         # not an address at all. Before this, "N/A" and "Lerne Deutsch in Bern"
@@ -255,6 +309,8 @@ class PersonRecord(BaseModel):
 
         if len(self.name.split()) < 2:
             raise ValueError(f"Person name is a single word, skipping: {self.name!r}")
+        if not is_publishable_person_name(self.name):
+            raise ValueError(f"Person name is a placeholder, skipping: {self.name!r}")
 
         if not self.person_id:
             key = f"{self.name.lower()}|{self.city.lower()}|{self.role}|{self.community_name.lower()}"

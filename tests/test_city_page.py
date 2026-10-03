@@ -2,6 +2,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests.people_seed import seed_groups
+
 from scraper.db import init_db, upsert_persons, upsert_venues
 from scraper.models import PersonRecord, VenueRecord
 from scraper.pipeline import CityConfig, TopicConfig
@@ -29,6 +31,7 @@ def test_city_page_omits_venue_and_person_collections(tmp_path):
         extracted_at="2026-01-01T00:00:00+00:00",
     )
     upsert_persons(db, [p.model_dump()])
+    seed_groups(db)
 
     old_db, old_cities = app_state.db_path, app_state.cities
     try:
@@ -75,6 +78,7 @@ def test_people_listing_deduplicates_persons(tmp_path):
             extracted_at="2026-01-01T00:00:00+00:00",
         )
         upsert_persons(db, [p.model_dump()])
+        seed_groups(db)
 
     old_db, old_cities = app_state.db_path, app_state.cities
     try:

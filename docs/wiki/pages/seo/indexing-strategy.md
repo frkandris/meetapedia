@@ -57,7 +57,7 @@ stored identity for reports. Regression coverage: `tests/test_sitemap_routes.py`
 
 ## robots.txt and other signals
 
-Per-domain `Sitemap:` line. Disallows `/admin, /source/, /api/, /set-lang, /unsubscribe, /community/, /healthz, /kereses`; special-cases `facebookexternalhit` with `Allow: /` for link previews. `/set-lang` also sends `X-Robots-Tag: noindex, nofollow`.
+Per-domain `Sitemap:` line, a `Content-Signal` line and a pointer to `/llms.txt` (2026-10-03, see [[answer-engines]]). Disallows `/admin, /source/, /api/, /set-lang, /unsubscribe, /community/, /healthz, /kereses`; special-cases `facebookexternalhit` with `Allow: /` for link previews. `/set-lang` also sends `X-Robots-Tag: noindex, nofollow`.
 
 ## Breadcrumbs
 

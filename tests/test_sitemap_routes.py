@@ -43,6 +43,11 @@ def route_client(tmp_path, monkeypatch):
             topic="running", community_name="Running Club",
             source_url="https://example.org/person",
             extracted_at="2026-09-05T00:00:00Z",
+        ).model_dump(), PersonRecord(
+            name=f"Orphan {city.name}", role="leader", city=city.name,
+            topic="running", community_name="A Club Listed Nowhere",
+            source_url="https://example.org/person",
+            extracted_at="2026-09-05T00:00:00Z",
         ).model_dump()])
     monkeypatch.setattr(app_state, "db_path", db)
     monkeypatch.setattr(app_state, "cities", cities)
@@ -106,3 +111,14 @@ def test_venue_and_person_pages_are_submitted_on_both_editions(route_client, dom
     assert f"https://{domain}/{city}/helyszin/{city}-hall" in urls
     assert f"https://{domain}/{city}/ember/anna-{city}" in urls
     assert not [u for u in urls if "/venue/" in u or "/person/" in u]
+
+
+@pytest.mark.parametrize("domain,city", [
+    ("kozossegek.com", "budapest"), ("meetapedia.com", "vienna"),
+])
+def test_a_person_whose_group_is_not_listed_is_not_submitted(route_client, domain, city):
+    """Their page 404s; submitting it would put a dead URL in the sitemap."""
+    response = route_client.get("/sitemap.xml", headers={"host": domain})
+    urls = [e.text for e in ET.fromstring(response.text).findall(".//{*}loc")]
+    assert f"https://{domain}/{city}/ember/anna-{city}" in urls
+    assert not [u for u in urls if "/ember/orphan-" in u]

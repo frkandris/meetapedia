@@ -461,6 +461,33 @@ async def main() -> None:
         _quota_cache.update(at=now, value=value)
         return value
 
+    async def _submit_indexnow(utc_day: str) -> None:
+        """Once per UTC day: push yesterday's and today's changed URLs to IndexNow.
+
+        Restart-safe through a daily counter, so a redeploy does not resubmit.
+        Never raises — a refused ping is not a reason to stop the worker.
+        """
+        from datetime import date, timedelta
+        from . import indexnow
+        from .db import bump_daily_counter, get_daily_counter
+        from .web.app import _build_sitemap
+        key = indexnow.valid_key(os.environ.get("INDEXNOW_KEY"))
+        db = app_state.db_path
+        if not key or not db or get_daily_counter(db, utc_day, "indexnow_submitted"):
+            return
+        since = (date.fromisoformat(utc_day) - timedelta(days=1)).isoformat()
+        try:
+            for site, site_url in (("kozossegek", "https://kozossegek.com"),
+                                   ("meetapedia", "https://meetapedia.com")):
+                entries = await asyncio.to_thread(
+                    _build_sitemap, {"site": site, "site_url": site_url})
+                urls = indexnow.changed_since(entries, since)
+                statuses = await indexnow.submit(site_url, urls, key) if urls else []
+                log.info("indexnow_submitted", site=site, urls=len(urls), statuses=statuses)
+            bump_daily_counter(db, utc_day, "indexnow_submitted")
+        except Exception as exc:  # noqa: BLE001 — never block the worker
+            log.warning("indexnow_failed", error=str(exc))
+
     async def _worker_loop() -> None:
         from .web.app import launch_pipeline_run
         from .guides import publish_daily_guides
@@ -472,6 +499,7 @@ async def main() -> None:
         last_mode = ""
         guides_checked_day = ""
         guides_retry_at = 0.0
+        indexnow_day = ""
         log.info("worker_started")
         while True:
             try:
@@ -524,6 +552,9 @@ async def main() -> None:
                         guides_retry_at = _time.monotonic() + _WORKER_EXTRACT_RETRY_S
                         log.warning("daily_guides_deferred", error=str(exc),
                                     retry_s=_WORKER_EXTRACT_RETRY_S)
+                if indexnow_day != utc_day:
+                    indexnow_day = utc_day
+                    await _submit_indexnow(utc_day)
                 if (schedule_cfg.get("enrich_enabled")
                         and not app_state._enrich_running
                         and not getattr(app_state, "worker_paused", False)):

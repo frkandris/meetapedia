@@ -12,6 +12,8 @@ from scraper.web import app as web_app
 from scraper.web.state import app_state
 from fastapi.testclient import TestClient
 
+from tests.people_seed import seed_groups
+
 
 @pytest.fixture(autouse=True)
 def _budapest_is_a_known_city(monkeypatch):
@@ -126,6 +128,7 @@ def test_person_detail_page_returns_200(tmp_path):
         extracted_at="2026-01-01T00:00:00+00:00",
     )
     upsert_persons(db, [p.model_dump()])
+    seed_groups(db)
 
     old_db = app_state.db_path
     try:
@@ -147,6 +150,7 @@ def test_person_detail_merges_multiple_communities(tmp_path):
             extracted_at="2026-01-01T00:00:00+00:00",
         )
         upsert_persons(db, [p.model_dump()])
+        seed_groups(db)
 
     old_db = app_state.db_path
     try:
@@ -159,7 +163,8 @@ def test_person_detail_merges_multiple_communities(tmp_path):
         app_state.db_path = old_db
 
 
-def test_person_detail_404_redirects(tmp_path):
+def test_an_unknown_person_is_a_404_not_a_redirect(tmp_path):
+    """A redirect to the index is a soft 404; Google keeps the URL queued."""
     db = _db(tmp_path)
     old_db = app_state.db_path
     try:
@@ -167,8 +172,50 @@ def test_person_detail_404_redirects(tmp_path):
         resp = TestClient(web_app.app).get(
             "/budapest/ember/nem-letezik", follow_redirects=False
         )
-        assert resp.status_code == 302
-        assert resp.headers["location"] == "/emberek"
+        assert resp.status_code == 404
+    finally:
+        app_state.db_path = old_db
+
+
+def _person(name, community="Futók"):
+    return PersonRecord.model_construct(
+        name=name, role="leader", city="Budapest", topic="running",
+        community_name=community, source_url="https://a.test", source_urls=[],
+        extracted_at="2026-01-01T00:00:00+00:00", person_id=name, social_links=[],
+    ).model_dump()
+
+
+def test_a_person_whose_group_is_not_listed_in_the_town_is_not_published(tmp_path):
+    """8,477 of 34,222 stored people led a group we do not list in that town."""
+    db = _db(tmp_path)
+    upsert_persons(db, [_person("Kovács János", community="Futók")])
+    old_db = app_state.db_path
+    try:
+        app_state.db_path = db
+        client = TestClient(web_app.app)
+        assert client.get("/budapest/ember/kovacs-janos").status_code == 404
+        seed_groups(db)
+        assert client.get("/budapest/ember/kovacs-janos").status_code == 200
+    finally:
+        app_state.db_path = old_db
+
+
+@pytest.mark.parametrize("name", [
+    "Jane Smith", "Not specified", "Local organizers", "Az alapítvány vezetői",
+    "Babinszki Tamás (papságra készülő",
+])
+def test_placeholder_people_stored_earlier_are_not_published(tmp_path, name):
+    """Rows written before the model refused them still exist in production."""
+    db = _db(tmp_path)
+    upsert_persons(db, [_person(name)])
+    seed_groups(db)
+    old_db = app_state.db_path
+    try:
+        app_state.db_path = db
+        from scraper.web.app import _slugify
+        resp = TestClient(web_app.app).get(f"/budapest/ember/{_slugify(name)}")
+        assert resp.status_code == 404
+        assert name not in TestClient(web_app.app).get("/emberek?city=Budapest").text
     finally:
         app_state.db_path = old_db
 
@@ -239,6 +286,7 @@ def test_emberek_page_lists_persons(tmp_path):
         extracted_at="2026-01-01T00:00:00+00:00",
     )
     upsert_persons(db, [p.model_dump()])
+    seed_groups(db)
 
     old_db = app_state.db_path
     old_cities = app_state.cities

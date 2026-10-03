@@ -6,6 +6,8 @@ from scraper.web import app as web_app
 from scraper.web.state import app_state
 from fastapi.testclient import TestClient
 
+from tests.people_seed import seed_groups
+
 
 def _db(tmp_path: Path) -> Path:
     p = tmp_path / "scraper.db"
@@ -32,6 +34,7 @@ def _setup_persons(db):
                      community_name="Futók DE", source_url="https://a.test",
                      extracted_at="2026-01-01T00:00:00+00:00").model_dump(),
     ])
+    seed_groups(db)
 
 
 def test_people_city_filter(tmp_path):

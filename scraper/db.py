@@ -6,6 +6,7 @@ from pathlib import Path
 
 import structlog
 
+from .models import is_publishable_person_name
 from .identity import (
     community_record_key as _community_record_key,
     normalized_match_key,
@@ -2797,6 +2798,7 @@ def get_persons_for_community(db_path: Path, community_name: str, city: str) -> 
     return [
         p for p in persons
         if normalized_match_key(p.get("community_name", "")) == target
+        and is_publishable_person_name(p.get("name"))
     ]
 
 
@@ -2806,6 +2808,39 @@ def get_all_persons(db_path: Path) -> list[dict]:
     with _connect(db_path) as conn:
         rows = conn.execute("SELECT data FROM persons ORDER BY city, id").fetchall()
     return [json.loads(r[0]) for r in rows]
+
+
+def get_publishable_persons(db_path: Path, city: str | None = None) -> list[dict]:
+    """Persons that may have a public page: a real name, and a group to lead.
+
+    A person row is published as a claim — this person leads that group in
+    this town — so it needs the group to be listed in that town. On 2026-10-03
+    8,477 of 34,222 rows had none: the community had since been hidden, merged
+    or never stored under that city (one Halásztelek page put one retirement
+    club's leader in 228 towns), and every such page linked to a group page
+    that does not exist. Placeholders ("Not specified", "Jane Smith") are out
+    for the reason in `models.is_placeholder_name`.
+
+    The sitemap, the people index and the person page all read this, so a page
+    cannot be submitted that would then refuse to render.
+    """
+    if not db_path.exists():
+        return []
+    with _connect(db_path) as conn:
+        where, args = ("WHERE city=?", (city,)) if city else ("", ())
+        persons = [json.loads(r[0]) for r in conn.execute(
+            f"SELECT data FROM persons {where} ORDER BY city, id", args)]
+        groups = {
+            (c, normalized_match_key(n or ""))
+            for c, n in conn.execute(
+                f"SELECT city, json_extract(data, '$.name') FROM communities "
+                f"WHERE hidden=0 {'AND city=?' if city else ''}", args)
+        }
+    return [
+        p for p in persons
+        if is_publishable_person_name(p.get("name"))
+        and (p.get("city", ""), normalized_match_key(p.get("community_name", ""))) in groups
+    ]
 
 
 def get_person_counts(db_path: Path) -> dict[str, int]:

@@ -5,6 +5,7 @@ import hmac
 import importlib.metadata
 import json
 import os
+import time
 from functools import lru_cache
 import re
 
@@ -18,7 +19,7 @@ from urllib.parse import quote as _url_quote, urlsplit
 import structlog
 import yaml
 from fastapi import APIRouter, BackgroundTasks, FastAPI, Form, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -62,7 +63,6 @@ from ..db import (
     get_venue_person_counts_by_url,
     get_venue_history,
     get_persons,
-    get_all_persons,
     get_person_counts,
     get_person_history,
     get_prompt_overrides,
@@ -85,6 +85,7 @@ from ..db import (
     search_all,
     get_venue_for_community,
     get_persons_for_community,
+    get_publishable_persons,
     save_community_submission,
     get_community_submissions,
     resolve_community_submission,
@@ -97,7 +98,7 @@ from ..extract import (ENRICH_SCHEMA, ENRICH_SYSTEM_PROMPT, EXTRACTION_SCHEMA,
                        VENUE_SCHEMA, PERSON_SCHEMA, PROMPT_KEYS, get_prompt, set_prompt_override)
 from ..fetch import fetch_and_clean
 from ..identity import public_slug
-from ..models import CommunityRecord
+from ..models import CommunityRecord, is_placeholder_leader
 from ..pipeline import (
     RUN_ABORTED,
     _enrich_record,
@@ -324,6 +325,39 @@ async def _count_pageview(request: Request, call_next):
     except Exception:
         pass  # tracking must never break a page
     return response
+
+
+@_fastapi.middleware("http")
+async def _markdown_for_agents(request: Request, call_next):
+    """Serve a public page as Markdown to a client that asks for it.
+
+    See `agent_markdown`. `Vary: Accept` goes on the HTML too: the two bodies
+    share one URL, and a cache that does not know they differ by Accept would
+    hand a browser the Markdown, or an agent the HTML.
+    """
+    from . import agent_markdown
+    response = await call_next(request)
+    if (request.method != "GET" or request.url.path.startswith("/admin")
+            or not agent_markdown.enabled()
+            or "text/html" not in (response.headers.get("content-type") or "")):
+        return response
+    response.headers["Vary"] = ", ".join(
+        v for v in (response.headers.get("vary"), "Accept") if v)
+    if response.status_code != 200 or not agent_markdown.wants_markdown(
+            request.headers.get("accept")):
+        return response
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    base = f"{lang_context(request)['site_url']}{request.url.path}"
+    try:
+        text = await asyncio.to_thread(
+            agent_markdown.html_to_markdown, body.decode("utf-8"), base)
+    except Exception:
+        log.warning("agent_markdown_failed", path=request.url.path)
+        return Response(body, status_code=200, headers=dict(response.headers))
+    return Response(text, media_type="text/markdown; charset=utf-8",
+                    headers={"Vary": "Accept", "X-Robots-Tag": "noindex"})
+
+
 app = _BasicAuth(_fastapi)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 templates.env.filters["urlencode"] = lambda s: _url_quote(str(s), safe="")
@@ -5470,8 +5504,110 @@ async def robots_txt(request: Request):
         "Disallow: /community/\n"
         "Disallow: /healthz\n"
         "Disallow: /kereses\n"
+        # contentsignals.org: what may be done with what is crawled here.
+        # Being read and cited by an answer engine is the point of the site,
+        # so all three are yes — a `no` would not keep the data private (it is
+        # public) and would only keep us out of the answers.
+        "Content-Signal: search=yes, ai-input=yes, ai-train=yes\n"
+        "\n"
         f"Sitemap: {site_url}/sitemap.xml\n"
+        f"# A plain-text map of this site for language models: {site_url}/llms.txt\n"
     )
+
+
+@_fastapi.get("/indexnow-key.txt")
+async def indexnow_key():
+    """Proof for IndexNow that we own this host: the file holds the key."""
+    from fastapi.responses import PlainTextResponse
+    from ..indexnow import valid_key
+    key = valid_key(os.environ.get("INDEXNOW_KEY"))
+    if not key:
+        return PlainTextResponse("Not found", status_code=404)
+    return PlainTextResponse(key)
+
+
+#: llms.txt per site, with the time it was built. It reads the whole corpus's
+#: city totals; an hour is fresher than any assistant refetches it.
+_LLMS_TXT_CACHE: dict[str, tuple[float, str]] = {}
+
+
+@_fastapi.get("/llms.txt")
+async def llms_txt(request: Request):
+    """A plain-text map of the site for language models (llmstxt.org).
+
+    Every sentence about what the site is and how its data is made comes from
+    the About page's own i18n strings, so the two cannot disagree; the numbers
+    are counted, not written. No instructions to models — only a description
+    and links.
+    """
+    from fastapi.responses import PlainTextResponse
+    ctx = lang_context(request)
+    cached = _LLMS_TXT_CACHE.get(ctx["site"])
+    if cached and time.monotonic() - cached[0] < 3600:
+        return PlainTextResponse(cached[1])
+    text = await asyncio.to_thread(_build_llms_txt, request, ctx)
+    _LLMS_TXT_CACHE[ctx["site"]] = (time.monotonic(), text)
+    return PlainTextResponse(text)
+
+
+def _build_llms_txt(request: Request, ctx: dict) -> str:
+    t, base, site = ctx["t"], ctx["site_url"], ctx["site"]
+    hu = site == "kozossegek"
+    site_names = {c.name for c in _site_cities(request)}
+    if not hu:
+        site_names -= _hu_city_names()
+    totals = [(c, n) for c, n in (get_city_totals(_db()) if app_state.db_path else [])
+              if c in site_names and n > 0]
+    communities = sum(n for _, n in totals)
+    guides = get_data_guides(_db(), site, limit=50) if app_state.db_path else []
+
+    def num(n: int) -> str:
+        # Hungarian groups thousands with a space; "73,219" reads as a decimal.
+        return f"{n:,}".replace(",", "\u00a0") if hu else f"{n:,}"
+
+    summary = (f"{num(communities)} helyi közösség, klub és csoport {num(len(totals))} "
+               f"magyarországi településen, nyilvános weboldalakról gyűjtve, városonként és témánként."
+               if hu else
+               f"{num(communities)} local communities, clubs and groups in {num(len(totals))} cities "
+               f"worldwide, collected from public web pages, by city and by interest.")
+    lines = [
+        f"# {ctx['site_name']}", "", f"> {summary}", "",
+        t("about_description").format(site_name=ctx["site_name"]), "",
+        f"{t('about_how_it_works')}: {t('about_how_it_works_text')}", "",
+        f"{t('about_data_quality')}: {t('about_data_quality_text')}", "",
+    ]
+    if hu:
+        lines += [
+            "## Fő oldalak", "",
+            f"- [Települések]({base}/varosok): minden település, ahol van közösség",
+            f"- [Adatútmutatók]({base}/utmutatok): város és téma szerinti összefoglalók a gyűjtött adatokból",
+            f"- [Térkép]({base}/terkep): a közösségek térképen",
+            f"- [Helyszínek]({base}/helyszinek): ahol a közösségek találkoznak",
+            f"- [Rólunk]({base}/rolunk): mi ez az oldal, és hogyan készül az adat",
+            f"- [Közösség beküldése]({base}/kozosseg-bekuldes): hiányzó közösség bejelentése",
+            "- [International edition](https://meetapedia.com): ugyanez a világ többi részére, angolul",
+        ]
+    else:
+        lines += [
+            "## Main pages", "",
+            f"- [Cities]({base}/cities): every city with listed communities, by country",
+            f"- [Map]({base}/map): communities on a map",
+            f"- [About]({base}/rolunk): what this site is and how the data is made",
+            f"- [Submit a community]({base}/submit-community): report a missing group",
+            "- [Hungarian edition](https://kozossegek.com): the same directory for Hungary, in Hungarian",
+        ]
+        if guides:
+            lines.append(f"- [Data guides]({base}/guides): city × topic summaries of the collected data")
+    if guides:
+        prefix = "/utmutatok" if hu else "/guides"
+        lines += ["", "## Adatútmutatók" if hu else "## Data guides", ""]
+        lines += [f"- [{g['title']}]({base}{prefix}/{g['slug']}): {' '.join((g.get('summary') or '').split())}"
+                  for g in guides]
+    if totals:
+        lines += ["", "## Települések" if hu else "## Cities", ""]
+        word = "közösség" if hu else "communities"
+        lines += [f"- [{c}]({base}/{_slugify(c)}): {n} {word}" for c, n in totals[:60]]
+    return "\n".join(lines).rstrip() + "\n"
 
 
 #: Sitemap entries per site, with the time they were built. Pure SQL + string
@@ -5676,7 +5812,7 @@ def _build_sitemap(ctx: dict) -> list[tuple[str, str | None]]:
                 locs.append(f"{base}/{city_sl}/helyszin/{name_sl}")
 
         seen_persons: set[tuple[str, str]] = set()
-        for p in get_all_persons(app_state.db_path):
+        for p in get_publishable_persons(app_state.db_path):
             if p.get("city", "") not in site_city_names:
                 continue
             city_sl = _slugify(p.get("city", ""))
@@ -7659,7 +7795,7 @@ async def _render_people(request: Request, city: str = ""):
     # stalls every other request for as long as it runs.
     await asyncio.to_thread(init_db, app_state.db_path)
     site_names = {c.name for c in _site_cities(request)}
-    all_persons = await asyncio.to_thread(get_all_persons, app_state.db_path)
+    all_persons = await asyncio.to_thread(get_publishable_persons, app_state.db_path)
     # Deduplicate: one card per person (name+city slug), merged across communities
     seen: dict[tuple, dict] = {}
     for p in all_persons:
@@ -7810,10 +7946,14 @@ async def public_person_detail(request: Request, city_slug: str, name_slug: str)
         return RedirectResponse("/emberek", status_code=302)
     if (redirect := _hu_redirect(request, city_name)):
         return redirect
-    all_persons = await asyncio.to_thread(get_persons, app_state.db_path, city_name)
+    all_persons = await asyncio.to_thread(get_publishable_persons, app_state.db_path, city_name)
     merged = [p for p in all_persons if _slugify(p.get("name", "")) == name_slug]
     if not merged:
-        return RedirectResponse("/emberek", status_code=302)
+        # 404, not a redirect to the index: these URLs were in the sitemap
+        # until 2026-10-03 (placeholders, people whose group is not listed in
+        # this town), and a redirect to a list is a soft 404 that keeps them
+        # in Google's queue instead of letting them drop out.
+        return HTMLResponse("Not found", status_code=404)
     _person_lang = lang_context(request)
     community_entries = []
     seen: dict = {}
@@ -7910,6 +8050,10 @@ async def public_city_segment(
     _city_records = await asyncio.to_thread(get_communities_for_city, _db(), city_name)
     record = next((_ensure_community_id(r) for r in _city_records
                    if _slugify(r.get("name", "")) == segment), None)
+    if record and is_placeholder_leader(record.get("leader")):
+        # Stored before the model rejected placeholders; the page, its person
+        # link and its schema `member` would all repeat "Jane Smith".
+        record = {**record, "leader": None}
     if record:
         _page_lang = lang_context(request)
         schema_json = records_to_jsonld(

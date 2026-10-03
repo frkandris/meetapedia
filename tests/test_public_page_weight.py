@@ -81,7 +81,7 @@ def test_the_listing_routes_read_the_database_off_the_event_loop():
     """A table scan on the loop is an outage for every concurrent request."""
     src = Path("scraper/web/app.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
-    scans = {"get_all_venues", "get_all_persons"}
+    scans = {"get_all_venues", "get_all_persons", "get_publishable_persons"}
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             continue

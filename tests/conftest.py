@@ -36,11 +36,13 @@ def _reset_sitemap_cache():
     someone else's document: an order-dependent failure that passed when its
     file ran alone.
     """
-    from scraper.web.app import _SITEMAP_CACHE
+    from scraper.web.app import _LLMS_TXT_CACHE, _SITEMAP_CACHE
 
     _SITEMAP_CACHE.clear()
+    _LLMS_TXT_CACHE.clear()
     yield
     _SITEMAP_CACHE.clear()
+    _LLMS_TXT_CACHE.clear()
 
 
 @pytest.fixture(autouse=True)
