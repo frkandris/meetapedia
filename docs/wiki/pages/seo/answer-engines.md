@@ -61,7 +61,11 @@ sitemap URL** of both domains. Details:
 `/indexnow-key.txt` serves the key on both domains, and the worker, once per UTC day right after the
 guide step, submits each site's sitemap URLs whose `lastmod` is yesterday or today. `lastmod` only
 moves on a real content change, so this is the set worth a recrawl. A daily counter
-(`indexnow_submitted`) makes it restart-safe; a refused ping is logged, never raised.
+(`indexnow_submitted`) makes it restart-safe, and only an accepted day (every request 200/202) is
+recorded; a refusal is logged, never raised, and retried after 30 minutes. That matters on day one:
+the first submission after the key went live (2026-10-03, 667 + 6,290 URLs) was answered **403
+`SiteVerificationNotCompleted`** while IndexNow fetched the key file, and a single-URL retry minutes
+later got 200.
 
 Google does not participate — its Indexing API does not cover pages like ours — so Google still
 learns of changes from the sitemap. Bing does, and Bing's index is what ChatGPT search and Copilot
