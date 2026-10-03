@@ -28,6 +28,14 @@ _ADMIN_HEADERS = {
 }
 
 
+def _zenei_kor_id(db: Path) -> str:
+    """A claim must name a stored community (2026-10-03 form validation)."""
+    import sqlite3
+    with sqlite3.connect(db) as conn:
+        return conn.execute(
+            "SELECT community_id FROM communities WHERE json_extract(data, '$.name')='Zenei Kör'").fetchone()[0]
+
+
 @pytest.fixture()
 def funnel_db(tmp_path: Path, monkeypatch):
     db = tmp_path / "scraper.db"
@@ -169,7 +177,7 @@ def test_a_claim_survives_without_a_mail_provider(funnel_db):
     """The failure this test exists for: no RESEND_API_KEY, claim silently lost."""
     client = TestClient(web_app.app)
     r = client.post("/claim-community", data={
-        "community_id": "abc123",
+        "community_id": _zenei_kor_id(funnel_db),
         "community_name": "Zenei Kör",
         "city": "Budapest",
         "page_url": "https://kozossegek.com/budapest/zenei-kor",
@@ -285,7 +293,7 @@ def test_a_claim_can_be_approved(funnel_db):
 
     client = TestClient(web_app.app)
     client.post("/claim-community", data={
-        "community_id": "abc123", "community_name": "Zenei Kör",
+        "community_id": _zenei_kor_id(funnel_db), "community_name": "Zenei Kör",
         "city": "Budapest", "page_url": "https://kozossegek.com/budapest/zenei-kor",
         "claimant_email": "leader@example.test",
     }, headers=KOZ)

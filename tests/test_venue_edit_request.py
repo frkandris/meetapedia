@@ -13,6 +13,14 @@ def _db(tmp_path: Path) -> Path:
     return p
 
 
+def _mupa(db: Path) -> str:
+    """Store the venue the request is about; /suggest-edit refuses an unknown one."""
+    import sqlite3
+    upsert_venues(db, [{"name": "Müpa Budapest", "city": "Budapest", "venue_id": "abc123"}])
+    with sqlite3.connect(db) as conn:
+        return conn.execute("SELECT record_key FROM venues").fetchone()[0]
+
+
 def test_suggest_edit_venue_wrong_info(tmp_path):
     db = _db(tmp_path)
     old_db = app_state.db_path
@@ -24,7 +32,7 @@ def test_suggest_edit_venue_wrong_info(tmp_path):
             "entity_name": "Müpa Budapest",
             "entity_city": "Budapest",
             "entity_topic": "",
-            "record_key": "",
+            "record_key": _mupa(db),
             "change_type": "wrong_info",
             "new_value": "",
             "notes": "Rossz telefonszám van megadva",
@@ -70,7 +78,7 @@ def test_suggest_edit_venue_name_correction_with_value(tmp_path):
             "entity_name": "Müpa Budapest",
             "entity_city": "Budapest",
             "entity_topic": "",
-            "record_key": "",
+            "record_key": _mupa(db),
             "change_type": "name_correction",
             "new_value": "Müpa Nemzeti Hangverseny- és Kongresszusi Központ",
             "notes": "Teljes oficial név",

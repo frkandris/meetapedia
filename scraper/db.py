@@ -2608,6 +2608,21 @@ def get_covered_pairs(db_path: Path) -> set[tuple[str, str]]:
 
 # ── Venues ────────────────────────────────────────────────────────────────────
 
+def get_venue_by_record_key(db_path: Path, record_key: str) -> dict | None:
+    """One venue by record_key, with its `venue_id` column folded into the data."""
+    if not db_path or not db_path.exists() or not record_key:
+        return None
+    with _connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT data, venue_id FROM venues WHERE record_key=?", (record_key,)
+        ).fetchone()
+    if not row:
+        return None
+    data = json.loads(row[0])
+    data["venue_id"] = data.get("venue_id") or row[1]
+    return data
+
+
 def upsert_venues(db_path: Path, records: list[dict]) -> int:
     if not records:
         return 0

@@ -4959,6 +4959,40 @@ async def public_source_page(request: Request, url_hash: str):
 #: Deliberately loose: one "@", a dot in the domain, no whitespace, RFC length.
 _EMAIL_RE = re.compile(r"(?=.{3,254}$)[^@\s]+@[^@\s]+\.[^@\s]+")
 
+#: Free text a visitor may type: a name, a new value, a note, a message.
+_FORM_NAME_MAX = 200
+_FORM_TEXT_MAX = 5000
+
+#: A town someone asks us to add: letters, spaces, dots, hyphens, apostrophes.
+#: The scanner's "1')" and "98766" are not towns.
+_TOWN_NAME_RE = re.compile(r"[^\W\d_](?:[^\W\d_]|[ .'\-]){1,99}")
+
+
+def _form_email(value: str) -> str:
+    """The address if it looks like one, else ""."""
+    value = (value or "").strip()
+    return value if _EMAIL_RE.fullmatch(value) else ""
+
+
+def _own_page_url(request: Request, url: str) -> str:
+    """A page of this site, or "". It is printed as a link in the operator's mail,
+    so a `javascript:` URL or someone else's site must not survive."""
+    try:
+        parts = urlsplit(url or "")
+    except ValueError:
+        return ""
+    if parts.scheme in ("http", "https") and parts.hostname and parts.hostname == request.url.hostname:
+        return url[:2000]
+    return ""
+
+
+def _known_city(name: str) -> str:
+    return name if any(c.name == name for c in (app_state.cities or [])) else ""
+
+
+def _known_topic(name: str) -> str:
+    return name if any(t.name == name for t in (app_state.topics or [])) else ""
+
 
 @_fastapi.post("/subscribe")
 async def public_subscribe(
@@ -4970,12 +5004,9 @@ async def public_subscribe(
     # Only values the site itself offers. An SQL-injection scanner (2026-10-03)
     # turned each probe into a stored row and a notification e-mail; the insert
     # is parameterised, so nothing ran, but a probe is not a subscription.
-    known_topics = {t.name for t in (app_state.topics or [])}
-    topics = [t for t in topics if t in known_topics]
-    if not any(c.name == city for c in (app_state.cities or [])):
-        city = ""
-    if not _EMAIL_RE.fullmatch(email or ""):
-        email = ""
+    topics = [t for t in topics if _known_topic(t)]
+    city = _known_city(city)
+    email = _form_email(email)
     city_sl = _slugify(city) if city else ""
     city_locale = _city_locale(city) if city else "en"
     if not app_state.db_path or not email or not city or not topics:
@@ -5021,6 +5052,7 @@ _RESEND_FROM = os.environ.get("RESEND_FROM", "onboarding@resend.dev")
 
 @_fastapi.post("/feedback")
 async def public_feedback(
+    request: Request,
     community_name: str = Form(""),
     city: str = Form(""),
     topic: str = Form(""),
@@ -5028,6 +5060,13 @@ async def public_feedback(
     message: str = Form(""),
     user_email: str = Form(""),
 ):
+    # The message is the visitor's own words; everything around it is context
+    # the page supplied, so a value the site never offered is dropped.
+    message = message.strip()[:_FORM_TEXT_MAX]
+    community_name = community_name.strip()[:_FORM_NAME_MAX]
+    city, topic = _known_city(city), _known_topic(topic)
+    user_email = _form_email(user_email)
+    page_url = _own_page_url(request, page_url)
     if _FEEDBACK_EMAIL and message and _RESEND_API_KEY:
         try:
             import resend
@@ -5060,14 +5099,25 @@ async def public_feedback(
 
 @_fastapi.post("/claim-community")
 async def public_claim_community(
+    request: Request,
     community_id: str = Form(""),
     community_name: str = Form(""),
     city: str = Form(""),
     page_url: str = Form(""),
     claimant_email: str = Form(""),
 ):
-    if not community_name or not claimant_email:
+    if not community_id or not claimant_email:
         return JSONResponse({"ok": False, "error": "missing_fields"})
+    claimant_email = _form_email(claimant_email)
+    if not claimant_email:
+        return JSONResponse({"ok": False, "error": "invalid_email"})
+    # The name and city come from the record, never the form: a claim names a
+    # community that exists, and the operator's mail must not carry spoofed text.
+    record = find_community_by_id(_db(), community_id) if app_state.db_path else None
+    if not record:
+        return JSONResponse({"ok": False, "error": "unknown_community"})
+    community_name, city = record.get("name", ""), record.get("city", "")
+    page_url = _own_page_url(request, page_url)
     # Persist before mailing. A claim is the strongest signal the public site
     # produces — someone running the group types their address in and asks for
     # it — and it was going out as an email and nowhere else. With no key set,
@@ -5108,6 +5158,7 @@ async def public_claim_community(
 
 @_fastapi.post("/report-not-community")
 async def public_report_not_community(
+    request: Request,
     community_id: str = Form(""),
     community_name: str = Form(""),
     city: str = Form(""),
@@ -5115,8 +5166,17 @@ async def public_report_not_community(
     source_url: str = Form(""),
     page_url: str = Form(""),
 ):
-    if not community_name or not app_state.db_path:
+    if not community_id or not app_state.db_path:
         return JSONResponse({"ok": False})
+    record = find_community_by_id(_db(), community_id)
+    if not record:
+        return JSONResponse({"ok": False, "error": "unknown_community"})
+    community_name, city = record.get("name", ""), record.get("city", "")
+    # One community_id spans its topic rows; keep the page's topic if it is real.
+    topic = _known_topic(topic) or record.get("topic", "")
+    own_urls = {record.get("source_url")} | set(record.get("source_urls") or [])
+    source_url = source_url if source_url in own_urls else ""
+    page_url = _own_page_url(request, page_url)
     save_not_community_report(
         _db(), community_id, community_name, city, topic, source_url, page_url
     )
@@ -5170,6 +5230,28 @@ async def public_suggest_edit(
         return JSONResponse({"ok": False, "error": "invalid_change_type"})
     if change_type in {"wrong_city", "wrong_topic", "name_correction"} and not new_value.strip():
         return JSONResponse({"ok": False, "error": "missing_new_value"})
+    # Approval applies the edit by record_key, so the request must resolve to
+    # a record that exists; its name, city and topic come from that record.
+    if entity_type == "community":
+        record = get_community_by_record_key(_db(), record_key) if record_key else None
+        if record:
+            entity_id = record.get("community_id", "")
+            entity_topic = record.get("topic", "")
+    else:
+        from ..db import get_venue_by_record_key
+        record = get_venue_by_record_key(_db(), record_key)
+        if record:
+            entity_id, entity_topic = record.get("venue_id", ""), ""
+    if not record:
+        return JSONResponse({"ok": False, "error": "unknown_entity"})
+    entity_name, entity_city = record.get("name", ""), record.get("city", "")
+    if email.strip() and not _form_email(email):
+        return JSONResponse({"ok": False, "error": "invalid_email"})
+    new_value = new_value.strip()[:_FORM_NAME_MAX]
+    notes = notes.strip()[:_FORM_TEXT_MAX]
+    if (change_type == "wrong_city" and not _known_city(new_value)) or (
+            change_type == "wrong_topic" and not _known_topic(new_value)):
+        return JSONResponse({"ok": False, "error": "invalid_new_value"})
     save_edit_request(
         _db(), entity_type, entity_id, entity_name, entity_city, entity_topic,
         record_key, change_type, new_value.strip() or None, notes.strip(), email.strip(),
@@ -5367,9 +5449,14 @@ async def public_cities_country(request: Request, country_slug: str):
 
 @_fastapi.post("/varosok/kerelem")
 async def request_city(request: Request, city_name: str = Form(""), email: str = Form("")):
-    if city_name.strip() and app_state.db_path:
-        save_city_request(app_state.db_path, city_name, email)
-    return RedirectResponse("/varosok?requested=" + city_name.strip(), status_code=303)
+    city_name = city_name.strip()
+    # A town we do not list yet, so it cannot be checked against cities.yaml —
+    # only against looking like a place name (the 2026-10-03 scanner sent "1')").
+    if not _TOWN_NAME_RE.fullmatch(city_name):
+        return RedirectResponse("/varosok", status_code=303)
+    if app_state.db_path:
+        save_city_request(app_state.db_path, city_name, _form_email(email))
+    return RedirectResponse("/varosok?requested=" + _url_quote(city_name), status_code=303)
 
 
 @_fastapi.get("/admin", response_class=HTMLResponse)
@@ -5490,10 +5577,13 @@ async def submit_community_post(
         return JSONResponse({"error": "missing_required_field"}, status_code=400)
     if not is_public_http_url(source_url.strip()):
         return JSONResponse({"error": "invalid_source_url"}, status_code=400)
+    # Both are <select>s on the form; anything else did not come from it.
+    if not _known_city(city.strip()) or not _known_topic(topic.strip()):
+        return JSONResponse({"error": "invalid_city_or_topic"}, status_code=400)
     init_db(_db())
     save_community_submission(
-        _db(), name.strip(), city.strip(), topic.strip(),
-        source_url.strip(), submitter_email.strip() or None,
+        _db(), name.strip()[:_FORM_NAME_MAX], city.strip(), topic.strip(),
+        source_url.strip(), _form_email(submitter_email) or None,
     )
     return RedirectResponse(lang_context(request)["submit_url"] + "?submitted=1", status_code=302)
 

@@ -3,6 +3,7 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-10-03
+- **Update**: [[2026-10-sqli-scanner-subscribe]] — every public form now validates: claims, reports and edit requests must name a stored record and take its name from the DB; `page_url` must be this site; town requests must look like a town; submissions need a configured city and topic.
 - **Creation**: [[2026-10-sqli-scanner-subscribe]] — `/subscribe` now accepts only a known city, known topics and a plausible email; a scanner's nine probes had become rows and notification e-mails (no injection: the insert is parameterised).
 - **Creation**: [[search-console-2026-10-03]] — API baseline: kozossegek 5 clicks / 55 impressions in 90 days, 1 of 120 sampled URLs indexed, guides unknown to Google, sitemap not fetched since 09-05; 145 of meetapedia's 154 clicks land on HU pages indexed before the 301.
 - **Creation**: [[bot-crawl-audit-2026-10-03]] — a no-JavaScript crawl of both live sitemaps; canonicals, titles and H1s clean; www.meetapedia.com answers 526; 8,477 of 34,222 person rows led a group not listed in their town, and "Jane Smith" (the prompt's example) was a published person in 39 towns.
