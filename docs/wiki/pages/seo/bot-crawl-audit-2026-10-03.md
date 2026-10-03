@@ -33,7 +33,12 @@ Every AI crawler user agent tested gets the page (Cloudflare does not block them
 
 1. **`https://www.meetapedia.com/` answers Cloudflare 526** (invalid origin certificate), and
    `http://meetapedia.com/` redirects with **307** rather than 301 (kozossegek does both right).
-   Infrastructure, not code: the www host needs a Coolify domain or a Cloudflare redirect rule.
+   Infrastructure, not code. **Fixed the same day in Cloudflare:** a Redirect Rule
+   (`https://www.*` → `https://${1}`, 301, query kept) answers at the edge, so the origin never
+   needs a www certificate, and *Always Use HTTPS* turned the 307 into a 301. Cause of the 526:
+   the meetapedia zone is Full (strict) and Traefik has no www route, so it served its default
+   certificate. The kozossegek zone is plain Full, which is also why its origin certificate —
+   expired 2026-08-11, Let's Encrypt renewal failing behind the proxy — goes unnoticed.
 2. **No `llms.txt`** (it 302'd to the home page) and no Markdown representation on either domain.
    Fixed: [[answer-engines]].
 3. **Person pages making unsupported claims.** Of 34,222 stored person rows, **8,477** led a group
