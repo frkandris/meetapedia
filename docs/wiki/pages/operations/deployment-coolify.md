@@ -32,7 +32,7 @@ Persist only the runtime dirs, never the whole `/app` tree (that would hide upda
 
 Both zones run **Full (strict)** since 2026-10-03, against **Cloudflare Origin CA certificates**
 (`kozossegek.com` + `*.kozossegek.com` to 2041-05-09, `meetapedia.com` + `*.meetapedia.com` to
-2041-09-29) in `/data/coolify/proxy/certs/`, loaded by `/data/coolify/proxy/dynamic/tls.yml`
+2041-09-29, which also covers `allergia.meetapedia.com`) in `/data/coolify/proxy/certs/`, loaded by `/data/coolify/proxy/dynamic/tls.yml`
 (`tls.certificates`). The directory is root-only; the `claude` SSH user reaches it through
 `docker run --rm -v /data/coolify/proxy:/p alpine …`.
 
@@ -43,7 +43,7 @@ the same host was already on disk since May, but `tls.yml` was a broken heredoc 
 trailing `EOF`) and never loaded.
 
 Two traps: **a router's ACME certificate beats a file certificate for the same host**, so the LE
-entries for `kozossegek.com` and `meetapedia.com` were removed from `acme.json` (backup
+entries for `kozossegek.com`, `meetapedia.com` and `allergia.meetapedia.com` were removed from `acme.json` (backup
 `acme.json.bak-20261003`) before a proxy restart; with a matching file certificate Traefik no longer
 requests one. And **`docker restart coolify-proxy` answers 404 for a few seconds** — Google's live
 URL test hit exactly that on 2026-10-03. `www` on meetapedia is a Cloudflare Redirect Rule, not a
