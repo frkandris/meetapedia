@@ -15,23 +15,23 @@
 
 {% macro related_block(title, items, more_url=None, more_label=None) %}
 {% if items %}
-<section class="mt-8 pt-6 border-t border-[#F5F2EC]">
-  <h2 class="text-sm font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-4">{{ title }}</h2>
+<section class="mt-8 pt-6 border-t border-[#F2F4F2]">
+  <h2 class="text-base font-semibold text-[#1A1D1B] mb-4">{{ title }}</h2>
   <ul class="grid gap-2 sm:grid-cols-2">
     {% for item in items %}
     <li>
       <a href="{{ item.url }}"
-         class="block px-3 py-2 rounded-lg bg-[#FBF9F5] hover:bg-[#F5F2EC] transition-colors">
+         class="block px-3 py-2 rounded-lg bg-[#F7F8F7] hover:bg-[#F2F4F2] transition-colors">
         <span class="block text-sm font-medium text-[#2E2A24]">{{ item.name }}</span>
         {% if item.note %}
-        <span class="block text-xs text-[#8C8478] mt-0.5">{{ item.note }}</span>
+        <span class="block text-xs text-[#646C67] mt-0.5">{{ item.note }}</span>
         {% endif %}
       </a>
     </li>
     {% endfor %}
   </ul>
   {% if more_url and more_label %}
-  <a href="{{ more_url }}" class="inline-block mt-3 text-sm text-[#7A6A55] hover:underline">{{ more_label }}</a>
+  <a href="{{ more_url }}" class="inline-block mt-3 text-sm text-[#59615C] hover:underline">{{ more_label }}</a>
   {% endif %}
 </section>
 {% endif %}

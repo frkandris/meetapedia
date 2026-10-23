@@ -7,29 +7,29 @@
 {# data-name carries the raw name: MpText.norm() does the folding, and the A-Z
    bar needs the original first letter. #}
 {% macro _venue_card(v) %}
-<div data-name="{{ v.name }}" class="bg-white rounded-xl border border-[#EAE5DB] p-5 flex flex-col gap-3 hover:border-[#E88E6B] hover:bg-[#FDF0EA]/20 transition-colors">
+<div data-name="{{ v.name }}" class="bg-white rounded-xl border border-[#E1E5E2] p-5 flex flex-col gap-3 hover:border-[#5E9E84] hover:bg-[#E8F2EC]/20 transition-colors">
 
   <div class="flex items-start justify-between gap-2">
-    <h2 class="font-semibold text-[#1C1917] text-base leading-snug">
+    <h2 class="font-semibold text-[#1A1D1B] text-base leading-snug">
       <a href="/{{ v.city | slugify }}/helyszin/{{ v.name | slugify }}"
-         class="hover:text-[#A8512F] transition-colors">{{ v.name }}</a>
+         class="hover:text-[#185A43] transition-colors">{{ v.name }}</a>
     </h2>
     {% if v.venue_type %}
-    <span class="shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded bg-[#F5F2EC] text-[#8C8478] border border-[#EAE5DB] whitespace-nowrap">
+    <span class="shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded bg-[#F2F4F2] text-[#646C67] border border-[#E1E5E2] whitespace-nowrap">
       {{ venue_type_labels.get(v.venue_type, v.venue_type.replace('_',' ')) }}
     </span>
     {% endif %}
   </div>
 
   {% if v.description %}
-  <p class="text-sm text-[#6A6259] leading-relaxed line-clamp-3">{{ v.description }}</p>
+  <p class="text-sm text-[#4F5752] leading-relaxed line-clamp-3">{{ v.description }}</p>
   {% endif %}
 
   {% if v.welcomed_topics %}
   <div class="flex flex-wrap gap-1">
     {% for t in v.welcomed_topics %}
     <a href="/helyszinek?topic={{ t | urlencode }}"
-       class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-[#FDF0EA] text-[#A8512F] border border-[#FAD9C7] whitespace-nowrap hover:bg-[#FAD9C7] transition-colors">
+       class="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-[#E8F2EC] text-[#185A43] border border-[#C4DDD0] whitespace-nowrap hover:bg-[#C4DDD0] transition-colors">
       <i class="ph ph-{{ topic_icons.get(t, 'circle') }}" style="font-size:10px"></i>
       {{ topic_labels.get(t, t.replace('_',' ').title()) }}
     </a>
@@ -37,23 +37,23 @@
   </div>
   {% endif %}
 
-  <div class="mt-auto flex flex-col gap-1 text-xs text-[#8C8478]">
+  <div class="mt-auto flex flex-col gap-1 text-xs text-[#646C67]">
     {% if v.city %}
     <span class="flex items-center gap-1.5">
-      <i class="ph ph-buildings text-[#B5ADA0]"></i>
-      <a href="/{{ v.city | slugify }}" class="hover:text-[#A8512F] transition-colors">{{ v.city }}</a>
+      <i class="ph ph-buildings text-[#9AA29D]"></i>
+      <a href="/{{ v.city | slugify }}" class="hover:text-[#185A43] transition-colors">{{ v.city }}</a>
     </span>
     {% endif %}
     {% if v.address %}
     <span class="flex items-start gap-1.5">
-      <i class="ph ph-map-pin text-[#B5ADA0] mt-0.5 shrink-0"></i>
+      <i class="ph ph-map-pin text-[#9AA29D] mt-0.5 shrink-0"></i>
       <span>{{ v.address }}</span>
     </span>
     {% endif %}
     {% if v.website %}
     <a href="{{ v.website }}" target="_blank" rel="noopener"
-       class="flex items-center gap-1.5 text-[#A8512F] hover:text-[#8A4226] hover:underline truncate">
-      <i class="ph ph-arrow-square-out text-[#B5ADA0] shrink-0"></i>
+       class="flex items-center gap-1.5 text-[#185A43] hover:text-[#134A37] hover:underline truncate">
+      <i class="ph ph-arrow-square-out text-[#9AA29D] shrink-0"></i>
       {{ v.website | replace('https://','') | replace('http://','') | truncate(38) }}
     </a>
     {% endif %}
@@ -64,7 +64,6 @@
 
 <div class="brand-gradient relative overflow-hidden">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-7 relative">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/70 mb-1.5">{{ t('explore_venues') }}</p>
     <h1 class="text-xl sm:text-2xl font-black tracking-[-0.025em] text-white leading-tight">{{ t('venues_heading') }}</h1>
     <p class="text-sm text-white/75 mt-1">{{ t('venues_count', n=(venues | length | string) ~ ((' / ' ~ total_all) if selected_city or selected_topic else '')) }}</p>
   </div>
@@ -77,10 +76,10 @@
   <form method="GET" action="/helyszinek" class="flex flex-wrap gap-2 items-end">
 
     <div class="flex flex-col gap-1">
-      <label class="text-[11px] font-semibold text-[#8C8478] uppercase tracking-[0.08em]">Város</label>
+      <label class="text-xs font-semibold text-[#646C67]">Város</label>
       <select name="city" onchange="this.form.submit()"
-        class="text-sm border border-[#D8D1C4] rounded-lg px-3 py-2 bg-white text-[#1C1917]
-               focus:outline-none focus:border-[#C2613A] focus:ring-2 focus:ring-[#C2613A]/20">
+        class="text-sm border border-[#CDD3CF] rounded-lg px-3 py-2 bg-white text-[#1A1D1B]
+               focus:outline-none focus:border-[#1E6B50] focus:ring-2 focus:ring-[#1E6B50]/20">
         <option value="">Összes város</option>
         {% for c in all_cities %}
         <option value="{{ c }}" {% if c == selected_city %}selected{% endif %}>{{ c }}</option>
@@ -89,10 +88,10 @@
     </div>
 
     <div class="flex flex-col gap-1">
-      <label class="text-[11px] font-semibold text-[#8C8478] uppercase tracking-[0.08em]">Kategória</label>
+      <label class="text-xs font-semibold text-[#646C67]">Kategória</label>
       <select name="topic" onchange="this.form.submit()"
-        class="text-sm border border-[#D8D1C4] rounded-lg px-3 py-2 bg-white text-[#1C1917]
-               focus:outline-none focus:border-[#C2613A] focus:ring-2 focus:ring-[#C2613A]/20">
+        class="text-sm border border-[#CDD3CF] rounded-lg px-3 py-2 bg-white text-[#1A1D1B]
+               focus:outline-none focus:border-[#1E6B50] focus:ring-2 focus:ring-[#1E6B50]/20">
         <option value="">Összes kategória</option>
         {% for t in all_topics %}
         <option value="{{ t }}" {% if t == selected_topic %}selected{% endif %}>
@@ -103,7 +102,7 @@
     </div>
 
     {% if selected_city or selected_topic %}
-    <a href="/helyszinek" class="text-xs text-[#A8512F] hover:text-[#8A4226] self-end pb-2.5 transition-colors">
+    <a href="/helyszinek" class="text-xs text-[#185A43] hover:text-[#134A37] self-end pb-2.5 transition-colors">
       Szűrők törlése
     </a>
     {% endif %}
@@ -132,9 +131,9 @@
          {# Carry the topic through: from /helyszinek?topic=music, picking a
             city must not silently widen the result to every venue in it. #}
          href="/helyszinek?city={{ city_group.name | urlencode }}{% if selected_topic %}&topic={{ selected_topic | urlencode }}{% endif %}"
-         class="flex items-center justify-between gap-2 px-3 py-2 bg-white border border-[#EAE5DB] rounded-lg hover:border-[#C2613A] transition-colors">
-        <span class="text-sm text-[#1C1917] truncate">{{ city_group.name }}</span>
-        <span class="text-xs text-[#B5ADA0]">{{ city_group.count }}</span>
+         class="flex items-center justify-between gap-2 px-3 py-2 bg-white border border-[#E1E5E2] rounded-lg hover:border-[#1E6B50] transition-colors">
+        <span class="text-sm text-[#1A1D1B] truncate">{{ city_group.name }}</span>
+        <span class="text-xs text-[#9AA29D]">{{ city_group.count }}</span>
       </a>
       {% endfor %}
     </div>
@@ -151,11 +150,11 @@
   </div>
 
   {% else %}
-  <div class="text-center py-20 text-[#B5ADA0]">
+  <div class="text-center py-20 text-[#9AA29D]">
     <i class="ph ph-map-pin text-5xl mb-4 block"></i>
     <p class="text-base">{{ t('venues_none_for_filters') }}</p>
     {% if selected_city or selected_topic %}
-    <a href="/helyszinek" class="mt-3 inline-block text-sm text-[#A8512F] hover:underline">Szűrők törlése</a>
+    <a href="/helyszinek" class="mt-3 inline-block text-sm text-[#185A43] hover:underline">Szűrők törlése</a>
     {% endif %}
   </div>
   {% endif %}

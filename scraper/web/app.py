@@ -8634,40 +8634,16 @@ async def admin_root_redirect():
 
 @_fastapi.get("/rolunk", response_class=HTMLResponse)
 async def public_about(request: Request):
+    # Counts only. The page used to carry every topic tile and every city of
+    # the site A–Z (1,312 on kozossegek.com), which no visitor reads on an
+    # About page; the explore and cities pages are where those lists belong.
+    site_cities = _site_cities(request)
     from .i18n import _detect_site
     site = _detect_site(request)
-    site_cities = _site_cities(request)
-    site_city_names = {c.name for c in site_cities}
     site_topic_counts = _hu_topic_counts() if site == "kozossegek" else _global_topic_counts()
-    city_totals = dict(get_city_totals(_db())) if app_state.db_path else {}
-    venue_counts = {k: v for k, v in (get_venue_counts(_db()) if app_state.db_path else {}).items() if k in site_city_names}
-    person_counts = {k: v for k, v in (get_person_counts(_db()) if app_state.db_path else {}).items() if k in site_city_names}
-    all_site_cities = sorted(
-        [{"name": c.name, "slug": _slugify(c.name), "count": city_totals.get(c.name, 0)}
-         for c in site_cities],
-        key=lambda c: _hu_sort_key(c["name"]),
-    )
-    country_city_groups: dict = {}
-    if site == "meetapedia":
-        for c in site_cities:
-            country = c.country or "Other"
-            entry = {"name": c.name, "slug": _slugify(c.name), "count": city_totals.get(c.name, 0)}
-            country_city_groups.setdefault(country, []).append(entry)
-        for grp in country_city_groups.values():
-            grp.sort(key=lambda c: c["name"])
-        country_city_groups = dict(sorted(country_city_groups.items()))
     return templates.TemplateResponse(request, "public_about.html", {
-        "city_count": len(site_city_names),
-        "topic_count": len(app_state.topics or []),
+        "city_count": len({c.name for c in site_cities}),
         "total_records": sum(site_topic_counts.values()),
-        "total_venues": sum(venue_counts.values()),
-        "total_persons": sum(person_counts.values()),
-        "topics": app_state.topics or [],
-        "topic_icons": TOPIC_ICONS,
-        "topic_labels": TOPIC_LABELS,
-        "topic_counts": site_topic_counts,
-        "all_hu_cities": all_site_cities,
-        "country_city_groups": country_city_groups,
         **lang_context(request),
     })
 

@@ -6,12 +6,34 @@
   <title>{% block title %}{{ site_name }}{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // The CDN injects its preflight at runtime, after every stylesheet in the
+    // head, so a plain `html { font-family }` loses to it. Its own config wins.
+    tailwind.config = { theme: { extend: { fontFamily: {
+      sans: ['"Atkinson Hyperlegible Next"', 'system-ui', '-apple-system', 'sans-serif'],
+    } } } };
+  </script>
   <link rel="stylesheet" href="/static/css/app.css" onerror="this.remove()">
   <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
   <style>
-    .brand-gradient { background: linear-gradient(135deg, #8A4226 0%, #A8512F 30%, #C2613A 65%, #E88E6B 100%); }
+    /* One typeface: Atkinson Hyperlegible Next, drawn for low-vision readers.
+       A large share of the groups here are seniors' clubs, and so are their
+       readers. Applied to the root so Tailwind's default sans never shows. */
+    html, body { font-family: 'Atkinson Hyperlegible Next', system-ui, -apple-system, sans-serif; }
+
+    /* The page head. It was a terracotta gradient band with white text on every
+       page — the most recognisable generated-page look there is. The class name
+       stays (fifteen templates use it); the band is now paper with a rule under
+       it, and whatever the templates paint white inside it reads as ink. */
+    .brand-gradient { background: #fff; border-bottom: 1px solid #E1E5E2; }
+    .brand-gradient h1, .brand-gradient .text-white { color: #1A1D1B !important; }
+    .brand-gradient [class*="text-white/"] { color: #4F5752 !important; }
+    .brand-gradient [class*="bg-white/"] { background-color: #F2F4F2 !important; }
+    .brand-gradient [class*="border-white"] { border-color: #E1E5E2 !important; }
+    .brand-gradient a[class*="text-white"]:hover { color: #134A37 !important; }
+    .brand-gradient h1 { letter-spacing: -0.015em; }
 
     /* The filter hides items with the `hidden` attribute, but the UA rule for
        it is an element-level rule that any Tailwind display utility on the same
@@ -25,20 +47,20 @@
       position: absolute; left: 0; right: 0; top: calc(100% + 4px);
       z-index: 40; margin: 0; padding: 4px; list-style: none;
       max-height: 17rem; overflow-y: auto; -webkit-overflow-scrolling: touch;
-      background: #fff; border: 1px solid #EAE5DB; border-radius: 8px;
-      box-shadow: 0 10px 15px -3px rgb(28 25 23 / 0.08), 0 4px 6px -4px rgb(28 25 23 / 0.04);
+      background: #fff; border: 1px solid #E1E5E2; border-radius: 8px;
+      box-shadow: 0 10px 15px -3px rgb(26 29 27 / 0.08), 0 4px 6px -4px rgb(26 29 27 / 0.04);
     }
     .mp-ac-panel[hidden] { display: none; }
     .mp-ac-item {
       display: flex; align-items: center; justify-content: space-between; gap: 8px;
       min-height: 44px; padding: 8px 10px; border-radius: 6px; cursor: pointer;
-      font-size: 15px; font-weight: 600; color: #2E2B29;
+      font-size: 15px; font-weight: 600; color: #232825;
     }
-    .mp-ac-item:hover, .mp-ac-item.is-active { background: #FDF0EA; color: #8A4226; }
+    .mp-ac-item:hover, .mp-ac-item.is-active { background: #E8F2EC; color: #134A37; }
     .mp-ac-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .mp-ac-count {
-      flex: none; font-size: 11px; font-weight: 700; color: #C2613A;
-      background: #FDF0EA; border: 1px solid #FAD9C7; border-radius: 9999px; padding: 1px 8px;
+      flex: none; font-size: 11px; font-weight: 700; color: #1E6B50;
+      background: #E8F2EC; border: 1px solid #C4DDD0; border-radius: 9999px; padding: 1px 8px;
     }
 
     .mp-az-bar {
@@ -48,12 +70,12 @@
     .mp-az-bar::-webkit-scrollbar { display: none; }
     .mp-az-btn {
       flex: none; min-width: 32px; min-height: 32px; padding: 0 8px;
-      border: 1px solid #EAE5DB; border-radius: 6px; background: #fff;
-      font-size: 12px; font-weight: 700; color: #6A6259; cursor: pointer;
+      border: 1px solid #E1E5E2; border-radius: 6px; background: #fff;
+      font-size: 12px; font-weight: 700; color: #4F5752; cursor: pointer;
       transition: background-color 120ms, border-color 120ms, color 120ms;
     }
-    .mp-az-btn:hover { border-color: #FAD9C7; background: #FDF0EA; color: #1C1917; }
-    .mp-az-btn.is-active { background: #FDF0EA; border-color: #C2613A; color: #8A4226; }
+    .mp-az-btn:hover { border-color: #C4DDD0; background: #E8F2EC; color: #1A1D1B; }
+    .mp-az-btn.is-active { background: #E8F2EC; border-color: #1E6B50; color: #134A37; }
     @media (min-width: 640px) { .mp-az-bar { flex-wrap: wrap; overflow-x: visible; } }
   </style>
   <link rel="canonical" href="{{ canonical_base or site_url }}{% block canonical_path %}{{ request.url.path }}{% endblock %}">
@@ -94,12 +116,12 @@
     gtag('config', 'G-XD0Z4FE8LX');
   </script>
 </head>
-<body class="bg-[#FAFAF8] min-h-screen font-sans antialiased text-[#1C1917]">
+<body class="bg-[#FFFFFF] min-h-screen font-sans antialiased text-[#1A1D1B]">
 
-<header class="bg-white/95 border-b border-[#EAE5DB] sticky top-0 z-20 backdrop-blur">
+<header class="bg-white/95 border-b border-[#E1E5E2] sticky top-0 z-20 backdrop-blur">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-    <a href="/" class="flex items-center gap-2 font-bold text-[#1C1917] text-lg tracking-tight shrink-0">
-      <span class="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[#A8512F] text-white">
+    <a href="/" class="flex items-center gap-2 font-bold text-[#1A1D1B] text-lg tracking-tight shrink-0">
+      <span class="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[#185A43] text-white">
         <i class="ph ph-users-three text-lg"></i>
       </span>
       <span>{{ site_name }}</span>
@@ -108,16 +130,16 @@
     <!-- Desktop nav -->
     <nav class="hidden sm:flex items-center gap-0.5 shrink-0">
       <a href="/" class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap
-        {% if _p == '/' or _p.startswith('/felfedezes') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
+        {% if _p == '/' or _p.startswith('/felfedezes') %}text-[#1A1D1B] bg-[#F2F4F2]{% else %}text-[#4F5752] hover:text-[#1A1D1B] hover:bg-[#F2F4F2]{% endif %}">
         {{ t('nav_discover') }}</a>
       <a href="{{ map_url }}" class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap
-        {% if _p.startswith('/terkep') or _p.startswith('/map') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
+        {% if _p.startswith('/terkep') or _p.startswith('/map') %}text-[#1A1D1B] bg-[#F2F4F2]{% else %}text-[#4F5752] hover:text-[#1A1D1B] hover:bg-[#F2F4F2]{% endif %}">
         {{ t('nav_map') }}</a>
       <a href="{{ '/utmutatok' if site == 'kozossegek' else '/guides' }}" class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap
-        {% if _p.startswith('/utmutatok') or _p.startswith('/guides') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
+        {% if _p.startswith('/utmutatok') or _p.startswith('/guides') %}text-[#1A1D1B] bg-[#F2F4F2]{% else %}text-[#4F5752] hover:text-[#1A1D1B] hover:bg-[#F2F4F2]{% endif %}">
         {{ t('nav_guides') }}</a>
       <a href="{{ about_url }}" class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap
-        {% if _p.startswith('/rolunk') or _p.startswith('/about') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
+        {% if _p.startswith('/rolunk') or _p.startswith('/about') %}text-[#1A1D1B] bg-[#F2F4F2]{% else %}text-[#4F5752] hover:text-[#1A1D1B] hover:bg-[#F2F4F2]{% endif %}">
         {{ t('nav_about') }}</a>
     </nav>
     <!-- Desktop search -->
@@ -126,8 +148,8 @@
         <input name="q" type="search"
                placeholder="{{ t('nav_search_placeholder') }}"
                value="{{ request.query_params.get('q', '') }}"
-               class="w-full pl-3 pr-8 py-1.5 text-sm rounded-md border border-[#EAE5DB] bg-[#F5F2EC] text-[#1C1917] placeholder-[#B5ADA0] focus:outline-none focus:ring-1 focus:ring-[#A8512F] focus:border-[#A8512F]">
-        <button type="submit" class="absolute right-2 inset-y-0 flex items-center text-[#8C8478] hover:text-[#A8512F] transition-colors">
+               class="w-full pl-3 pr-8 py-1.5 text-sm rounded-md border border-[#E1E5E2] bg-[#F2F4F2] text-[#1A1D1B] placeholder-[#9AA29D] focus:outline-none focus:ring-1 focus:ring-[#185A43] focus:border-[#185A43]">
+        <button type="submit" class="absolute right-2 inset-y-0 flex items-center text-[#646C67] hover:text-[#185A43] transition-colors">
           <i class="ph ph-magnifying-glass text-base"></i>
         </button>
       </div>
@@ -135,15 +157,15 @@
     <!-- Language selector (meetapedia only, far right of search) -->
     {% if site == 'meetapedia' %}
     <div class="relative group hidden sm:block shrink-0">
-      <button type="button" class="px-2 py-1.5 text-sm rounded-md text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC] flex items-center gap-1 transition-colors">
+      <button type="button" class="px-2 py-1.5 text-sm rounded-md text-[#4F5752] hover:text-[#1A1D1B] hover:bg-[#F2F4F2] flex items-center gap-1 transition-colors">
         <span class="text-base leading-none">{{ current_lang.flag }}</span>
         <i class="ph ph-caret-down text-xs"></i>
       </button>
-      <div class="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-[#EAE5DB] py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 max-h-64 overflow-y-auto">
+      <div class="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-[#E1E5E2] py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 max-h-64 overflow-y-auto">
         {% for code, info in languages.items() %}
         <a href="/set-lang?lang={{ code }}&next={{ request.url.path | urlencode }}"
            rel="nofollow"
-           class="flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-[#F5F2EC] transition-colors {{ 'font-semibold text-[#A8512F]' if code == lang else 'text-[#1C1917]' }}">
+           class="flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-[#F2F4F2] transition-colors {{ 'font-semibold text-[#185A43]' if code == lang else 'text-[#1A1D1B]' }}">
           <span>{{ info.flag }}</span><span>{{ info.name }}</span>
         </a>
         {% endfor %}
@@ -151,33 +173,33 @@
     </div>
     {% endif %}
     <!-- Mobile hamburger button -->
-    <button id="nav-toggle" class="sm:hidden p-2 rounded-md text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC] transition-colors" aria-label="Menü">
+    <button id="nav-toggle" class="sm:hidden p-2 rounded-md text-[#4F5752] hover:text-[#1A1D1B] hover:bg-[#F2F4F2] transition-colors" aria-label="Menü">
       <i id="nav-icon" class="ph ph-list text-xl"></i>
     </button>
   </div>
   <!-- Mobile nav dropdown -->
-  <div id="nav-mobile" class="hidden sm:hidden border-t border-[#EAE5DB] bg-white/95">
+  <div id="nav-mobile" class="hidden sm:hidden border-t border-[#E1E5E2] bg-white/95">
     <nav class="max-w-6xl mx-auto px-4 py-2 flex flex-col gap-0.5">
       <a href="/" class="px-3 py-2.5 text-sm font-medium rounded-md transition-colors
-        {% if _p == '/' or _p.startswith('/felfedezes') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
+        {% if _p == '/' or _p.startswith('/felfedezes') %}text-[#1A1D1B] bg-[#F2F4F2]{% else %}text-[#4F5752] hover:text-[#1A1D1B] hover:bg-[#F2F4F2]{% endif %}">
         {{ t('nav_discover') }}</a>
       <a href="{{ map_url }}" class="px-3 py-2.5 text-sm font-medium rounded-md transition-colors
-        {% if _p.startswith('/terkep') or _p.startswith('/map') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
+        {% if _p.startswith('/terkep') or _p.startswith('/map') %}text-[#1A1D1B] bg-[#F2F4F2]{% else %}text-[#4F5752] hover:text-[#1A1D1B] hover:bg-[#F2F4F2]{% endif %}">
         {{ t('nav_map') }}</a>
       <a href="{{ '/utmutatok' if site == 'kozossegek' else '/guides' }}" class="px-3 py-2.5 text-sm font-medium rounded-md transition-colors
-        {% if _p.startswith('/utmutatok') or _p.startswith('/guides') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
+        {% if _p.startswith('/utmutatok') or _p.startswith('/guides') %}text-[#1A1D1B] bg-[#F2F4F2]{% else %}text-[#4F5752] hover:text-[#1A1D1B] hover:bg-[#F2F4F2]{% endif %}">
         {{ t('nav_guides') }}</a>
       <a href="{{ about_url }}" class="px-3 py-2.5 text-sm font-medium rounded-md transition-colors
-        {% if _p.startswith('/rolunk') or _p.startswith('/about') %}text-[#1C1917] bg-[#F5F2EC]{% else %}text-[#6A6259] hover:text-[#1C1917] hover:bg-[#F5F2EC]{% endif %}">
+        {% if _p.startswith('/rolunk') or _p.startswith('/about') %}text-[#1A1D1B] bg-[#F2F4F2]{% else %}text-[#4F5752] hover:text-[#1A1D1B] hover:bg-[#F2F4F2]{% endif %}">
         {{ t('nav_about') }}</a>
     </nav>
-    <div class="px-3 py-2 border-t border-[#EAE5DB]">
+    <div class="px-3 py-2 border-t border-[#E1E5E2]">
       <form action="/kereses" method="get" class="flex items-center gap-2">
         <input name="q" type="search"
                placeholder="{{ t('nav_search_placeholder') }}"
                value="{{ request.query_params.get('q', '') }}"
-               class="flex-1 px-3 py-2 text-sm rounded-md border border-[#EAE5DB] bg-[#F5F2EC] text-[#1C1917] placeholder-[#B5ADA0] focus:outline-none focus:ring-1 focus:ring-[#A8512F]">
-        <button type="submit" class="px-3 py-2 bg-[#A8512F] text-white rounded-md text-sm hover:bg-[#7A3A21] transition-colors">
+               class="flex-1 px-3 py-2 text-sm rounded-md border border-[#E1E5E2] bg-[#F2F4F2] text-[#1A1D1B] placeholder-[#9AA29D] focus:outline-none focus:ring-1 focus:ring-[#185A43]">
+        <button type="submit" class="px-3 py-2 bg-[#185A43] text-white rounded-md text-sm hover:bg-[#123F2F] transition-colors">
           <i class="ph ph-magnifying-glass"></i>
         </button>
       </form>
@@ -201,9 +223,9 @@
   {% block content %}{% endblock %}
 </main>
 
-<footer class="mt-16 border-t border-[#EAE5DB] bg-white">
+<footer class="mt-16 border-t border-[#E1E5E2] bg-white">
   <!-- Site feedback form -->
-  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 border-b border-[#EAE5DB]">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 border-b border-[#E1E5E2]">
     <form id="site-feedback-form" onsubmit="submitSiteFeedback(event)">
       <div id="sfb-success" class="hidden text-sm text-[#4A7C59] font-medium py-1">
         <i class="ph ph-check-circle mr-1"></i>{{ t('footer_feedback_thanks') }}
@@ -213,16 +235,16 @@
           <textarea id="sfb-message" name="message" rows="2"
             placeholder="{{ t('footer_feedback_prompt') }}"
             onfocus="document.getElementById('sfb-extra').classList.remove('hidden')"
-            class="flex-1 text-sm text-[#1C1917] placeholder-[#B5AFA7] bg-[#FAF8F5] border border-[#EAE5DB] rounded-lg px-3 py-2.5 resize-none focus:outline-none focus:border-[#C2613A] focus:ring-1 focus:ring-[#C2613A] transition-colors"></textarea>
+            class="flex-1 text-sm text-[#1A1D1B] placeholder-[#9AA29D] bg-[#F7F8F7] border border-[#E1E5E2] rounded-lg px-3 py-2.5 resize-none focus:outline-none focus:border-[#1E6B50] focus:ring-1 focus:ring-[#1E6B50] transition-colors"></textarea>
           <button type="submit"
-            class="self-stretch px-4 bg-[#C2613A] text-white text-sm font-semibold rounded-lg hover:bg-[#A8512F] transition-colors shrink-0">
+            class="self-stretch px-4 bg-[#1E6B50] text-white text-sm font-semibold rounded-lg hover:bg-[#185A43] transition-colors shrink-0">
             {{ t('footer_feedback_send') }}
           </button>
         </div>
         <div id="sfb-extra" class="hidden mt-2">
           <input id="sfb-email" name="email" type="email"
             placeholder="{{ t('footer_feedback_email_placeholder') }}"
-            class="w-full text-sm text-[#1C1917] placeholder-[#B5AFA7] bg-[#FAF8F5] border border-[#EAE5DB] rounded-lg px-3 py-2 focus:outline-none focus:border-[#C2613A] focus:ring-1 focus:ring-[#C2613A] transition-colors">
+            class="w-full text-sm text-[#1A1D1B] placeholder-[#9AA29D] bg-[#F7F8F7] border border-[#E1E5E2] rounded-lg px-3 py-2 focus:outline-none focus:border-[#1E6B50] focus:ring-1 focus:ring-[#1E6B50] transition-colors">
         </div>
       </div>
     </form>
@@ -231,21 +253,21 @@
   <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
     <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
       <div class="flex items-center gap-2">
-        <span class="font-semibold text-[#1C1917] text-sm">{{ site_name }}</span>
-        <span class="text-xs text-[#8C8478]">· {{ t('footer_tagline') }}</span>
+        <span class="font-semibold text-[#1A1D1B] text-sm">{{ site_name }}</span>
+        <span class="text-xs text-[#646C67]">· {{ t('footer_tagline') }}</span>
       </div>
       {# Always the sister *home page*, not the twin of the current page —
          footer links are site-level, the strip above the content is page-level. #}
       <a href="https://{{ 'kozossegek.com' if sister_key == 'hu' else 'meetapedia.com' }}"
-         class="text-xs text-[#8C8478] hover:text-[#A8512F] underline underline-offset-2 decoration-[#D8D1C4] transition-colors">
+         class="text-xs text-[#646C67] hover:text-[#185A43] underline underline-offset-2 decoration-[#CDD3CF] transition-colors">
         {{ t('footer_sister_hu' if sister_key == 'hu' else 'footer_sister_en') }}
       </a>
     </div>
     <div class="flex items-center gap-4">
-      <a href="{{ about_url }}" class="text-xs text-[#8C8478] hover:text-[#4A4441] transition-colors">{{ t('nav_about') }}</a>
-      <a href="{{ map_url }}" class="text-xs text-[#8C8478] hover:text-[#4A4441] transition-colors">{{ t('nav_map') }}</a>
-      <a href="{{ submit_url }}" class="text-xs text-[#8C8478] hover:text-[#4A4441] transition-colors">{{ t('nav_submit') }}</a>
-      <a href="/admin" rel="nofollow" class="text-xs text-[#D8D1C4] hover:text-[#8C8478] transition-colors">Admin</a>
+      <a href="{{ about_url }}" class="text-xs text-[#646C67] hover:text-[#3B413D] transition-colors">{{ t('nav_about') }}</a>
+      <a href="{{ map_url }}" class="text-xs text-[#646C67] hover:text-[#3B413D] transition-colors">{{ t('nav_map') }}</a>
+      <a href="{{ submit_url }}" class="text-xs text-[#646C67] hover:text-[#3B413D] transition-colors">{{ t('nav_submit') }}</a>
+      <a href="/admin" rel="nofollow" class="text-xs text-[#CDD3CF] hover:text-[#646C67] transition-colors">Admin</a>
     </div>
   </div>
 </footer>

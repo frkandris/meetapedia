@@ -34,3 +34,4 @@ skills-lock.json
 
 # Playwright MCP browser-session artifacts (screenshots, console logs, snapshots)
 .playwright-mcp/
+.preview/

@@ -5,7 +5,6 @@
 
 <div class="brand-gradient relative overflow-hidden">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-7 relative">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/70 mb-1.5">{{ site_name }}</p>
     <h1 class="text-xl sm:text-2xl font-black tracking-[-0.025em] text-white leading-tight">{{ t('about_title') }}</h1>
   </div>
 </div>
@@ -16,13 +15,13 @@
   {#- Links are built here and injected into the translated sentence, so the
       anchor text sits inside the prose instead of trailing after it. Every
       value is a constant from lang_context — no user input reaches |safe. -#}
-  {%- set _link_cls = 'font-semibold text-[#A8512F] hover:text-[#8A4226] underline underline-offset-2' -%}
+  {%- set _link_cls = 'font-semibold text-[#185A43] hover:text-[#134A37] underline underline-offset-2' -%}
   {%- set _author = '<a href="' ~ project_author_url ~ '" target="_blank" rel="noopener" class="' ~ _link_cls ~ '">' ~ project_author ~ '</a>' -%}
   {%- set _open_source = '<a href="' ~ project_repo_url ~ '" target="_blank" rel="noopener" class="' ~ _link_cls ~ '">' ~ t('about_open_source') ~ '</a>' -%}
   {%- set _sister_home = 'https://kozossegek.com' if sister_key == 'hu' else 'https://meetapedia.com' -%}
   {%- set _sister = '<a href="' ~ _sister_home ~ '" class="' ~ _link_cls ~ '">' ~ sister_name ~ '</a>' -%}
-  <div class="max-w-3xl border-b border-[#EAE5DB] pb-10">
-    <div class="space-y-4 text-[#6A6259] leading-relaxed">
+  <div class="max-w-3xl border-b border-[#E1E5E2] pb-10">
+    <div class="space-y-4 text-[#4F5752] leading-relaxed">
       <p>
         {{ t('about_description') }}
         {{ t('about_project_line_hu' if sister_key == 'hu' else 'about_project_line_en',
@@ -31,100 +30,32 @@
     </div>
   </div>
 
-  <!-- Stats -->
-  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-    <a href="/felfedezes" class="bg-white border border-[#EAE5DB] rounded-lg p-4 hover:border-[#E88E6B] hover:bg-[#FDF0EA]/50 transition-colors group">
-      <div class="text-2xl font-extrabold text-[#1C1917]">{{ total_records }}</div>
-      <div class="text-xs font-medium text-[#8C8478] mt-1 group-hover:text-[#A8512F]">{{ t('about_communities') }}</div>
-    </a>
-    <a href="/varosok" class="bg-white border border-[#EAE5DB] rounded-lg p-4 hover:border-[#E88E6B] hover:bg-[#FDF0EA]/50 transition-colors group">
-      <div class="text-2xl font-extrabold text-[#1C1917]">{{ city_count }}</div>
-      <div class="text-xs font-medium text-[#8C8478] mt-1 group-hover:text-[#A8512F]">{{ t('about_cities') }}</div>
-    </a>
-    <a href="{{ people_url }}" class="bg-white border border-[#EAE5DB] rounded-lg p-4 hover:border-[#E88E6B] hover:bg-[#FDF0EA]/50 transition-colors group">
-      <div class="text-2xl font-extrabold text-[#1C1917]">{{ total_persons }}</div>
-      <div class="text-xs font-medium text-[#8C8478] mt-1 group-hover:text-[#A8512F]">{{ t('about_people') }}</div>
-    </a>
-    <a href="/helyszinek" class="bg-white border border-[#EAE5DB] rounded-lg p-4 hover:border-[#E88E6B] hover:bg-[#FDF0EA]/50 transition-colors group">
-      <div class="text-2xl font-extrabold text-[#1C1917]">{{ total_venues }}</div>
-      <div class="text-xs font-medium text-[#8C8478] mt-1 group-hover:text-[#A8512F]">{{ t('about_venues') }}</div>
-    </a>
+  <!-- What it holds, in one sentence rather than four stat tiles -->
+  {%- set _num = 'font-semibold text-[#185A43] underline underline-offset-2 hover:text-[#134A37]' -%}
+  {%- set _n_comm = '{:,}'.format(total_records).replace(',', ' ') -%}
+  {%- set _n_city = '{:,}'.format(city_count).replace(',', ' ') -%}
+  <p class="max-w-3xl text-lg text-[#1A1D1B] leading-relaxed">
+    {{ t('about_counts',
+          communities='<a href="' ~ explore_url ~ '" class="' ~ _num ~ '">' ~ _n_comm ~ '</a>',
+          cities='<a href="' ~ ('/varosok' if site == 'kozossegek' else '/cities') ~ '" class="' ~ _num ~ '">' ~ _n_city ~ '</a>') | safe }}
+  </p>
+
+  <div class="max-w-3xl grid gap-10 sm:grid-cols-2">
+    <section>
+      <h2 class="text-lg font-semibold text-[#1A1D1B] mb-2">{{ t('about_how_it_works') }}</h2>
+      <p class="text-[#3B413D] leading-relaxed">{{ t('about_how_it_works_text') }}</p>
+    </section>
+    <section>
+      <h2 class="text-lg font-semibold text-[#1A1D1B] mb-2">{{ t('about_data_quality') }}</h2>
+      <p class="text-[#3B413D] leading-relaxed">{{ t('about_data_quality_text') }}</p>
+    </section>
   </div>
 
-  <!-- Browse by interest -->
-  <div>
-    <h2 class="text-xl font-bold text-[#1C1917] mb-5">{{ t('about_browse_interest') }}</h2>
-    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-      {% for topic in topics %}
-      <a href="/felfedezes?topic={{ topic.name }}"
-         class="relative flex items-center gap-2 min-h-[44px] px-3 bg-white rounded-lg border border-[#EAE5DB]
-           hover:border-[#E88E6B] hover:bg-[#FDF0EA]/50 transition-colors group">
-        <i class="ph ph-{{ topic_icons.get(topic.name, 'circle') }} text-lg text-[#8C8478] group-hover:text-[#C2613A] leading-none shrink-0"></i>
-        <span class="text-xs font-medium text-[#4A4441] group-hover:text-[#8A4226] leading-tight min-w-0 pr-5">
-          {{ topic_labels.get(topic.name, topic.name.replace('_',' ').title()) }}
-        </span>
-        {%- set cnt = topic_counts.get(topic.name, 0) -%}
-        {%- if cnt > 0 -%}
-        <span class="absolute top-2 right-2 text-[11px] font-bold text-[#C2613A] leading-none">{{ cnt }}</span>
-        {%- endif -%}
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-
-  {% if site == 'meetapedia' and country_city_groups %}
-  <!-- Cities by country -->
-  {% for country, cities in country_city_groups.items() %}
-  <div>
-    <h2 class="text-lg font-bold text-[#1C1917] mb-3">{{ country }}</h2>
-    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-6">
-      {% for city in cities %}
-      {% if city.count > 0 %}
-      <a href="/{{ city.slug }}"
-         class="flex items-center justify-between bg-white rounded-lg border border-[#EAE5DB] px-3 py-2.5
-                hover:border-[#E88E6B] hover:bg-[#FDF0EA]/50 transition-colors group">
-        <span class="text-sm font-semibold text-[#2E2B29] group-hover:text-[#8A4226] truncate min-w-0">{{ city.name }}</span>
-        <span class="text-xs font-bold text-[#C2613A] shrink-0 ml-2">{{ city.count }}</span>
-      </a>
-      {% else %}
-      <div class="flex items-center bg-white rounded-lg border border-[#EAE5DB] px-3 py-2.5 opacity-50">
-        <span class="text-sm font-medium text-[#8C8478] truncate min-w-0">{{ city.name }}</span>
-      </div>
-      {% endif %}
-      {% endfor %}
-    </div>
-  </div>
-  {% endfor %}
-  {% elif all_hu_cities %}
-  <!-- All Hungarian cities A–Z -->
-  <div>
-    <h2 class="text-xl font-bold text-[#1C1917] mb-5">Magyar városok A–Z</h2>
-    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-      {% for city in all_hu_cities %}
-      {% if city.count > 0 %}
-      <a href="/{{ city.slug }}"
-         class="flex items-center justify-between bg-white rounded-lg border border-[#EAE5DB] px-3 py-2.5
-                hover:border-[#E88E6B] hover:bg-[#FDF0EA]/50 transition-colors group">
-        <span class="text-sm font-semibold text-[#2E2B29] group-hover:text-[#8A4226] truncate min-w-0">{{ city.name }}</span>
-        <span class="text-xs font-bold text-[#C2613A] shrink-0 ml-2">{{ city.count }}</span>
-      </a>
-      {% else %}
-      <div class="flex items-center bg-white rounded-lg border border-[#EAE5DB] px-3 py-2.5 opacity-50">
-        <span class="text-sm font-medium text-[#8C8478] truncate min-w-0">{{ city.name }}</span>
-      </div>
-      {% endif %}
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- CTA -->
-  <div class="text-center pb-4">
-    <a href="/"
-      class="inline-block px-8 py-3 bg-[#A8512F] text-white font-bold rounded-lg hover:bg-[#A8512F] transition-colors text-base">
-      {{ t('about_start_exploring') }}
-    </a>
-  </div>
+  <section class="max-w-3xl border-t border-[#E1E5E2] pt-8">
+    <h2 class="text-lg font-semibold text-[#1A1D1B] mb-2">{{ t('about_fix_title') }}</h2>
+    <p class="text-[#3B413D] leading-relaxed mb-4">{{ t('about_fix_text') }}</p>
+    <a href="{{ submit_url }}" class="inline-block px-5 py-2.5 bg-[#1E6B50] text-white font-semibold rounded-md hover:bg-[#134A37] transition-colors">{{ t('about_fix_cta') }}</a>
+  </section>
 
 </div>
 {% endblock %}

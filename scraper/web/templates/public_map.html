@@ -9,14 +9,14 @@
   #map { height: calc(100vh - 57px - 64px); min-height: 480px; }
   .leaflet-popup-content-wrapper { border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
   .leaflet-popup-content { margin: 14px 16px; }
-  .city-popup-name { font-size: 15px; font-weight: 700; color: #1C1917; margin-bottom: 6px; }
-  .city-popup-count { font-size: 13px; font-weight: 600; color: #C2613A; margin-bottom: 10px; }
+  .city-popup-name { font-size: 15px; font-weight: 700; color: #1A1D1B; margin-bottom: 6px; }
+  .city-popup-count { font-size: 13px; font-weight: 600; color: #1E6B50; margin-bottom: 10px; }
   .city-popup-btn {
-    display: inline-block; background: #C2613A; color: #fff;
+    display: inline-block; background: #1E6B50; color: #fff;
     padding: 5px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
     text-decoration: none; transition: background 0.15s;
   }
-  .city-popup-btn:hover { background: #A8512F; }
+  .city-popup-btn:hover { background: #185A43; }
 </style>
 {% endblock %}
 
@@ -60,9 +60,9 @@ cities.forEach(city => {
 
   const marker = L.circleMarker([city.lat, city.lng], {
     radius: radius,
-    fillColor: '#C2613A',
+    fillColor: '#1E6B50',
     fillOpacity: 0.55,
-    color: '#8A4226',
+    color: '#134A37',
     weight: 1.5,
   }).addTo(map);
 

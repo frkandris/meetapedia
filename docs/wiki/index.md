@@ -71,6 +71,7 @@ vocabulary), [faq.md](faq.md) (recurring questions).
 - [[our-own-gpu-in-the-fleet]] — A laptop running Qwen3-4B scores 73 on our task — above the 8B and the 20B — and its allowance never runs out, which is the hole it fills.
 - [[localgpu-governor]] — Our own GPU may be off, asleep or throttled by its owner; production treats that as absence, not failure, and a governor sizes the model to what the owner leaves free.
 - [[world-expansion]] — Every country DataForSEO can search, largest population first, in waves of decreasing city size, with the search placed by country and capped at $5 a day.
+- [[site-visual-identity]] — White paper, ink, one town-green accent and Atkinson Hyperlegible Next replace the terracotta-gradient look; About stops listing every city.
 
 - [[search-ttl-3650-days]] — TTL set to ~10 years: index the world first, worry about freshness later.
 - [[sweden-pipeline-priority]] — Country order in the bounded saver windows lives in config, not code, so whichever market has the largest unprocessed backlog can lead.

@@ -55,3 +55,6 @@ Both admin and public load the Tailwind CDN JIT runtime (not a build). All utili
 other domain, and a footer link to the sister home page. The About page (`/rolunk`, EN
 `/about` 302s to it) credits the author, links the GitHub repo, and explains the
 kozossegek ↔ meetapedia relationship. See [[sister-site-cross-links]].
+
+Visual identity (palette, typeface, page head, About content) since 2026-10-23:
+[[site-visual-identity]].

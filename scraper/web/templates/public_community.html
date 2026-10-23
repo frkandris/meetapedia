@@ -7,38 +7,30 @@
 {% from "_related.html" import related_block %}
 {% block content %}
 
-<!-- Mini gradient strip -->
-<div class="brand-gradient relative overflow-hidden">
-  <div class="max-w-3xl mx-auto px-4 sm:px-6 py-5 sm:py-7 relative">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/70 mb-1.5">
-      {{ city }}{% if topic %} · {{ topic_label }}{% endif %}
-    </p>
-    <h1 class="text-xl sm:text-2xl font-black tracking-[-0.025em] text-white leading-tight">{{ r.name }}</h1>
-  </div>
-</div>
-
+{# No page-head band here: the name used to appear three times above the
+   fold (band, breadcrumb, card). The card carries the page's one h1. #}
 <div class="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
   <!-- Breadcrumb -->
-  <nav class="flex items-center gap-1.5 text-sm text-[#8C8478] mb-6 overflow-hidden flex-wrap">
-    <a href="/" class="hover:text-[#1C1917] transition-colors shrink-0">{{ site_name }}</a>
+  <nav class="flex items-center gap-1.5 text-sm text-[#646C67] mb-6 overflow-hidden flex-wrap">
+    <a href="/" class="hover:text-[#1A1D1B] transition-colors shrink-0">{{ site_name }}</a>
     {% if city %}
-    <span class="text-[#D8D1C4]">/</span>
-    <a href="/{{ city | slugify }}" class="hover:text-[#1C1917] transition-colors shrink-0">{{ city }}</a>
+    <span class="text-[#CDD3CF]">/</span>
+    <a href="/{{ city | slugify }}" class="hover:text-[#1A1D1B] transition-colors shrink-0">{{ city }}</a>
     {% endif %}
     {% if topic and topic_slug %}
-    <span class="text-[#D8D1C4]">/</span>
+    <span class="text-[#CDD3CF]">/</span>
     <a href="/{{ city | slugify }}/{{ topic_slug }}"
-       class="hover:text-[#1C1917] transition-colors shrink-0">
+       class="hover:text-[#1A1D1B] transition-colors shrink-0">
       {{ topic_label }}
     </a>
     {% endif %}
-    <span class="text-[#D8D1C4]">/</span>
-    <span class="text-[#4A4441] font-medium truncate">{{ r.name }}</span>
+    <span class="text-[#CDD3CF]">/</span>
+    <span class="text-[#3B413D] font-medium truncate">{{ r.name }}</span>
   </nav>
 
   <!-- Header card -->
-  <div class="bg-white rounded-xl border border-[#EAE5DB] p-6 sm:p-8 mb-4">
+  <div class="bg-white rounded-xl border border-[#E1E5E2] p-6 sm:p-8 mb-4">
 
     {# Twin record on the other edition — icon only, in the card's top-right
        corner. Community pages only: this is the one page type where "the same
@@ -48,29 +40,29 @@
     <a href="{{ sister_url }}"
        title="{{ t('sister_notice_hu' if sister_key == 'hu' else 'sister_notice_en') }}"
        aria-label="{{ t('sister_notice_hu' if sister_key == 'hu' else 'sister_notice_en') }}"
-       class="float-right -mt-1 -mr-1 inline-flex items-center justify-center w-8 h-8 rounded-lg text-[#B5ADA0]
-              hover:text-[#A8512F] hover:bg-[#FDF0EA] transition-colors">
+       class="float-right -mt-1 -mr-1 inline-flex items-center justify-center w-8 h-8 rounded-lg text-[#9AA29D]
+              hover:text-[#185A43] hover:bg-[#E8F2EC] transition-colors">
       <i class="ph ph-translate text-lg"></i>
     </a>
     {% endif %}
 
     <!-- Identity -->
     <div class="flex items-start gap-4 mb-5">
-      <div class="w-12 h-12 rounded-xl bg-[#FDF0EA] border border-[#FAD9C7] flex items-center justify-center shrink-0">
-        <i class="ph ph-{{ topic_icons.get(topic, 'users-three') }} text-[#C2613A] text-2xl"></i>
+      <div class="w-12 h-12 rounded-xl bg-[#E8F2EC] border border-[#C4DDD0] flex items-center justify-center shrink-0">
+        <i class="ph ph-{{ topic_icons.get(topic, 'users-three') }} text-[#1E6B50] text-2xl"></i>
       </div>
       <div class="min-w-0 pt-0.5">
-        <p class="text-lg font-bold text-[#1C1917] leading-tight">{{ r.name }}</p>
+        <h1 class="text-2xl sm:text-3xl font-bold text-[#1A1D1B] leading-tight tracking-[-0.01em]">{{ r.name }}</h1>
         <div class="flex flex-wrap items-center gap-1.5 mt-2">
           {% if city %}
           <a href="/{{ city | slugify }}"
-             class="inline-flex items-center gap-1 text-xs text-[#6A6259] bg-[#F5F2EC] border border-[#EAE5DB] px-2 py-0.5 rounded-md hover:border-[#C2613A] hover:text-[#8A4226] transition-colors">
-            <i class="ph ph-map-pin text-[#B5ADA0]"></i> {{ city }}
+             class="inline-flex items-center gap-1 text-xs text-[#4F5752] bg-[#F2F4F2] border border-[#E1E5E2] px-2 py-0.5 rounded-md hover:border-[#1E6B50] hover:text-[#134A37] transition-colors">
+            <i class="ph ph-map-pin text-[#9AA29D]"></i> {{ city }}
           </a>
           {% endif %}
           {% if topic and topic_slug %}
           <a href="/{{ city | slugify }}/{{ topic_slug }}"
-             class="inline-flex items-center gap-1 text-xs text-[#8A4226] bg-[#FDF0EA] border border-[#FAD9C7] px-2 py-0.5 rounded-md hover:bg-[#FAD9C7] transition-colors">
+             class="inline-flex items-center gap-1 text-xs text-[#134A37] bg-[#E8F2EC] border border-[#C4DDD0] px-2 py-0.5 rounded-md hover:bg-[#C4DDD0] transition-colors">
             <i class="ph ph-{{ topic_icons.get(topic, 'circle') }}"></i>
             {{ topic_label }}
           </a>
@@ -84,10 +76,10 @@
        showed it. Suppressed when the body text below would repeat it. #}
     {% set body_text = r.long_description or r.description %}
     {% if r.short_description and r.short_description != body_text %}
-    <p class="text-[#4A4441] font-medium leading-relaxed mb-3 text-[15px]">{{ r.short_description }}</p>
+    <p class="text-[#3B413D] font-medium leading-relaxed mb-3 text-[15px]">{{ r.short_description }}</p>
     {% endif %}
     {% if body_text %}
-    <p class="text-[#4A4441] leading-relaxed mb-6 text-base">{{ body_text }}</p>
+    <p class="text-[#3B413D] leading-relaxed mb-6 text-base">{{ body_text }}</p>
     {% endif %}
 
     <!-- Get involved CTA zone -->
@@ -97,25 +89,25 @@
     {% set all_sources = r.source_urls if r.get('source_urls') else ([r.source_url] if r.source_url else []) %}
     {% set social_set = r.social_links | list %}
     {% if has_website or r.social_links or all_sources %}
-    <div class="mb-6 pb-6 border-b border-[#F5F2EC]">
-      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">{% if has_website or r.social_links %}{{ t('community_get_involved') }}{% else %}{{ t('community_source_links') }}{% endif %}</p>
+    <div class="mb-6 pb-6 border-b border-[#F2F4F2]">
+      <p class="text-sm font-semibold text-[#1A1D1B] mb-3">{% if has_website or r.social_links %}{{ t('community_get_involved') }}{% else %}{{ t('community_source_links') }}{% endif %}</p>
       <div class="flex flex-col gap-2">
         {# Primary website #}
         {% if has_website %}
         {% set wm = website_url | link_meta %}
         <a href="{{ website_url }}" target="_blank" rel="noopener"
            data-outclick data-community-id="{{ r.community_id }}" data-link-type="website"
-           class="flex items-center gap-3 group rounded-lg px-3 py-2.5 hover:bg-[#F5F2EC] transition-colors -mx-3">
+           class="flex items-center gap-3 group rounded-lg px-3 py-2.5 hover:bg-[#F2F4F2] transition-colors -mx-3">
           <span class="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 {{ wm.color }}">
             <i class="ph {{ wm.icon }}" style="font-size:17px"></i>
           </span>
           <span class="flex flex-col min-w-0">
-            <span class="text-sm font-semibold text-[#1C1917]">{{ wm.label }}</span>
-            <span class="text-xs text-[#8C8478] truncate group-hover:text-[#C2613A] transition-colors">
+            <span class="text-sm font-semibold text-[#1A1D1B]">{{ wm.label }}</span>
+            <span class="text-xs text-[#646C67] truncate group-hover:text-[#1E6B50] transition-colors">
               {{ website_url | replace('https://','') | replace('http://','') | truncate(55, True, '…') }}
             </span>
           </span>
-          <i class="ph ph-arrow-square-out text-[#D8D1C4] group-hover:text-[#C2613A] ml-auto shrink-0 transition-colors" style="font-size:15px"></i>
+          <i class="ph ph-arrow-square-out text-[#CDD3CF] group-hover:text-[#1E6B50] ml-auto shrink-0 transition-colors" style="font-size:15px"></i>
         </a>
         {% else %}
         {# No website — show source URLs as fallback #}
@@ -124,17 +116,17 @@
         {% set sm = src | link_meta %}
         <a href="{{ src }}" target="_blank" rel="noopener"
            data-outclick data-community-id="{{ r.community_id }}" data-link-type="source"
-           class="flex items-center gap-3 group rounded-lg px-3 py-2.5 hover:bg-[#F5F2EC] transition-colors -mx-3">
+           class="flex items-center gap-3 group rounded-lg px-3 py-2.5 hover:bg-[#F2F4F2] transition-colors -mx-3">
           <span class="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 {{ sm.color }}">
             <i class="ph {{ sm.icon }}" style="font-size:17px"></i>
           </span>
           <span class="flex flex-col min-w-0">
-            <span class="text-sm font-semibold text-[#1C1917]">{{ sm.label }}</span>
-            <span class="text-xs text-[#8C8478] truncate group-hover:text-[#C2613A] transition-colors">
+            <span class="text-sm font-semibold text-[#1A1D1B]">{{ sm.label }}</span>
+            <span class="text-xs text-[#646C67] truncate group-hover:text-[#1E6B50] transition-colors">
               {{ src | replace('https://','') | replace('http://','') | truncate(55, True, '…') }}
             </span>
           </span>
-          <i class="ph ph-arrow-square-out text-[#D8D1C4] group-hover:text-[#C2613A] ml-auto shrink-0 transition-colors" style="font-size:15px"></i>
+          <i class="ph ph-arrow-square-out text-[#CDD3CF] group-hover:text-[#1E6B50] ml-auto shrink-0 transition-colors" style="font-size:15px"></i>
         </a>
         {% endif %}
         {% endfor %}
@@ -145,17 +137,17 @@
         {% set lm = link | link_meta %}
         <a href="{{ link }}" target="_blank" rel="noopener"
            data-outclick data-community-id="{{ r.community_id }}" data-link-type="social"
-           class="flex items-center gap-3 group rounded-lg px-3 py-2.5 hover:bg-[#F5F2EC] transition-colors -mx-3">
+           class="flex items-center gap-3 group rounded-lg px-3 py-2.5 hover:bg-[#F2F4F2] transition-colors -mx-3">
           <span class="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 {{ lm.color }}">
             <i class="ph {{ lm.icon }}" style="font-size:17px"></i>
           </span>
           <span class="flex flex-col min-w-0">
-            <span class="text-sm font-semibold text-[#1C1917]">{{ lm.label }}</span>
-            <span class="text-xs text-[#8C8478] truncate group-hover:text-[#C2613A] transition-colors">
+            <span class="text-sm font-semibold text-[#1A1D1B]">{{ lm.label }}</span>
+            <span class="text-xs text-[#646C67] truncate group-hover:text-[#1E6B50] transition-colors">
               {{ link | replace('https://','') | replace('http://','') | truncate(55, True, '…') }}
             </span>
           </span>
-          <i class="ph ph-arrow-square-out text-[#D8D1C4] group-hover:text-[#C2613A] ml-auto shrink-0 transition-colors" style="font-size:15px"></i>
+          <i class="ph ph-arrow-square-out text-[#CDD3CF] group-hover:text-[#1E6B50] ml-auto shrink-0 transition-colors" style="font-size:15px"></i>
         </a>
         {% endif %}
         {% endfor %}
@@ -167,12 +159,12 @@
     {% macro detail_row(icon, label, value) %}
     {% if value %}
     <div class="flex items-start gap-3 text-sm">
-      <div class="w-7 h-7 rounded-md bg-[#F5F2EC] border border-[#EAE5DB] flex items-center justify-center shrink-0 mt-0.5">
-        <i class="ph ph-{{ icon }} text-[#8C8478]" style="font-size:13px"></i>
+      <div class="w-7 h-7 rounded-md bg-[#F2F4F2] border border-[#E1E5E2] flex items-center justify-center shrink-0 mt-0.5">
+        <i class="ph ph-{{ icon }} text-[#646C67]" style="font-size:13px"></i>
       </div>
       <div class="min-w-0">
-        <div class="text-[11px] font-semibold text-[#B5ADA0] uppercase tracking-[0.08em] mb-0.5">{{ label }}</div>
-        <div class="text-[#4A4441]">{{ value }}</div>
+        <div class="text-xs font-semibold text-[#9AA29D] mb-0.5">{{ label }}</div>
+        <div class="text-[#3B413D]">{{ value }}</div>
       </div>
     </div>
     {% endif %}
@@ -182,7 +174,7 @@
     {% set has_when_where = r.location or r.meeting_schedule or r.frequency %}
     {% if has_when_where %}
     <div class="mb-5">
-      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">{{ t('community_location') }} & {{ t('community_schedule') }}</p>
+      <p class="text-sm font-semibold text-[#1A1D1B] mb-3">{{ t('community_location') }} & {{ t('community_schedule') }}</p>
       <div class="space-y-3">
         {{ detail_row('map-pin',  t('community_location'),  r.location) }}
         {{ detail_row('calendar', t('community_schedule'),  r.meeting_schedule) }}
@@ -194,19 +186,19 @@
     <!-- Who -->
     {% set has_who = r.leader or r.member_count or r.skill_level or r.age_range or r.language %}
     {% if has_who %}
-    <div class="mb-5 {% if has_when_where %}pt-5 border-t border-[#F5F2EC]{% endif %}">
-      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">{{ t('community_who_section') }}</p>
+    <div class="mb-5 {% if has_when_where %}pt-5 border-t border-[#F2F4F2]{% endif %}">
+      <p class="text-sm font-semibold text-[#1A1D1B] mb-3">{{ t('community_who_section') }}</p>
       <div class="space-y-3">
         {% if r.leader %}
         <div class="flex items-start gap-3 text-sm">
-          <div class="w-7 h-7 rounded-md bg-[#F5F2EC] border border-[#EAE5DB] flex items-center justify-center shrink-0 mt-0.5">
-            <i class="ph ph-person-simple text-[#8C8478]" style="font-size:13px"></i>
+          <div class="w-7 h-7 rounded-md bg-[#F2F4F2] border border-[#E1E5E2] flex items-center justify-center shrink-0 mt-0.5">
+            <i class="ph ph-person-simple text-[#646C67]" style="font-size:13px"></i>
           </div>
           <div class="min-w-0">
-            <div class="text-[11px] font-semibold text-[#B5ADA0] uppercase tracking-[0.08em] mb-0.5">{{ t('community_leader') }}</div>
-            <div class="text-[#4A4441]">
+            <div class="text-xs font-semibold text-[#9AA29D] mb-0.5">{{ t('community_leader') }}</div>
+            <div class="text-[#3B413D]">
               <a href="/{{ city | slugify }}/ember/{{ r.leader | slugify }}"
-                 class="hover:text-[#A8512F] transition-colors">{{ r.leader }}</a>
+                 class="hover:text-[#185A43] transition-colors">{{ r.leader }}</a>
             </div>
           </div>
         </div>
@@ -225,18 +217,18 @@
     <!-- Joining -->
     {% set has_joining = r.fee or r.join_process or r.email or r.phone or r.contact %}
     {% if has_joining %}
-    <div class="{% if has_when_where or has_who %}pt-5 border-t border-[#F5F2EC]{% endif %}">
-      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">{{ t('community_joining_section') }}</p>
+    <div class="{% if has_when_where or has_who %}pt-5 border-t border-[#F2F4F2]{% endif %}">
+      <p class="text-sm font-semibold text-[#1A1D1B] mb-3">{{ t('community_joining_section') }}</p>
       <div class="space-y-3">
         {{ detail_row('currency-circle-dollar', t('community_fee'),          r.fee) }}
         {{ detail_row('trend-up',               t('community_join_process'), r.join_process) }}
         {% if r.email or r.phone or r.contact %}
         <div class="flex items-start gap-3 text-sm">
-          <div class="w-7 h-7 rounded-md bg-[#F5F2EC] border border-[#EAE5DB] flex items-center justify-center shrink-0 mt-0.5">
-            <i class="ph ph-envelope text-[#8C8478]" style="font-size:13px"></i>
+          <div class="w-7 h-7 rounded-md bg-[#F2F4F2] border border-[#E1E5E2] flex items-center justify-center shrink-0 mt-0.5">
+            <i class="ph ph-envelope text-[#646C67]" style="font-size:13px"></i>
           </div>
           <div class="min-w-0">
-            <div class="text-[11px] font-semibold text-[#B5ADA0] uppercase tracking-[0.08em] mb-0.5">{{ t('community_contact') }}</div>
+            <div class="text-xs font-semibold text-[#9AA29D] mb-0.5">{{ t('community_contact') }}</div>
             {# Both contact lines are links and both must look like one. The
                phone used to be styled only with `hover:`, so on a touch screen —
                where the number is most useful, because tapping it dials — it was
@@ -244,13 +236,13 @@
                pointer target of 24 CSS px; the native 44pt figure is a different
                rule and does not apply here. #}
             {% if r.email %}
-            <div><a href="mailto:{{ r.email }}" class="inline-flex items-center min-h-6 text-[#A8512F] hover:underline break-all">{{ r.email }}</a></div>
+            <div><a href="mailto:{{ r.email }}" class="inline-flex items-center min-h-6 text-[#185A43] hover:underline break-all">{{ r.email }}</a></div>
             {% endif %}
             {% if r.phone %}
-            <div><a href="tel:{{ r.phone }}" class="inline-flex items-center min-h-6 text-[#A8512F] hover:underline tabular-nums">{{ r.phone }}</a></div>
+            <div><a href="tel:{{ r.phone }}" class="inline-flex items-center min-h-6 text-[#185A43] hover:underline tabular-nums">{{ r.phone }}</a></div>
             {% endif %}
             {% if r.contact and not r.email and not r.phone %}
-            <div class="text-[#4A4441]">{{ r.contact }}</div>
+            <div class="text-[#3B413D]">{{ r.contact }}</div>
             {% endif %}
           </div>
         </div>
@@ -261,7 +253,7 @@
 
     <!-- Founding year -->
     {% if r.founding_year %}
-    <div class="mt-5 pt-5 border-t border-[#F5F2EC]">
+    <div class="mt-5 pt-5 border-t border-[#F2F4F2]">
       <div class="space-y-3">
         {{ detail_row('flag', t('community_founded'), r.founding_year | string) }}
       </div>
@@ -270,12 +262,12 @@
 
     <!-- Tags -->
     {% if r.tags %}
-    <div class="mt-5 pt-5 border-t border-[#F5F2EC]">
-      <div class="text-[11px] font-semibold text-[#B5ADA0] uppercase tracking-[0.08em] mb-2">{{ t('community_tags_label') }}</div>
+    <div class="mt-5 pt-5 border-t border-[#F2F4F2]">
+      <div class="text-xs font-semibold text-[#9AA29D] mb-2">{{ t('community_tags_label') }}</div>
       <div class="flex flex-wrap gap-1.5">
         {% for tag in r.tags %}
         <a href="{{ explore_url }}?tag={{ tag | urlencode }}"
-           class="text-xs bg-[#F5F2EC] text-[#6A6259] border border-[#EAE5DB] px-2 py-0.5 rounded-md hover:bg-[#FDF0EA] hover:border-[#FAD9C7] hover:text-[#8A4226] transition-colors">{{ tag }}</a>
+           class="text-xs bg-[#F2F4F2] text-[#4F5752] border border-[#E1E5E2] px-2 py-0.5 rounded-md hover:bg-[#E8F2EC] hover:border-[#C4DDD0] hover:text-[#134A37] transition-colors">{{ tag }}</a>
         {% endfor %}
       </div>
     </div>
@@ -283,7 +275,7 @@
 
     <!-- History -->
     {% if r.history %}
-    <div class="mt-5 pt-5 border-t border-[#F5F2EC]">
+    <div class="mt-5 pt-5 border-t border-[#F2F4F2]">
       <div class="space-y-3">
         {{ detail_row('book-open', t('community_history_label'), r.history) }}
       </div>
@@ -309,13 +301,13 @@
     {% endif %}
     {% endfor %}
     {% if cta_links %}
-    <div class="mt-6 pt-6 border-t border-[#F5F2EC]">
-      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">{{ t('community_how_to_join') }}</p>
+    <div class="mt-6 pt-6 border-t border-[#F2F4F2]">
+      <p class="text-sm font-semibold text-[#1A1D1B] mb-3">{{ t('community_how_to_join') }}</p>
       <div class="flex flex-col gap-2">
         {% for link in cta_links %}
         {% set cm = link | link_meta %}
         <a href="{{ link }}" target="_blank" rel="noopener"
-           class="flex items-center gap-3 rounded-xl bg-[#C2613A] px-5 py-3.5 text-white hover:bg-[#A8512F] transition-colors">
+           class="flex items-center gap-3 rounded-xl bg-[#1E6B50] px-5 py-3.5 text-white hover:bg-[#185A43] transition-colors">
           <i class="ph ph-arrow-square-out text-lg shrink-0"></i>
           <span class="flex flex-col min-w-0 text-left">
             <span class="font-semibold text-sm leading-tight">
@@ -334,41 +326,41 @@
 
   <!-- Venue card -->
   {% if community_venue %}
-  <div class="mt-4 bg-white rounded-xl border border-[#EAE5DB] p-5">
-    <p class="text-[11px] font-semibold text-[#B5ADA0] uppercase tracking-[0.08em] mb-3">
+  <div class="mt-4 bg-white rounded-xl border border-[#E1E5E2] p-5">
+    <p class="text-xs font-semibold text-[#9AA29D] mb-3">
       <i class="ph ph-map-pin mr-1"></i>{{ t('community_venue_label') }}
     </p>
     <a href="/{{ city | slugify }}/helyszin/{{ community_venue.name | slugify }}"
        class="flex items-center gap-3 group">
-      <div class="w-9 h-9 rounded-lg bg-[#F5F2EC] border border-[#EAE5DB] flex items-center justify-center shrink-0">
-        <i class="ph ph-map-pin text-[#A8512F]" style="font-size:16px"></i>
+      <div class="w-9 h-9 rounded-lg bg-[#F2F4F2] border border-[#E1E5E2] flex items-center justify-center shrink-0">
+        <i class="ph ph-map-pin text-[#185A43]" style="font-size:16px"></i>
       </div>
       <div class="min-w-0">
-        <div class="font-semibold text-[#1C1917] group-hover:text-[#A8512F] transition-colors">{{ community_venue.name }}</div>
+        <div class="font-semibold text-[#1A1D1B] group-hover:text-[#185A43] transition-colors">{{ community_venue.name }}</div>
         {% if community_venue.address %}
-        <div class="text-xs text-[#8C8478] truncate">{{ community_venue.address }}</div>
+        <div class="text-xs text-[#646C67] truncate">{{ community_venue.address }}</div>
         {% endif %}
       </div>
-      <i class="ph ph-arrow-right text-[#D8D1C4] group-hover:text-[#A8512F] transition-colors ml-auto shrink-0"></i>
+      <i class="ph ph-arrow-right text-[#CDD3CF] group-hover:text-[#185A43] transition-colors ml-auto shrink-0"></i>
     </a>
   </div>
   {% endif %}
 
   <!-- Community persons -->
   {% if community_persons %}
-  <div class="mt-4 bg-white rounded-xl border border-[#EAE5DB] p-5">
-    <p class="text-[11px] font-semibold text-[#B5ADA0] uppercase tracking-[0.08em] mb-3">
+  <div class="mt-4 bg-white rounded-xl border border-[#E1E5E2] p-5">
+    <p class="text-xs font-semibold text-[#9AA29D] mb-3">
       <i class="ph ph-person-simple mr-1"></i>{{ t('community_people_label') }}
     </p>
     <div class="space-y-2">
       {% for p in community_persons %}
       <a href="/{{ city | slugify }}/ember/{{ p.name | slugify }}"
-         class="flex items-center gap-2.5 group py-1 -mx-1 px-1 rounded-lg hover:bg-[#F5F2EC] transition-colors">
-        <i class="ph ph-person-simple text-[#B5ADA0] group-hover:text-[#A8512F] transition-colors shrink-0 text-base"></i>
+         class="flex items-center gap-2.5 group py-1 -mx-1 px-1 rounded-lg hover:bg-[#F2F4F2] transition-colors">
+        <i class="ph ph-person-simple text-[#9AA29D] group-hover:text-[#185A43] transition-colors shrink-0 text-base"></i>
         <div class="min-w-0 flex items-center gap-2">
-          <span class="text-sm font-medium text-[#1C1917] group-hover:text-[#A8512F] transition-colors">{{ p.name }}</span>
+          <span class="text-sm font-medium text-[#1A1D1B] group-hover:text-[#185A43] transition-colors">{{ p.name }}</span>
           {% if p.role %}
-          <span class="text-[11px] text-[#8C8478] bg-[#F5F2EC] border border-[#EAE5DB] px-1.5 py-0.5 rounded shrink-0">{{ p.role | role_hu }}</span>
+          <span class="text-[11px] text-[#646C67] bg-[#F2F4F2] border border-[#E1E5E2] px-1.5 py-0.5 rounded shrink-0">{{ p.role | role_hu }}</span>
           {% endif %}
         </div>
       </a>
@@ -380,20 +372,20 @@
   <!-- Source attribution -->
   {% set all_sources = r.source_urls if r.get('source_urls') else ([r.source_url] if r.source_url else []) %}
   {% if all_sources %}
-  <div class="mt-4 border-t border-[#EAE5DB] pt-5">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#B5ADA0] mb-2">{{ t('community_source_page') }}</p>
+  <div class="mt-4 border-t border-[#E1E5E2] pt-5">
+    <p class="text-xs font-semibold text-[#9AA29D] mb-2">{{ t('community_source_page') }}</p>
     <div class="flex flex-col gap-1.5">
       {% for url in all_sources %}
       {% set _uhash = url | sha256_16 %}
       <div class="flex items-center gap-2">
         <a href="{{ url }}" target="_blank" rel="noopener"
-           class="inline-flex items-center gap-1.5 text-xs text-[#A8512F] hover:text-[#8A4226] transition-colors group min-w-0">
+           class="inline-flex items-center gap-1.5 text-xs text-[#185A43] hover:text-[#134A37] transition-colors group min-w-0">
           <i class="ph ph-arrow-square-out shrink-0"></i>
           <span class="truncate group-hover:underline">{{ url | replace('https://','') | replace('http://','') }}</span>
         </a>
         <a href="/source/{{ _uhash }}"
            title="{{ t('community_source_page') }}"
-           class="shrink-0 w-5 h-5 rounded-full bg-[#F5F2EC] border border-[#EAE5DB] flex items-center justify-center text-[#B5ADA0] hover:bg-[#FDF0EA] hover:border-[#FAD9C7] hover:text-[#C2613A] transition-colors">
+           class="shrink-0 w-5 h-5 rounded-full bg-[#F2F4F2] border border-[#E1E5E2] flex items-center justify-center text-[#9AA29D] hover:bg-[#E8F2EC] hover:border-[#C4DDD0] hover:text-[#1E6B50] transition-colors">
           <i class="ph ph-info" style="font-size:11px"></i>
         </a>
       </div>
@@ -406,20 +398,20 @@
        The snippet is assembled in JS from data-* attributes with explicit HTML
        escaping so an untrusted community name can never produce executable or
        malformed markup in the copied code. -->
-  <details class="mt-4 bg-white border border-[#EAE5DB] rounded-xl overflow-hidden group">
-    <summary class="px-5 py-3 flex items-center gap-2 text-sm text-[#8C8478] hover:text-[#4A4441] cursor-pointer list-none">
-      <i class="ph ph-code text-base group-hover:text-[#A8512F] transition-colors"></i>
+  <details class="mt-4 bg-white border border-[#E1E5E2] rounded-xl overflow-hidden group">
+    <summary class="px-5 py-3 flex items-center gap-2 text-sm text-[#646C67] hover:text-[#3B413D] cursor-pointer list-none">
+      <i class="ph ph-code text-base group-hover:text-[#185A43] transition-colors"></i>
       <span>{{ t('community_badge_title') }}</span>
-      <i class="ph ph-caret-right ml-auto text-[#D8D1C4] group-open:rotate-90 transition-transform"></i>
+      <i class="ph ph-caret-right ml-auto text-[#CDD3CF] group-open:rotate-90 transition-transform"></i>
     </summary>
-    <div class="px-5 pb-5 pt-4 border-t border-[#F5F2EC]">
-      <p class="text-xs text-[#8C8478] mb-2">{{ t('community_badge_desc') }}</p>
+    <div class="px-5 pb-5 pt-4 border-t border-[#F2F4F2]">
+      <p class="text-xs text-[#646C67] mb-2">{{ t('community_badge_desc') }}</p>
       <textarea id="badge-code" readonly rows="2"
         data-url="{{ (canonical_base or site_url) ~ '/' ~ (city | slugify) ~ '/' ~ (r.name | slugify) }}"
         data-name="{{ r.name }}" data-site="{{ site_name }}"
-        class="w-full text-xs font-mono border border-[#D8D1C4] rounded-lg px-3 py-2 bg-[#FAF8F4] text-[#4A4441] resize-none focus:outline-none focus:border-[#C2613A]"></textarea>
+        class="w-full text-xs font-mono border border-[#CDD3CF] rounded-lg px-3 py-2 bg-[#F7F8F7] text-[#3B413D] resize-none focus:outline-none focus:border-[#1E6B50]"></textarea>
       <button type="button" onclick="copyBadge(this)"
-        class="mt-2 text-xs font-medium px-3 py-1.5 rounded-md bg-[#F5F2EC] border border-[#EAE5DB] text-[#4A4441] hover:border-[#C2613A] transition-colors"
+        class="mt-2 text-xs font-medium px-3 py-1.5 rounded-md bg-[#F2F4F2] border border-[#E1E5E2] text-[#3B413D] hover:border-[#1E6B50] transition-colors"
         data-copy="{{ t('community_badge_copy') }}" data-copied="{{ t('community_badge_copied') }}">{{ t('community_badge_copy') }}</button>
     </div>
   </details>
@@ -444,20 +436,20 @@
   </script>
 
   <!-- Unified report problem -->
-  <div class="mt-4 bg-white border border-[#EAE5DB] rounded-xl overflow-hidden" id="report-section">
+  <div class="mt-4 bg-white border border-[#E1E5E2] rounded-xl overflow-hidden" id="report-section">
 
     <!-- Collapsed prompt -->
     <div id="report-prompt" class="px-5 py-3">
       <button onclick="openReport()"
-        class="w-full flex items-center gap-2 text-sm text-[#8C8478] hover:text-[#4A4441] transition-colors group text-left">
-        <i class="ph ph-flag text-base group-hover:text-[#A8512F] transition-colors"></i>
+        class="w-full flex items-center gap-2 text-sm text-[#646C67] hover:text-[#3B413D] transition-colors group text-left">
+        <i class="ph ph-flag text-base group-hover:text-[#185A43] transition-colors"></i>
         <span>{{ t('community_report_error') }}</span>
-        <i class="ph ph-caret-right ml-auto text-[#D8D1C4] group-hover:text-[#A8512F] transition-colors"></i>
+        <i class="ph ph-caret-right ml-auto text-[#CDD3CF] group-hover:text-[#185A43] transition-colors"></i>
       </button>
     </div>
 
     <!-- Expanded form -->
-    <div id="report-form" class="hidden px-5 pb-5 pt-4 border-t border-[#F5F2EC]">
+    <div id="report-form" class="hidden px-5 pb-5 pt-4 border-t border-[#F2F4F2]">
       <!-- Hidden community fields -->
       <input type="hidden" id="rf-community-id"   value="{{ r.community_id | default('') | e }}">
       <input type="hidden" id="rf-community-name" value="{{ r.name | e }}">
@@ -467,9 +459,9 @@
       <input type="hidden" id="rf-record-key"      value="{{ record_key | default('') | e }}">
       <input type="hidden" id="rf-entity-id"       value="{{ r.community_id | default('') | e }}">
 
-      <label class="block text-xs font-medium text-[#6A6259] mb-1.5">{{ t('community_report_what_problem') }}</label>
+      <label class="block text-xs font-medium text-[#4F5752] mb-1.5">{{ t('community_report_what_problem') }}</label>
       <select id="report-type" onchange="onReportType(this.value)"
-        class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] mb-4 text-[#1C1917] bg-white">
+        class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg focus:outline-none focus:border-[#1E6B50] mb-4 text-[#1A1D1B] bg-white">
         <option value="">{{ t('community_report_select') }}</option>
         <option value="not_community">{{ t('community_report_not_community') }}</option>
         <option value="wrong_city">{{ t('community_report_wrong_city') }}</option>
@@ -481,28 +473,28 @@
       </select>
 
       <!-- Not community: no extra fields, just a note -->
-      <div id="rf-not-community" class="hidden mb-4 text-xs text-[#8C8478] bg-[#FFF8F5] border border-[#FAD9C7] rounded-lg px-3 py-2">
+      <div id="rf-not-community" class="hidden mb-4 text-xs text-[#646C67] bg-[#F3F8F5] border border-[#C4DDD0] rounded-lg px-3 py-2">
         {{ t('community_report_admin_note') }}
       </div>
 
       <!-- Wrong city -->
       <div id="rf-city-field" class="hidden mb-4">
-        <label class="block text-xs font-medium text-[#6A6259] mb-1">{{ t('community_report_correct_city') }}</label>
+        <label class="block text-xs font-medium text-[#4F5752] mb-1">{{ t('community_report_correct_city') }}</label>
         {# Options are fetched from /api/cities.json when this field is first
            opened. Rendering them here cost 176 KB on every one of 42,091
            community pages — 76% of the document, identical on all of them,
            inside a hidden div nobody ever saw. #}
         <select id="rf-new-city" data-cities-url="/api/cities.json"
-          class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] text-[#1C1917] bg-white">
+          class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg focus:outline-none focus:border-[#1E6B50] text-[#1A1D1B] bg-white">
           <option value="">{{ t('community_report_select_city') }}</option>
         </select>
       </div>
 
       <!-- Wrong topic -->
       <div id="rf-topic-field" class="hidden mb-4">
-        <label class="block text-xs font-medium text-[#6A6259] mb-1">{{ t('community_report_correct_topic') }}</label>
+        <label class="block text-xs font-medium text-[#4F5752] mb-1">{{ t('community_report_correct_topic') }}</label>
         <select id="rf-new-topic"
-          class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] text-[#1C1917] bg-white">
+          class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg focus:outline-none focus:border-[#1E6B50] text-[#1A1D1B] bg-white">
           <option value="">{{ t('community_report_select_topic') }}</option>
           {% for slug, label in all_topic_names | default([]) %}<option value="{{ slug }}"{% if slug == topic %} selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
@@ -510,40 +502,40 @@
 
       <!-- Name correction -->
       <div id="rf-name-field" class="hidden mb-4">
-        <label class="block text-xs font-medium text-[#6A6259] mb-1">{{ t('community_report_correct_name') }}</label>
+        <label class="block text-xs font-medium text-[#4F5752] mb-1">{{ t('community_report_correct_name') }}</label>
         <input type="text" id="rf-new-name" value="{{ r.name | e }}"
-          class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] text-[#1C1917]">
+          class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg focus:outline-none focus:border-[#1E6B50] text-[#1A1D1B]">
       </div>
 
       <!-- Notes (shown for most types) -->
       <div id="rf-notes-field" class="hidden mb-3">
         <textarea id="rf-notes" rows="2"
           placeholder="{{ t('community_report_note_placeholder') }}"
-          class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg resize-none focus:outline-none focus:border-[#C2613A] text-[#1C1917] placeholder-[#B5ADA0]"></textarea>
+          class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg resize-none focus:outline-none focus:border-[#1E6B50] text-[#1A1D1B] placeholder-[#9AA29D]"></textarea>
       </div>
 
       <!-- Free text (for "other") -->
       <div id="rf-message-field" class="hidden mb-3">
         <textarea id="rf-message" rows="3"
           placeholder="{{ t('community_report_message_placeholder') }}"
-          class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg resize-none focus:outline-none focus:border-[#C2613A] text-[#1C1917] placeholder-[#B5ADA0]"></textarea>
+          class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg resize-none focus:outline-none focus:border-[#1E6B50] text-[#1A1D1B] placeholder-[#9AA29D]"></textarea>
       </div>
 
       <!-- Email -->
       <div id="rf-email-field" class="hidden mb-4">
         <input type="email" id="rf-email"
           placeholder="{{ t('community_report_email_placeholder') }}"
-          class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] text-[#1C1917] placeholder-[#B5ADA0]">
+          class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg focus:outline-none focus:border-[#1E6B50] text-[#1A1D1B] placeholder-[#9AA29D]">
       </div>
 
       <!-- Actions -->
       <div id="rf-actions" class="hidden flex items-center gap-3">
         <button onclick="submitReport()"
-          class="px-4 py-2 bg-[#A8512F] text-white text-xs font-semibold rounded-lg hover:bg-[#8A4226] transition-colors">
+          class="px-4 py-2 bg-[#185A43] text-white text-xs font-semibold rounded-lg hover:bg-[#134A37] transition-colors">
           {{ t('community_feedback_send') }}
         </button>
         <button type="button" onclick="closeReport()"
-          class="text-xs text-[#8C8478] hover:text-[#4A4441] transition-colors">
+          class="text-xs text-[#646C67] hover:text-[#3B413D] transition-colors">
           {{ t('community_feedback_cancel') }}
         </button>
       </div>
@@ -557,27 +549,27 @@
   </div>
 
   <!-- Claim community -->
-  <div class="mt-3 bg-white border border-[#EAE5DB] rounded-xl overflow-hidden" id="claim-section">
+  <div class="mt-3 bg-white border border-[#E1E5E2] rounded-xl overflow-hidden" id="claim-section">
     <div id="claim-prompt" class="px-5 py-3">
       <button onclick="openClaim()"
-        class="w-full flex items-center gap-2 text-sm text-[#8C8478] hover:text-[#4A4441] transition-colors group text-left">
-        <i class="ph ph-crown-simple text-base group-hover:text-[#C2613A] transition-colors"></i>
+        class="w-full flex items-center gap-2 text-sm text-[#646C67] hover:text-[#3B413D] transition-colors group text-left">
+        <i class="ph ph-crown-simple text-base group-hover:text-[#1E6B50] transition-colors"></i>
         <span>{{ t('community_claim') }}</span>
-        <i class="ph ph-caret-right ml-auto text-[#D8D1C4] group-hover:text-[#A8512F] transition-colors"></i>
+        <i class="ph ph-caret-right ml-auto text-[#CDD3CF] group-hover:text-[#185A43] transition-colors"></i>
       </button>
     </div>
-    <div id="claim-form" class="hidden px-5 pb-5 pt-4 border-t border-[#F5F2EC]">
-      <p class="text-xs text-[#6A6259] mb-3">{{ t('community_claim_desc') }}</p>
+    <div id="claim-form" class="hidden px-5 pb-5 pt-4 border-t border-[#F2F4F2]">
+      <p class="text-xs text-[#4F5752] mb-3">{{ t('community_claim_desc') }}</p>
       <input type="email" id="claim-email"
         placeholder="{{ t('community_report_email_placeholder') }}"
-        class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] text-[#1C1917] placeholder-[#B5ADA0] mb-3">
+        class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg focus:outline-none focus:border-[#1E6B50] text-[#1A1D1B] placeholder-[#9AA29D] mb-3">
       <div class="flex items-center gap-3">
         <button onclick="submitClaim()"
-          class="px-4 py-2 bg-[#A8512F] text-white text-xs font-semibold rounded-lg hover:bg-[#8A4226] transition-colors">
+          class="px-4 py-2 bg-[#185A43] text-white text-xs font-semibold rounded-lg hover:bg-[#134A37] transition-colors">
           {{ t('community_feedback_send') }}
         </button>
         <button type="button" onclick="closeClaim()"
-          class="text-xs text-[#8C8478] hover:text-[#4A4441] transition-colors">
+          class="text-xs text-[#646C67] hover:text-[#3B413D] transition-colors">
           {{ t('community_feedback_cancel') }}
         </button>
       </div>
@@ -614,9 +606,9 @@
     'confidence': 'Confidence',
     'joinable': t('community_join_process')
   } %}
-  <div class="mt-10 border-t border-[#EAE5DB] pt-6">
+  <div class="mt-10 border-t border-[#E1E5E2] pt-6">
     <details class="group">
-      <summary class="flex items-center gap-2 cursor-pointer text-xs font-semibold uppercase tracking-[0.08em] text-[#8C8478] hover:text-[#4A4441] transition-colors list-none">
+      <summary class="flex items-center gap-2 cursor-pointer text-sm font-semibold text-[#3B413D] hover:text-[#3B413D] transition-colors list-none">
         <i class="ph ph-clock-counter-clockwise"></i>
         {{ t('community_changes') }} ({{ community_history | length }})
         <i class="ph ph-caret-down group-open:rotate-180 transition-transform ml-auto"></i>
@@ -627,24 +619,24 @@
         {% set date_str = entry.changed_at[:10] %}
         {% if date_str != ns.last_date %}
         {% set ns.last_date = date_str %}
-        <div class="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#B5ADA0] pt-3 pb-1 first:pt-0">
+        <div class="text-xs font-semibold text-[#9AA29D] pt-3 pb-1 first:pt-0">
           {{ date_str }}
         </div>
         {% endif %}
-        <div class="flex items-start gap-2 text-xs text-[#6A6259] py-1 border-b border-[#F5F2EC] last:border-0">
-          <span class="shrink-0 text-[#B5ADA0] w-[5.5rem]">{{ entry.changed_at[11:16] }}</span>
-          <span class="shrink-0 font-medium text-[#4A4441] w-28">{{ field_labels.get(entry.field, entry.field) }}</span>
+        <div class="flex items-start gap-2 text-xs text-[#4F5752] py-1 border-b border-[#F2F4F2] last:border-0">
+          <span class="shrink-0 text-[#9AA29D] w-[5.5rem]">{{ entry.changed_at[11:16] }}</span>
+          <span class="shrink-0 font-medium text-[#3B413D] w-28">{{ field_labels.get(entry.field, entry.field) }}</span>
           {% if entry.field == '__created__' %}
-          <span class="text-[#A8512F]">{{ t('community_added') }}</span>
+          <span class="text-[#185A43]">{{ t('community_added') }}</span>
           {% elif entry.old_value is none %}
           <span class="text-[#6A9E6A]">{{ entry.new_value | truncate(80) }}</span>
           {% elif entry.new_value is none %}
-          <span class="text-[#B5ADA0] line-through">{{ entry.old_value | truncate(60) }}</span>
+          <span class="text-[#9AA29D] line-through">{{ entry.old_value | truncate(60) }}</span>
           {% else %}
           <span class="flex flex-wrap items-center gap-1 min-w-0">
-            <span class="text-[#B5ADA0] line-through truncate max-w-[12rem]">{{ entry.old_value | truncate(60) }}</span>
+            <span class="text-[#9AA29D] line-through truncate max-w-[12rem]">{{ entry.old_value | truncate(60) }}</span>
             <i class="ph ph-arrow-right shrink-0"></i>
-            <span class="text-[#4A4441] truncate max-w-[12rem]">{{ entry.new_value | truncate(60) }}</span>
+            <span class="text-[#3B413D] truncate max-w-[12rem]">{{ entry.new_value | truncate(60) }}</span>
           </span>
           {% endif %}
         </div>
@@ -658,7 +650,7 @@
   {% if city and topic and topic_slug %}
   <div class="mt-6 text-center">
     <a href="/{{ city | slugify }}/{{ topic_slug }}"
-       class="inline-flex items-center gap-2 text-sm text-[#A8512F] hover:text-[#8A4226] transition-colors font-medium">
+       class="inline-flex items-center gap-2 text-sm text-[#185A43] hover:text-[#134A37] transition-colors font-medium">
       <i class="ph ph-arrow-left"></i>
       {{ t('community_more_in').format(label=topic_label, city=city) }}
     </a>

@@ -16,23 +16,23 @@
 {% block content %}
 
 <!-- Sticky sub-bar -->
-<div class="bg-white/95 border-b border-[#EAE5DB] sticky top-[57px] z-10 backdrop-blur">
+<div class="bg-white/95 border-b border-[#E1E5E2] sticky top-[57px] z-10 backdrop-blur">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-2 flex-wrap">
-    <a href="/" class="text-sm text-[#8C8478] hover:text-[#1C1917] transition-colors">{{ site_name }}</a>
+    <a href="/" class="text-sm text-[#646C67] hover:text-[#1A1D1B] transition-colors">{{ site_name }}</a>
     {% if city %}
-    <span class="text-[#D8D1C4]">/</span>
-    <a href="/{{ city | slugify }}" class="text-sm {% if not selected_topics %}font-semibold text-[#1C1917]{% else %}text-[#8C8478] hover:text-[#1C1917]{% endif %}">{{ city }}</a>
+    <span class="text-[#CDD3CF]">/</span>
+    <a href="/{{ city | slugify }}" class="text-sm {% if not selected_topics %}font-semibold text-[#1A1D1B]{% else %}text-[#646C67] hover:text-[#1A1D1B]{% endif %}">{{ city }}</a>
     {% endif %}
     {% for t in selected_topics %}
-    <span class="text-[#D8D1C4]">/</span>
-    <span class="text-sm font-semibold text-[#A8512F]">
+    <span class="text-[#CDD3CF]">/</span>
+    <span class="text-sm font-semibold text-[#185A43]">
       <i class="ph ph-{{ topic_icons.get(t, 'circle') }}"></i>
       {{ topic_labels.get(t, t.replace('_',' ').title()) }}
     </span>
     {% endfor %}
     {% if tag %}
-    <span class="text-[#D8D1C4]">/</span>
-    <span class="text-sm font-semibold text-[#A8512F]">
+    <span class="text-[#CDD3CF]">/</span>
+    <span class="text-sm font-semibold text-[#185A43]">
       <i class="ph ph-tag"></i> {{ tag }}
     </span>
     {% endif %}
@@ -44,7 +44,7 @@
 {% if tag %}
 <div class="brand-gradient relative overflow-hidden">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-7 relative">
-    <p class="text-xs font-semibold uppercase tracking-[0.1em] text-white/70 mb-1.5">
+    <p class="text-xs font-semibold text-white/70 mb-1.5">
       <i class="ph ph-tag"></i> Tag
     </p>
     <h1 class="text-xl sm:text-2xl font-extrabold tracking-[-0.025em] text-white leading-tight">{{ tag }}</h1>
@@ -54,7 +54,6 @@
 {% elif country_sections %}
 <div class="brand-gradient relative overflow-hidden">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-7 relative">
-    <p class="text-xs font-semibold uppercase tracking-[0.1em] text-white/70 mb-1.5">{{ t('nav_discover') }}</p>
     <h1 class="text-xl sm:text-2xl font-extrabold tracking-[-0.025em] text-white leading-tight">
       {% if selected_topics | length == 1 %}
         {{ topic_labels.get(selected_topics[0], selected_topics[0].replace('_',' ').title()) }}
@@ -67,7 +66,6 @@
 {% elif city %}
 <div class="brand-gradient relative overflow-hidden">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-7 relative">
-    <p class="text-xs font-semibold uppercase tracking-[0.1em] text-white/70 mb-1.5">{{ city }}</p>
     <h1 class="text-xl sm:text-2xl font-extrabold tracking-[-0.025em] text-white leading-tight">
       {% if selected_topics | length == 1 %}
         {{ t('explore_topic_in', label=topic_labels.get(selected_topics[0], selected_topics[0].replace('_',' ').title()), city=city) }}
@@ -88,13 +86,13 @@
      filters get none: the city-wide "every topic" copy would be factually wrong. #}
   {% if city and not tag %}
   {% if selected_topics | length == 1 and total > 0 %}
-  <p class="text-sm text-[#6A6259] leading-relaxed mb-6 max-w-3xl">
+  <p class="text-sm text-[#4F5752] leading-relaxed mb-6 max-w-3xl">
     {{ t('explore_intro_topic_city', label=topic_labels.get(selected_topics[0], selected_topics[0].replace('_',' ').title()), city=city, n=total) }}
   </p>
   {% elif not selected_topics %}
   {% set city_total = available_topics.values() | sum %}
   {% if city_total > 0 %}
-  <p class="text-sm text-[#6A6259] leading-relaxed mb-6 max-w-3xl">
+  <p class="text-sm text-[#4F5752] leading-relaxed mb-6 max-w-3xl">
     {{ t('explore_intro_city', city=city, n=city_total) }}
   </p>
   {% endif %}
@@ -102,11 +100,11 @@
   {% endif %}
 
   {% if subscribed %}
-  <div class="mb-6 bg-[#FDF0EA] border border-[#FAD9C7] rounded-lg px-5 py-4 flex items-center gap-3">
-    <i class="ph ph-check-circle text-[#C2613A] text-xl shrink-0"></i>
+  <div class="mb-6 bg-[#E8F2EC] border border-[#C4DDD0] rounded-lg px-5 py-4 flex items-center gap-3">
+    <i class="ph ph-check-circle text-[#1E6B50] text-xl shrink-0"></i>
     <div>
-      <div class="text-sm font-semibold text-[#4C2615]">{{ t('explore_subscribed_title') }}</div>
-      <div class="text-xs text-[#8A4226] mt-0.5">{{ t('explore_subscribed_desc', city=city) }}</div>
+      <div class="text-sm font-semibold text-[#0D3527]">{{ t('explore_subscribed_title') }}</div>
+      <div class="text-xs text-[#134A37] mt-0.5">{{ t('explore_subscribed_desc', city=city) }}</div>
     </div>
   </div>
   {% endif %}
@@ -119,28 +117,28 @@
   <div id="tag-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3">
     {% for r in tag_records %}
     <div data-name="{{ r.name }}"
-         class="relative bg-white rounded-lg border border-[#EAE5DB] p-4 flex flex-col gap-2 shadow-sm hover:border-[#E88E6B] hover:bg-[#FDF0EA]/40 hover:shadow-md transition-all">
+         class="relative bg-white rounded-lg border border-[#E1E5E2] p-4 flex flex-col gap-2 shadow-sm hover:border-[#5E9E84] hover:bg-[#E8F2EC]/40 hover:shadow-md transition-all">
       <a href="{{ r.community_url }}" class="absolute inset-0 rounded-lg" aria-label="{{ r.name }}"></a>
       <div class="relative flex items-start justify-between gap-2">
-        <h4 class="font-semibold text-[#1C1917] text-sm leading-snug flex items-baseline gap-1.5 min-w-0">
-          <i class="ph ph-{{ topic_icons.get(r.topic, 'circle') }} text-[#C2613A] text-sm shrink-0"></i>
+        <h4 class="font-semibold text-[#1A1D1B] text-sm leading-snug flex items-baseline gap-1.5 min-w-0">
+          <i class="ph ph-{{ topic_icons.get(r.topic, 'circle') }} text-[#1E6B50] text-sm shrink-0"></i>
           <span class="truncate">{{ r.name }}</span>
         </h4>
         {% if r.city %}
         <a href="/{{ r.city | slugify }}"
-           class="relative shrink-0 inline-flex items-center gap-1 text-xs text-[#6A6259] bg-[#F5F2EC] border border-[#EAE5DB] px-1.5 py-0.5 rounded-md hover:border-[#C2613A] hover:text-[#8A4226] transition-colors whitespace-nowrap">
+           class="relative shrink-0 inline-flex items-center gap-1 text-xs text-[#4F5752] bg-[#F2F4F2] border border-[#E1E5E2] px-1.5 py-0.5 rounded-md hover:border-[#1E6B50] hover:text-[#134A37] transition-colors whitespace-nowrap">
           <i class="ph ph-map-pin" style="font-size:9px"></i> {{ r.city }}
         </a>
         {% endif %}
       </div>
       {% if r.short_description or r.description %}
-      <p class="text-xs text-[#6A6259] leading-relaxed line-clamp-2">{{ r.short_description or r.description }}</p>
+      <p class="text-xs text-[#4F5752] leading-relaxed line-clamp-2">{{ r.short_description or r.description }}</p>
       {% endif %}
     </div>
     {% endfor %}
   </div>
   {% else %}
-  <div class="text-center py-16 text-[#B5ADA0]">
+  <div class="text-center py-16 text-[#9AA29D]">
     <i class="ph ph-tag text-5xl mb-3 block"></i>
     <p class="text-base">{{ t('tag_no_communities') }}</p>
   </div>
@@ -154,13 +152,13 @@
     {% for city_sec in country_sec.cities %}
     <div class="mb-6" data-city="{{ city_sec.city }}">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="text-base font-semibold text-[#4A4441] flex items-center gap-1.5">
-          <i class="ph ph-map-pin text-[#C2613A] text-sm"></i>
-          <a href="{{ city_sec.city_url }}" class="hover:text-[#8A4226] transition-colors">{{ city_sec.city }}</a>
-          <span class="text-xs font-normal text-[#8C8478]">{{ t('n_communities', n=city_sec.total) }}</span>
+        <h3 class="text-base font-semibold text-[#3B413D] flex items-center gap-1.5">
+          <i class="ph ph-map-pin text-[#1E6B50] text-sm"></i>
+          <a href="{{ city_sec.city_url }}" class="hover:text-[#134A37] transition-colors">{{ city_sec.city }}</a>
+          <span class="text-xs font-normal text-[#646C67]">{{ t('n_communities', n=city_sec.total) }}</span>
         </h3>
         <a href="{{ city_sec.city_url }}"
-           class="text-xs font-medium text-[#A8512F] hover:text-[#8A4226] transition-colors">
+           class="text-xs font-medium text-[#185A43] hover:text-[#134A37] transition-colors">
           {{ t('explore_see_all', n=city_sec.total) }}
         </a>
       </div>
@@ -168,23 +166,23 @@
       <div class="flex flex-wrap gap-1.5 mb-3">
         {% for chip in city_sec.topic_chips %}
         <a href="{{ chip.url }}"
-           class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-white border-[#EAE5DB] text-[#6A6259] hover:border-[#FAD9C7] hover:text-[#4C2615] hover:bg-[#FDF0EA]/50 transition-colors">
+           class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-white border-[#E1E5E2] text-[#4F5752] hover:border-[#C4DDD0] hover:text-[#0D3527] hover:bg-[#E8F2EC]/50 transition-colors">
           <i class="ph ph-{{ chip.icon }}"></i>
           {{ chip.label }}
-          <span class="font-bold text-[#C2613A] ml-0.5">{{ chip.count }}</span>
+          <span class="font-bold text-[#1E6B50] ml-0.5">{{ chip.count }}</span>
         </a>
         {% endfor %}
       </div>
       {% endif %}
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {% for r in city_sec.records %}
-        <a href="{{ r.community_url }}" class="block bg-white rounded-lg border border-[#EAE5DB] p-3 flex flex-col gap-1.5 shadow-sm hover:border-[#E88E6B] hover:bg-[#FDF0EA]/40 hover:shadow-md transition-all">
-          <h4 class="font-semibold text-[#1C1917] text-xs leading-snug flex items-baseline gap-1">
-            <i class="ph ph-{{ topic_icons.get(r.topic, 'circle') }} text-[#C2613A] text-xs shrink-0"></i>
+        <a href="{{ r.community_url }}" class="block bg-white rounded-lg border border-[#E1E5E2] p-3 flex flex-col gap-1.5 shadow-sm hover:border-[#5E9E84] hover:bg-[#E8F2EC]/40 hover:shadow-md transition-all">
+          <h4 class="font-semibold text-[#1A1D1B] text-xs leading-snug flex items-baseline gap-1">
+            <i class="ph ph-{{ topic_icons.get(r.topic, 'circle') }} text-[#1E6B50] text-xs shrink-0"></i>
             <span>{{ r.name }}</span>
           </h4>
           {% if r.short_description or r.description %}
-          <p class="text-[11px] text-[#6A6259] leading-relaxed line-clamp-2">{{ r.short_description or r.description }}</p>
+          <p class="text-[11px] text-[#4F5752] leading-relaxed line-clamp-2">{{ r.short_description or r.description }}</p>
           {% endif %}
         </a>
         {% endfor %}
@@ -197,9 +195,9 @@
   <!-- No city, no data -->
   {% elif not city %}
   <div class="text-center py-20">
-    <i class="ph ph-buildings text-[#D8D1C4] text-6xl mb-4 block"></i>
-    <h2 class="text-xl font-semibold text-[#4A4441] mb-3">{{ t('explore_choose_city') }}</h2>
-    <a href="/" class="inline-block px-6 py-3 bg-[#A8512F] text-white rounded-lg font-medium hover:bg-[#8A4226] transition-colors">
+    <i class="ph ph-buildings text-[#CDD3CF] text-6xl mb-4 block"></i>
+    <h2 class="text-xl font-semibold text-[#3B413D] mb-3">{{ t('explore_choose_city') }}</h2>
+    <a href="/" class="inline-block px-6 py-3 bg-[#185A43] text-white rounded-lg font-medium hover:bg-[#134A37] transition-colors">
       {{ t('explore_back_search') }}
     </a>
   </div>
@@ -207,7 +205,7 @@
   <!-- Results (city + optional topic filter) -->
   {% else %}
 
-  <div class="flex items-center justify-end mb-6 flex-wrap gap-2 border-b border-[#EAE5DB] pb-4">
+  <div class="flex items-center justify-end mb-6 flex-wrap gap-2 border-b border-[#E1E5E2] pb-4">
 
     <!-- Topic chips: URL-mode when topic active, JS-mode otherwise -->
     {% if selected_topics %}
@@ -220,27 +218,27 @@
           {% if t.name in selected_topics %}checked{% endif %}
           onchange="this.form.submit()">
         <span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer
-          peer-checked:bg-[#FDF0EA] peer-checked:border-[#C2613A] peer-checked:text-[#4C2615]
-          border-[#EAE5DB] bg-white text-[#6A6259] hover:border-[#FAD9C7] hover:bg-[#FDF0EA]/50">
+          peer-checked:bg-[#E8F2EC] peer-checked:border-[#1E6B50] peer-checked:text-[#0D3527]
+          border-[#E1E5E2] bg-white text-[#4F5752] hover:border-[#C4DDD0] hover:bg-[#E8F2EC]/50">
           <i class="ph ph-{{ topic_icons.get(t.name, 'circle') }}"></i>
           {{ topic_labels.get(t.name, t.name.replace('_',' ').title()) }}
-          <span class="ml-0.5 font-bold text-[#C2613A]">{{ available_topics[t.name] }}</span>
+          <span class="ml-0.5 font-bold text-[#1E6B50]">{{ available_topics[t.name] }}</span>
         </span>
       </label>
       {% endif %}
       {% endfor %}
     </form>
     {% else %}
-    <div class="flex items-center gap-1.5 flex-wrap sticky top-[57px] z-10 bg-[#FAFAF8]/95 backdrop-blur py-2" id="topic-chips">
+    <div class="flex items-center gap-1.5 flex-wrap sticky top-[57px] z-10 bg-[#FFFFFF]/95 backdrop-blur py-2" id="topic-chips">
       {% for t in topics %}
       {% if available_topics.get(t.name, 0) > 0 %}
       <button type="button" onclick="filterTopic('{{ t.name }}')"
         data-topic="{{ t.name }}"
         class="topic-chip inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors
-          bg-white border-[#EAE5DB] text-[#6A6259] hover:border-[#FAD9C7] hover:text-[#4C2615] hover:bg-[#FDF0EA]/50">
+          bg-white border-[#E1E5E2] text-[#4F5752] hover:border-[#C4DDD0] hover:text-[#0D3527] hover:bg-[#E8F2EC]/50">
         <i class="ph ph-{{ topic_icons.get(t.name, 'circle') }}"></i>
         {{ topic_labels.get(t.name, t.name.replace('_',' ').title()) }}
-        <span class="font-bold text-[#C2613A]">{{ available_topics[t.name] }}</span>
+        <span class="font-bold text-[#1E6B50]">{{ available_topics[t.name] }}</span>
       </button>
       {% endif %}
       {% endfor %}
@@ -249,29 +247,29 @@
   </div>
 
   {% if total == 0 %}
-  <div class="bg-white rounded-lg border border-[#EAE5DB] p-12 text-center mb-8">
-    <i class="ph ph-magnifying-glass text-[#D8D1C4] text-5xl mb-4 block"></i>
-    <h3 class="text-lg font-semibold text-[#4A4441] mb-2">{{ t('explore_no_data_title') }}</h3>
-    <p class="text-sm text-[#8C8478] max-w-xs mx-auto">{{ t('explore_no_data_desc') }}</p>
+  <div class="bg-white rounded-lg border border-[#E1E5E2] p-12 text-center mb-8">
+    <i class="ph ph-magnifying-glass text-[#CDD3CF] text-5xl mb-4 block"></i>
+    <h3 class="text-lg font-semibold text-[#3B413D] mb-2">{{ t('explore_no_data_title') }}</h3>
+    <p class="text-sm text-[#646C67] max-w-xs mx-auto">{{ t('explore_no_data_desc') }}</p>
   </div>
   {% else %}
 
-  {{ lf.filter_bar(t, target='#community-grid', item='.community-card') }}
+  {{ lf.filter_bar(t, target='#community-grid', item='.community-card', az=false) }}
 
   <div id="community-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
     {% for section in sections %}
     {% for r in section.records %}
-    <div class="community-card relative bg-white rounded-lg border border-[#EAE5DB] p-5 shadow-sm hover:border-[#E88E6B] hover:bg-[#FDF0EA]/30 hover:shadow-md transition-all flex flex-col gap-3"
+    <div class="community-card relative bg-white rounded-lg border border-[#E1E5E2] p-5 shadow-sm hover:border-[#5E9E84] hover:bg-[#E8F2EC]/30 hover:shadow-md transition-all flex flex-col gap-3"
          data-name="{{ r.name }}" data-topic="{{ section.topic }}">
       <a href="{{ r.community_url }}" class="absolute inset-0 rounded-lg" aria-label="{{ r.name }}"></a>
 
-      <h3 class="font-semibold text-[#1C1917] text-base leading-snug flex items-baseline gap-1.5">
-        <i class="ph ph-{{ section.icon }} text-[#C2613A] text-sm shrink-0"></i>
+      <h3 class="font-semibold text-[#1A1D1B] text-base leading-snug flex items-baseline gap-1.5">
+        <i class="ph ph-{{ section.icon }} text-[#1E6B50] text-sm shrink-0"></i>
         <span>{{ r.name }}</span>
       </h3>
 
       {% if r.short_description or r.description %}
-      <p class="text-sm text-[#6A6259] leading-relaxed line-clamp-2">{{ r.short_description or r.description }}</p>
+      <p class="text-sm text-[#4F5752] leading-relaxed line-clamp-2">{{ r.short_description or r.description }}</p>
       {% endif %}
 
     </div>
@@ -283,42 +281,42 @@
 
   <!-- Venues section (city + single topic only) -->
   {% if topic_venues %}
-  <div class="mt-8 pt-6 border-t border-[#EAE5DB]">
-    <h2 class="text-base font-semibold text-[#1C1917] mb-4 flex items-center gap-2">
-      <i class="ph ph-map-pin text-[#C2613A]"></i>
+  <div class="mt-8 pt-6 border-t border-[#E1E5E2]">
+    <h2 class="text-base font-semibold text-[#1A1D1B] mb-4 flex items-center gap-2">
+      <i class="ph ph-map-pin text-[#1E6B50]"></i>
       {% if selected_topics | length == 1 %}
         {{ topic_labels.get(selected_topics[0], selected_topics[0].replace('_',' ').title()) }} {{ t('explore_venues') }}
       {% else %}
         {{ t('explore_venues') }}
       {% endif %}
-      <span class="text-xs text-[#8C8478] font-normal">{{ topic_venues | length }}</span>
+      <span class="text-xs text-[#646C67] font-normal">{{ topic_venues | length }}</span>
     </h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {% for v in topic_venues %}
-      <div class="bg-white rounded-lg border border-[#EAE5DB] p-4 flex flex-col gap-2">
+      <div class="bg-white rounded-lg border border-[#E1E5E2] p-4 flex flex-col gap-2">
         <div class="flex items-start justify-between gap-2">
-          <h3 class="font-semibold text-[#1C1917] text-sm leading-snug">
+          <h3 class="font-semibold text-[#1A1D1B] text-sm leading-snug">
             <a href="/{{ v.city | slugify }}/helyszin/{{ v.name | slugify }}"
-               class="hover:text-[#A8512F] transition-colors">{{ v.name }}</a>
+               class="hover:text-[#185A43] transition-colors">{{ v.name }}</a>
           </h3>
           {% if v.venue_type %}
-          <span class="shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded bg-[#F5F2EC] text-[#8C8478] border border-[#EAE5DB] whitespace-nowrap">
+          <span class="shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded bg-[#F2F4F2] text-[#646C67] border border-[#E1E5E2] whitespace-nowrap">
             {{ venue_type_labels.get(v.venue_type, v.venue_type.replace('_',' ')) }}
           </span>
           {% endif %}
         </div>
         {% if v.description %}
-        <p class="text-xs text-[#6A6259] leading-relaxed line-clamp-3">{{ v.description }}</p>
+        <p class="text-xs text-[#4F5752] leading-relaxed line-clamp-3">{{ v.description }}</p>
         {% endif %}
         {% if v.address %}
-        <div class="flex items-start gap-1.5 text-xs text-[#8C8478] mt-auto">
-          <i class="ph ph-map-pin shrink-0 text-[#B5ADA0] mt-0.5"></i>
+        <div class="flex items-start gap-1.5 text-xs text-[#646C67] mt-auto">
+          <i class="ph ph-map-pin shrink-0 text-[#9AA29D] mt-0.5"></i>
           <span>{{ v.address }}</span>
         </div>
         {% endif %}
         {% if v.website %}
         <a href="{{ v.website }}" target="_blank" rel="noopener"
-           class="text-xs text-[#A8512F] hover:text-[#8A4226] hover:underline truncate">
+           class="text-xs text-[#185A43] hover:text-[#134A37] hover:underline truncate">
           {{ v.website | replace('https://','') | replace('http://','') | truncate(40) }}
         </a>
         {% endif %}
@@ -332,19 +330,19 @@
   {% if city and selected_topics | length == 1 %}
   <div class="mt-6 text-center">
     <a href="{{ submit_url }}?city={{ city | urlencode }}&topic={{ selected_topics[0] | urlencode }}"
-       class="inline-flex items-center gap-2 text-sm text-[#A8512F] hover:text-[#8A4226] hover:underline transition-colors">
+       class="inline-flex items-center gap-2 text-sm text-[#185A43] hover:text-[#134A37] hover:underline transition-colors">
       <i class="ph ph-plus-circle"></i> {{ t('explore_submit_cta') }}
     </a>
   </div>
   {% endif %}
 
   <!-- Subscribe section -->
-  <div class="mt-8 bg-white rounded-lg border border-[#EAE5DB] p-6 sm:p-8">
+  <div class="mt-8 bg-white rounded-lg border border-[#E1E5E2] p-6 sm:p-8">
     <div class="max-w-lg">
-      <h3 class="text-lg font-bold text-[#1C1917] mb-1 flex items-center gap-2">
-        <i class="ph ph-bell-ringing text-[#C2613A]"></i> {{ t('subscribe_title') }}
+      <h3 class="text-lg font-bold text-[#1A1D1B] mb-1 flex items-center gap-2">
+        <i class="ph ph-bell-ringing text-[#1E6B50]"></i> {{ t('subscribe_title') }}
       </h3>
-      <p class="text-sm text-[#8C8478] mb-5">
+      <p class="text-sm text-[#646C67] mb-5">
         {% if selected_topics | length == 1 %}
           {{ t('subscribe_desc_topic', topic=topic_labels.get(selected_topics[0], selected_topics[0].replace('_',' ').title()), city=city) }}
         {% elif selected_topics %}
@@ -364,14 +362,14 @@
           name="email"
           required
           placeholder="your@email.com"
-          class="flex-1 px-4 py-2.5 border border-[#D8D1C4] rounded-lg text-sm focus:outline-none focus:border-[#C2613A] focus:ring-2 focus:ring-[#C2613A]/20 bg-white transition-colors placeholder-[#B5ADA0] text-[#1C1917]"
+          class="flex-1 px-4 py-2.5 border border-[#CDD3CF] rounded-lg text-sm focus:outline-none focus:border-[#1E6B50] focus:ring-2 focus:ring-[#1E6B50]/20 bg-white transition-colors placeholder-[#9AA29D] text-[#1A1D1B]"
         >
         <button type="submit"
-          class="px-6 py-2.5 bg-[#A8512F] text-white text-sm font-semibold rounded-lg hover:bg-[#8A4226] active:bg-[#8A4226] transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#A8512F]/50 focus:ring-offset-1">
+          class="px-6 py-2.5 bg-[#185A43] text-white text-sm font-semibold rounded-lg hover:bg-[#134A37] active:bg-[#134A37] transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#185A43]/50 focus:ring-offset-1">
           {{ t('subscribe_btn') }}
         </button>
       </form>
-      <p class="mt-2 text-xs text-[#B5ADA0]">{{ t('subscribe_no_spam') }}</p>
+      <p class="mt-2 text-xs text-[#9AA29D]">{{ t('subscribe_no_spam') }}</p>
     </div>
   </div>
 
@@ -429,12 +427,12 @@
     var chips = document.querySelectorAll('.topic-chip');
     chips.forEach(function(c) {
       var isActive = active.has(c.dataset.topic);
-      c.classList.toggle('bg-[#FDF0EA]', isActive);
-      c.classList.toggle('border-[#C2613A]', isActive);
-      c.classList.toggle('text-[#4C2615]', isActive);
+      c.classList.toggle('bg-[#E8F2EC]', isActive);
+      c.classList.toggle('border-[#1E6B50]', isActive);
+      c.classList.toggle('text-[#0D3527]', isActive);
       c.classList.toggle('bg-white', !isActive);
-      c.classList.toggle('border-[#EAE5DB]', !isActive);
-      c.classList.toggle('text-[#6A6259]', !isActive);
+      c.classList.toggle('border-[#E1E5E2]', !isActive);
+      c.classList.toggle('text-[#4F5752]', !isActive);
     });
     var cards = document.querySelectorAll('.community-card[data-topic]');
     var visible = 0;
@@ -460,17 +458,17 @@
 </script>
 {% if nearby_cities %}
 <div class="max-w-6xl mx-auto px-4 sm:px-6 pb-10">
-  <div class="mt-4 pt-6 border-t border-[#EAE5DB]">
-    <h2 class="text-base font-semibold text-[#1C1917] mb-3 flex items-center gap-2">
-      <i class="ph ph-map-trifold text-[#C2613A]"></i>{{ t('nearby_cities_heading') }}
+  <div class="mt-4 pt-6 border-t border-[#E1E5E2]">
+    <h2 class="text-base font-semibold text-[#1A1D1B] mb-3 flex items-center gap-2">
+      <i class="ph ph-map-trifold text-[#1E6B50]"></i>{{ t('nearby_cities_heading') }}
     </h2>
     <div class="flex flex-wrap gap-2">
       {% for nc in nearby_cities %}
       <a href="/{{ nc.slug }}"
-         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-white border border-[#EAE5DB] hover:border-[#E88E6B] hover:bg-[#FDF0EA] transition-colors">
-        <span class="font-medium text-[#2E2B29]">{{ nc.name }}</span>
-        <span class="text-xs font-bold text-[#C2613A]">{{ nc.count }}</span>
-        <span class="text-[11px] text-[#B5ADA0]">{{ nc.km }} km</span>
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-white border border-[#E1E5E2] hover:border-[#5E9E84] hover:bg-[#E8F2EC] transition-colors">
+        <span class="font-medium text-[#232825]">{{ nc.name }}</span>
+        <span class="text-xs font-bold text-[#1E6B50]">{{ nc.count }}</span>
+        <span class="text-[11px] text-[#9AA29D]">{{ nc.km }} km</span>
       </a>
       {% endfor %}
     </div>

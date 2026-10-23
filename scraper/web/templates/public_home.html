@@ -3,13 +3,13 @@
 {% block og_desc %}{{ t('home_og_desc', total=total_records, cities=cities | length) }}{% endblock %}
 {% block content %}
 
-<!-- Gradient hero — full bleed -->
+<!-- Page head — the one large thing on the page -->
 <div class="brand-gradient relative overflow-hidden">
-  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14 relative">
-    <h1 class="text-3xl sm:text-4xl font-extrabold tracking-[-0.03em] text-white leading-[1.1] mb-4">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16 relative">
+    <h1 class="text-4xl sm:text-6xl font-extrabold tracking-[-0.02em] text-white leading-[1.05] mb-5 max-w-3xl">
       {{ t('home_title') }}
     </h1>
-    <p class="text-base text-white/80 leading-relaxed max-w-lg">
+    <p class="text-lg text-white/80 leading-relaxed max-w-xl">
       {{ t('home_subtitle') }}
     </p>
     <p class="text-sm text-white/55 mt-3 font-medium">
@@ -27,7 +27,7 @@
       <!-- Cities near you (JS-populated) -->
       <div id="cities-near-you" class="space-y-3 hidden">
         <div class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-[#1C1917]">{{ t('home_cities_near_you') }}</h2>
+          <h2 class="text-sm font-semibold text-[#1A1D1B]">{{ t('home_cities_near_you') }}</h2>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="nearby-cities-grid"></div>
       </div>
@@ -35,7 +35,7 @@
       <!-- Detect location prompt -->
       <div id="detect-location-wrap" class="flex items-center">
         <button id="detect-location-btn"
-          class="flex items-center gap-1.5 text-xs font-medium text-[#A8512F] hover:text-[#8A4226] transition-colors focus:outline-none focus:ring-2 focus:ring-[#A8512F]/40 focus:rounded">
+          class="flex items-center gap-1.5 text-xs font-medium text-[#185A43] hover:text-[#134A37] transition-colors focus:outline-none focus:ring-2 focus:ring-[#185A43]/40 focus:rounded">
           <i class="ph ph-crosshair text-sm"></i>
           {{ t('home_detect_location') }}
         </button>
@@ -47,17 +47,17 @@
       <div class="space-y-3">
         <a href="{{ cities_url }}/{{ country | slugify }}"
            class="group inline-flex items-center gap-1">
-          <h2 class="text-sm font-semibold text-[#1C1917] group-hover:text-[#8A4226] transition-colors">{{ country }}</h2>
-          <i class="ph ph-caret-right text-xs text-[#B5ADA0] group-hover:text-[#8A4226] transition-colors"></i>
+          <h2 class="text-sm font-semibold text-[#1A1D1B] group-hover:text-[#134A37] transition-colors">{{ country }}</h2>
+          <i class="ph ph-caret-right text-xs text-[#9AA29D] group-hover:text-[#134A37] transition-colors"></i>
         </a>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {% for city in cities %}
           <a href="/{{ city.slug }}"
-             class="flex items-center justify-between bg-white rounded-lg border border-[#EAE5DB] px-3 py-2.5
-                    hover:border-[#E88E6B] hover:bg-[#FDF0EA] transition-colors group">
-            <span class="text-sm font-semibold text-[#2E2B29] group-hover:text-[#8A4226] truncate min-w-0">{{ city.name }}</span>
+             class="flex items-center justify-between bg-white rounded-lg border border-[#E1E5E2] px-3 py-2.5
+                    hover:border-[#5E9E84] hover:bg-[#E8F2EC] transition-colors group">
+            <span class="text-sm font-semibold text-[#232825] group-hover:text-[#134A37] truncate min-w-0">{{ city.name }}</span>
             {% if city.count > 0 %}
-            <span class="text-xs font-bold text-[#C2613A] bg-[#FDF0EA] border border-[#FAD9C7] rounded-full px-2 py-0.5 shrink-0 ml-2">{{ city.count }}</span>
+            <span class="text-xs font-bold text-[#1E6B50] bg-[#E8F2EC] border border-[#C4DDD0] rounded-full px-2 py-0.5 shrink-0 ml-2">{{ city.count }}</span>
             {% endif %}
           </a>
           {% endfor %}
@@ -67,26 +67,26 @@
       {% elif hu_city_list %}
       <div class="space-y-4">
         <div class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-[#1C1917]">{{ t('home_popular_cities') }}</h2>
-          <a href="{{ map_url }}" class="text-xs font-medium text-[#A8512F] hover:text-[#8A4226] transition-colors">
+          <h2 class="text-sm font-semibold text-[#1A1D1B]">{{ t('home_popular_cities') }}</h2>
+          <a href="{{ map_url }}" class="text-xs font-medium text-[#185A43] hover:text-[#134A37] transition-colors">
             {{ t('nav_map') }}
           </a>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {% for city in hu_city_list %}
           <a href="/{{ city.slug }}"
-             class="flex items-center justify-between bg-white rounded-lg border border-[#EAE5DB] px-3 py-2.5
-                    hover:border-[#E88E6B] hover:bg-[#FDF0EA] transition-colors group">
-            <span class="text-sm font-semibold text-[#2E2B29] group-hover:text-[#8A4226] truncate min-w-0">{{ city.name }}</span>
+             class="flex items-center justify-between bg-white rounded-lg border border-[#E1E5E2] px-3 py-2.5
+                    hover:border-[#5E9E84] hover:bg-[#E8F2EC] transition-colors group">
+            <span class="text-sm font-semibold text-[#232825] group-hover:text-[#134A37] truncate min-w-0">{{ city.name }}</span>
             {% if city.count > 0 %}
-            <span class="text-xs font-bold text-[#C2613A] bg-[#FDF0EA] border border-[#FAD9C7] rounded-full px-2 py-0.5 shrink-0 ml-2">{{ city.count }}</span>
+            <span class="text-xs font-bold text-[#1E6B50] bg-[#E8F2EC] border border-[#C4DDD0] rounded-full px-2 py-0.5 shrink-0 ml-2">{{ city.count }}</span>
             {% endif %}
           </a>
           {% endfor %}
         </div>
         <div class="pt-1">
           <a href="{{ cities_url }}"
-             class="inline-flex items-center gap-1.5 text-xs font-medium text-[#A8512F] hover:text-[#8A4226] transition-colors">
+             class="inline-flex items-center gap-1.5 text-xs font-medium text-[#185A43] hover:text-[#134A37] transition-colors">
             <i class="ph ph-list-bullets"></i>
             {{ t('home_all_cities') }}
           </a>
@@ -96,15 +96,15 @@
 
       {% if recent_communities %}
       <div class="space-y-3 pt-2">
-        <h2 class="text-sm font-semibold text-[#1C1917]">{{ t('home_recent_heading') }}</h2>
+        <h2 class="text-sm font-semibold text-[#1A1D1B]">{{ t('home_recent_heading') }}</h2>
         <div class="flex flex-col gap-1.5">
           {% for r in recent_communities %}
           <a href="/{{ r.city | slugify }}/{{ r.name | slugify }}"
-             class="flex items-center gap-2.5 bg-white rounded-lg border border-[#EAE5DB] px-3 py-2
-                    hover:border-[#E88E6B] hover:bg-[#FDF0EA] transition-colors group min-w-0">
-            <i class="ph ph-{{ topic_icons.get(r.topic, 'circle') }} text-[#C2613A] text-sm shrink-0"></i>
-            <span class="text-sm font-medium text-[#2E2B29] group-hover:text-[#8A4226] truncate">{{ r.name }}</span>
-            <span class="text-xs text-[#8C8478] shrink-0 ml-auto">{{ r.city }}</span>
+             class="flex items-center gap-2.5 bg-white rounded-lg border border-[#E1E5E2] px-3 py-2
+                    hover:border-[#5E9E84] hover:bg-[#E8F2EC] transition-colors group min-w-0">
+            <i class="ph ph-{{ topic_icons.get(r.topic, 'circle') }} text-[#1E6B50] text-sm shrink-0"></i>
+            <span class="text-sm font-medium text-[#232825] group-hover:text-[#134A37] truncate">{{ r.name }}</span>
+            <span class="text-xs text-[#646C67] shrink-0 ml-auto">{{ r.city }}</span>
           </a>
           {% endfor %}
         </div>
@@ -113,12 +113,12 @@
     </section>
 
     <!-- Right: search form (order-1 on mobile so it appears before cities) -->
-    <section class="bg-white rounded-xl border border-[#EAE5DB] p-5 sm:p-6 shadow-sm order-1 lg:order-2">
+    <section class="bg-white rounded-xl border border-[#E1E5E2] p-5 sm:p-6 shadow-sm order-1 lg:order-2">
       <form action="{{ explore_url }}" method="GET" id="main-form">
 
         <!-- City input -->
         <div class="mb-6">
-          <label for="city-input" class="block text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-2">
+          <label for="city-input" class="block text-sm font-semibold text-[#1A1D1B] mb-2">
             {{ t('home_city_label') }}
           </label>
           <div class="relative">
@@ -131,16 +131,16 @@
               value="{{ selected_city }}"
               placeholder="{{ t('home_city_placeholder') }}"
               autocomplete="off"
-              class="w-full pl-3 pr-10 py-3 text-base border border-[#D8D1C4] rounded-lg
-                focus:outline-none focus:border-[#C2613A] focus:ring-2 focus:ring-[#C2613A]/20 transition-colors
-                bg-white placeholder-[#B5ADA0] text-[#1C1917]"
+              class="w-full pl-3 pr-10 py-3 text-base border border-[#CDD3CF] rounded-lg
+                focus:outline-none focus:border-[#1E6B50] focus:ring-2 focus:ring-[#1E6B50]/20 transition-colors
+                bg-white placeholder-[#9AA29D] text-[#1A1D1B]"
             >
             <button type="button" id="geo-btn" title="{{ t('home_detect_location') }}" aria-label="{{ t('home_detect_location') }}"
-              class="absolute right-2.5 inset-y-0 my-auto flex items-center justify-center w-6 h-6 text-[#B5ADA0] hover:text-[#C2613A] transition-colors focus:outline-none focus:ring-2 focus:ring-[#C2613A]/40 focus:rounded">
+              class="absolute right-2.5 inset-y-0 my-auto flex items-center justify-center w-6 h-6 text-[#9AA29D] hover:text-[#1E6B50] transition-colors focus:outline-none focus:ring-2 focus:ring-[#1E6B50]/40 focus:rounded">
               <i id="geo-icon" class="ph ph-crosshair text-xl"></i>
             </button>
           </div>
-          <p id="city-hint" class="mt-2 text-xs text-[#8C8478] min-h-[1rem]">
+          <p id="city-hint" class="mt-2 text-xs text-[#646C67] min-h-[1rem]">
             <span id="city-count-text"></span>
           </p>
         </div>
@@ -148,9 +148,9 @@
         <!-- Topic chips -->
         <div class="mb-6">
           <div class="flex items-center justify-between mb-3">
-            <label class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em]">{{ t('home_interests_label') }}</label>
+            <label class="text-sm font-semibold text-[#1A1D1B]">{{ t('home_interests_label') }}</label>
             <button type="button" id="clear-topics"
-              class="text-xs text-[#A8512F] hover:text-[#8A4226] font-medium hidden transition-colors focus:outline-none focus:ring-2 focus:ring-[#A8512F]/40 focus:rounded">
+              class="text-xs text-[#185A43] hover:text-[#134A37] font-medium hidden transition-colors focus:outline-none focus:ring-2 focus:ring-[#185A43]/40 focus:rounded">
               {{ t('home_clear_all') }}
             </button>
           </div>
@@ -160,14 +160,14 @@
             <label class="cursor-pointer select-none" data-topic="{{ topic.name }}" data-slug="{{ topic_url_slugs.get(topic.name, topic.name) }}">
               <input type="checkbox" name="topic" value="{{ topic.name }}" class="sr-only peer">
               <div class="relative flex items-center gap-2 min-h-[44px] px-2.5 py-2
-                rounded-lg border border-[#EAE5DB] bg-white
-                peer-checked:border-[#C2613A] peer-checked:bg-[#FDF0EA] peer-checked:ring-1 peer-checked:ring-[#C2613A]
-                hover:border-[#FAD9C7] hover:bg-[#FDF0EA]/50 transition-colors cursor-pointer">
-                <i class="ph ph-{{ topic_icons.get(topic.name, 'circle') }} text-lg text-[#8C8478] peer-checked:text-[#C2613A] leading-none shrink-0"></i>
-                <span class="text-xs font-medium text-[#4A4441] leading-tight min-w-0 pr-5">
+                rounded-lg border border-[#E1E5E2] bg-white
+                peer-checked:border-[#1E6B50] peer-checked:bg-[#E8F2EC] peer-checked:ring-1 peer-checked:ring-[#1E6B50]
+                hover:border-[#C4DDD0] hover:bg-[#E8F2EC]/50 transition-colors cursor-pointer">
+                <i class="ph ph-{{ topic_icons.get(topic.name, 'circle') }} text-lg text-[#646C67] peer-checked:text-[#1E6B50] leading-none shrink-0"></i>
+                <span class="text-xs font-medium text-[#3B413D] leading-tight min-w-0 pr-5">
                   {{ topic_labels.get(topic.name, topic.name.replace('_',' ').title()) }}
                 </span>
-                <span class="count-badge absolute top-1.5 right-2 text-[11px] font-bold text-[#C2613A] leading-none">
+                <span class="count-badge absolute top-1.5 right-2 text-[11px] font-bold text-[#1E6B50] leading-none">
                   {%- set cnt = topic_counts.get(topic.name, 0) -%}
                   {%- if cnt > 0 %}{{ cnt }}{% endif -%}
                 </span>
@@ -179,8 +179,8 @@
 
         <!-- Explore button -->
         <button type="submit"
-          class="w-full py-3 bg-[#A8512F] text-white font-semibold rounded-lg
-            hover:bg-[#8A4226] active:bg-[#8A4226] transition-colors text-base focus:outline-none focus:ring-2 focus:ring-[#A8512F]/50 focus:ring-offset-1">
+          class="w-full py-3 bg-[#185A43] text-white font-semibold rounded-lg
+            hover:bg-[#134A37] active:bg-[#134A37] transition-colors text-base focus:outline-none focus:ring-2 focus:ring-[#185A43]/50 focus:ring-offset-1">
           {{ t('home_explore_btn') }}
         </button>
 
@@ -295,10 +295,10 @@ function _renderNearbyCities(lat, lng) {
   const grid = document.getElementById('nearby-cities-grid');
   grid.innerHTML = nearest.map(c => `
     <a href="/${c.slug}"
-       class="flex items-center justify-between bg-white rounded-lg border border-[#EAE5DB] px-3 py-2.5
-              hover:border-[#E88E6B] hover:bg-[#FDF0EA] transition-colors group">
-      <span class="text-sm font-semibold text-[#2E2B29] group-hover:text-[#8A4226] truncate min-w-0">${c.name}</span>
-      ${c.count > 0 ? `<span class="text-xs font-bold text-[#C2613A] bg-[#FDF0EA] border border-[#FAD9C7] rounded-full px-2 py-0.5 shrink-0 ml-2">${c.count}</span>` : ''}
+       class="flex items-center justify-between bg-white rounded-lg border border-[#E1E5E2] px-3 py-2.5
+              hover:border-[#5E9E84] hover:bg-[#E8F2EC] transition-colors group">
+      <span class="text-sm font-semibold text-[#232825] group-hover:text-[#134A37] truncate min-w-0">${c.name}</span>
+      ${c.count > 0 ? `<span class="text-xs font-bold text-[#1E6B50] bg-[#E8F2EC] border border-[#C4DDD0] rounded-full px-2 py-0.5 shrink-0 ml-2">${c.count}</span>` : ''}
     </a>`).join('');
   document.getElementById('cities-near-you').classList.remove('hidden');
   document.getElementById('detect-location-wrap').classList.add('hidden');
@@ -336,7 +336,7 @@ document.getElementById('main-form').addEventListener('submit', function(e) {
   if (hit) { cityInput.value = hit.name; return; }
   e.preventDefault();
   cityCountText.textContent = '';
-  hint.innerHTML = '<span style="color:#C2613A">{{ t("home_city_unknown") }}</span>';
+  hint.innerHTML = '<span style="color:#1E6B50">{{ t("home_city_unknown") }}</span>';
   cityAc && cityAc.close();
   cityInput.focus();
 });

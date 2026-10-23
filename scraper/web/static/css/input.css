@@ -2,35 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Design Tokens — Warm Editorial Minimalism ──────────────────────────── */
-/* Philosophy: Notion/Craft-inspired. Warm paper backgrounds, ink-dark text,  */
-/* terracotta accent. No dark mode (out of scope per brief).                  */
+/* ─── Design Tokens — Town Notice Board ──────────────────────────────────── */
+/* White paper, ink text, one town-green accent, one legible typeface.       */
+/* Replaced the terracotta-on-cream look on 2026-10-23. No dark mode.        */
 
 :root {
   /* ── Color: Backgrounds ── */
-  --color-bg-primary:     #FAFAF8;   /* warm off-white — page canvas */
+  --color-bg-primary:     #FFFFFF;   /* warm off-white — page canvas */
   --color-bg-secondary:   #FFFFFF;   /* card/panel surface */
-  --color-bg-tertiary:    #F5F2EC;   /* input wells, subtle insets */
-  --color-bg-inverse:     #1C1917;   /* dark surface (used sparingly) */
+  --color-bg-tertiary:    #F2F4F2;   /* input wells, subtle insets */
+  --color-bg-inverse:     #1A1D1B;   /* dark surface (used sparingly) */
 
   /* ── Color: Text ── */
-  --color-text-primary:   #1C1917;   /* ink dark — main body & headings */
-  --color-text-secondary: #6A6259;   /* warm mid-gray — supporting copy */
-  --color-text-tertiary:  #8C8478;   /* placeholder, disabled, captions */
-  --color-text-inverse:   #FAFAF8;   /* text on dark backgrounds */
-  --color-text-link:      #C2613A;   /* terracotta links */
+  --color-text-primary:   #1A1D1B;   /* ink dark — main body & headings */
+  --color-text-secondary: #4F5752;   /* warm mid-gray — supporting copy */
+  --color-text-tertiary:  #646C67;   /* placeholder, disabled, captions */
+  --color-text-inverse:   #FFFFFF;   /* text on dark backgrounds */
+  --color-text-link:      #1E6B50;   /* town-green links */
 
   /* ── Color: Borders ── */
-  --color-border-primary:   #EAE5DB; /* default card/panel border */
-  --color-border-secondary: #F5F2EC; /* very subtle — dividers */
-  --color-border-focus:     #C2613A; /* terracotta focus ring */
+  --color-border-primary:   #E1E5E2; /* default card/panel border */
+  --color-border-secondary: #F2F4F2; /* very subtle — dividers */
+  --color-border-focus:     #1E6B50; /* green focus ring */
 
-  /* ── Color: Accent — Terracotta ── */
-  --color-accent-primary:        #C2613A;
-  --color-accent-primary-hover:  #A8512F;
-  --color-accent-primary-active: #8A4226;
-  --color-accent-primary-subtle: #FDF0EA; /* tinted bg for checked states */
-  --color-accent-primary-muted:  #FAD9C7; /* border on checked states */
+  /* ── Color: Accent — Town green ── */
+  --color-accent-primary:        #1E6B50;
+  --color-accent-primary-hover:  #185A43;
+  --color-accent-primary-active: #134A37;
+  --color-accent-primary-subtle: #E8F2EC; /* tinted bg for checked states */
+  --color-accent-primary-muted:  #C4DDD0; /* border on checked states */
 
   /* ── Color: Status ── */
   --color-status-success:         #16A34A;
@@ -47,11 +47,11 @@
   --color-status-info-border:     #DBEAFE;
 
   /* ── Color: Surface ── */
-  --color-surface-overlay: rgb(28 25 23 / 0.4); /* modal backdrop */
+  --color-surface-overlay: rgb(26 29 27 / 0.4); /* modal backdrop */
 
   /* ── Typography ── */
-  --font-family-body:    'Inter', system-ui, -apple-system, sans-serif;
-  --font-family-display: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-family-body:    'Atkinson Hyperlegible Next', system-ui, -apple-system, sans-serif;
+  --font-family-display: 'Atkinson Hyperlegible Next', system-ui, -apple-system, sans-serif;
   --font-family-mono:    ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --font-size-xs:   11px;
@@ -109,11 +109,11 @@
   --border-radius-full: 9999px;
 
   /* ── Shadows (warm-tinted, not cool gray) ── */
-  --shadow-sm:    0 1px 2px 0 rgb(28 25 23 / 0.05);
-  --shadow-md:    0 1px 3px 0 rgb(28 25 23 / 0.08), 0 1px 2px -1px rgb(28 25 23 / 0.06);
-  --shadow-lg:    0 4px 6px -1px rgb(28 25 23 / 0.08), 0 2px 4px -2px rgb(28 25 23 / 0.05);
-  --shadow-xl:    0 10px 15px -3px rgb(28 25 23 / 0.08), 0 4px 6px -4px rgb(28 25 23 / 0.04);
-  --shadow-focus: 0 0 0 3px rgb(194 97 58 / 0.25);
+  --shadow-sm:    0 1px 2px 0 rgb(26 29 27 / 0.05);
+  --shadow-md:    0 1px 3px 0 rgb(26 29 27 / 0.08), 0 1px 2px -1px rgb(26 29 27 / 0.06);
+  --shadow-lg:    0 4px 6px -1px rgb(26 29 27 / 0.08), 0 2px 4px -2px rgb(26 29 27 / 0.05);
+  --shadow-xl:    0 10px 15px -3px rgb(26 29 27 / 0.08), 0 4px 6px -4px rgb(26 29 27 / 0.04);
+  --shadow-focus: 0 0 0 3px rgb(30 107 80 / 0.25);
 
   /* ── Motion ── */
   --duration-instant: 50ms;
@@ -145,7 +145,7 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Focus ring — terracotta, consistent across all interactive elements */
+  /* Focus ring — green, consistent across all interactive elements */
   :focus-visible {
     outline: 2px solid var(--color-border-focus);
     outline-offset: 2px;
@@ -195,13 +195,12 @@
   }
   .input::placeholder { color: var(--color-text-tertiary); }
 
-  /* Label overline (uppercase section labels) */
+  /* Section label — sentence case; the tracked all-caps overline it replaced
+     sat above every heading whether or not it said anything. */
   .label-overline {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
-    letter-spacing: var(--letter-spacing-wider);
-    text-transform: uppercase;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-secondary);
   }
 
   /* Chip/pill — unselected */
@@ -229,8 +228,10 @@
     color: var(--color-accent-primary-active);
   }
 
-  /* Brand gradient — terrakotta hero/strip background */
+  /* Page head — paper with a rule (public_base.html turns the templates'
+     white-on-gradient text into ink). */
   .brand-gradient {
-    background: linear-gradient(135deg, #8A4226 0%, #A8512F 30%, #C2613A 65%, #E88E6B 100%);
+    background: #FFFFFF;
+    border-bottom: 1px solid var(--color-border-primary);
   }
 }

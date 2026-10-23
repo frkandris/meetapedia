@@ -4,18 +4,18 @@
 {% block og_desc %}{{ 'Közösségkeresést segítő, saját adatainkból készült összehasonlítások.' if site == 'kozossegek' else 'Practical community guides built from our directory data.' }}{% endblock %}
 {% block content %}
 <main class="max-w-4xl mx-auto px-4 sm:px-6 py-10">
-  <p class="text-sm font-semibold text-[#A8512F]">{{ 'Adatútmutatók' if site == 'kozossegek' else 'Data guides' }}</p>
+  <p class="text-sm font-semibold text-[#185A43]">{{ 'Adatútmutatók' if site == 'kozossegek' else 'Data guides' }}</p>
   <h1 class="mt-2 text-3xl sm:text-4xl font-extrabold tracking-tight">{{ 'Találd meg a neked való közösséget' if site == 'kozossegek' else 'Find the community that fits you' }}</h1>
-  <p class="mt-4 text-[#6A6259] leading-7">{{ 'Ezek az oldalak a katalógus ellenőrizhető adatait rendezik össze. Csak akkor jelenik meg új útmutató, ha elegendő közösség és több összehasonlítható szempont áll rendelkezésre.' if site == 'kozossegek' else 'These pages organise verifiable directory data. A guide is published only when enough communities and several useful comparison points are available.' }}</p>
+  <p class="mt-4 text-[#4F5752] leading-7">{{ 'Ezek az oldalak a katalógus ellenőrizhető adatait rendezik össze. Csak akkor jelenik meg új útmutató, ha elegendő közösség és több összehasonlítható szempont áll rendelkezésre.' if site == 'kozossegek' else 'These pages organise verifiable directory data. A guide is published only when enough communities and several useful comparison points are available.' }}</p>
   <div class="mt-8 grid gap-4">
     {% for guide in guides %}
-    <article class="rounded-xl border border-[#EAE5DB] bg-white p-5">
-      <p class="text-xs font-semibold uppercase tracking-wide text-[#A8512F]">{{ guide.city }} · {{ guide.data.topic_label }}</p>
-      <h2 class="mt-2 text-xl font-bold"><a class="hover:text-[#A8512F]" href="{{ canonical_path }}/{{ guide.slug }}">{{ guide.title }}</a></h2>
-      <p class="mt-2 text-sm leading-6 text-[#6A6259]">{{ guide.summary }}</p>
+    <article class="rounded-xl border border-[#E1E5E2] bg-white p-5">
+      <p class="text-xs font-semibold text-[#185A43]">{{ guide.city }} · {{ guide.data.topic_label }}</p>
+      <h2 class="mt-2 text-xl font-bold"><a class="hover:text-[#185A43]" href="{{ canonical_path }}/{{ guide.slug }}">{{ guide.title }}</a></h2>
+      <p class="mt-2 text-sm leading-6 text-[#4F5752]">{{ guide.summary }}</p>
     </article>
     {% else %}
-    <p class="rounded-xl border border-[#EAE5DB] bg-white p-6">{{ 'Az első minősített útmutatók a következő napi futásban készülnek el.' if site == 'kozossegek' else 'The first qualified guides will appear in the next daily run.' }}</p>
+    <p class="rounded-xl border border-[#E1E5E2] bg-white p-6">{{ 'Az első minősített útmutatók a következő napi futásban készülnek el.' if site == 'kozossegek' else 'The first qualified guides will appear in the next daily run.' }}</p>
     {% endfor %}
   </div>
   {% if pages > 1 %}<nav class="mt-8 flex justify-between text-sm font-semibold">

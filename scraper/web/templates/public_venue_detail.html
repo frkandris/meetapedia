@@ -8,7 +8,7 @@
 <!-- Mini gradient strip -->
 <div class="brand-gradient relative overflow-hidden">
   <div class="max-w-3xl mx-auto px-4 sm:px-6 py-5 sm:py-7 relative">
-    <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/70 mb-1.5">
+    <p class="text-[11px] font-semibold text-white/70 mb-1.5">
       {{ city }} · {{ t('explore_venues') }}
     </p>
     <h1 class="text-xl sm:text-2xl font-black tracking-[-0.025em] text-white leading-tight">{{ v.name }}</h1>
@@ -18,38 +18,38 @@
 <div class="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
   <!-- Breadcrumb -->
-  <nav class="flex items-center gap-1.5 text-sm text-[#8C8478] mb-6 overflow-hidden flex-wrap">
-    <a href="/" class="hover:text-[#1C1917] transition-colors shrink-0">{{ site_name }}</a>
+  <nav class="flex items-center gap-1.5 text-sm text-[#646C67] mb-6 overflow-hidden flex-wrap">
+    <a href="/" class="hover:text-[#1A1D1B] transition-colors shrink-0">{{ site_name }}</a>
     {% if city %}
-    <span class="text-[#D8D1C4]">/</span>
-    <a href="/{{ city_slug }}" class="hover:text-[#1C1917] transition-colors shrink-0">{{ city }}</a>
+    <span class="text-[#CDD3CF]">/</span>
+    <a href="/{{ city_slug }}" class="hover:text-[#1A1D1B] transition-colors shrink-0">{{ city }}</a>
     {% endif %}
-    <span class="text-[#D8D1C4]">/</span>
-    <a href="/helyszinek?city={{ city | urlencode }}" class="hover:text-[#1C1917] transition-colors shrink-0">{{ t('explore_venues') }}</a>
-    <span class="text-[#D8D1C4]">/</span>
-    <span class="text-[#4A4441] font-medium truncate">{{ v.name }}</span>
+    <span class="text-[#CDD3CF]">/</span>
+    <a href="/helyszinek?city={{ city | urlencode }}" class="hover:text-[#1A1D1B] transition-colors shrink-0">{{ t('explore_venues') }}</a>
+    <span class="text-[#CDD3CF]">/</span>
+    <span class="text-[#3B413D] font-medium truncate">{{ v.name }}</span>
   </nav>
 
   <!-- Header card -->
-  <div class="bg-white rounded-xl border border-[#EAE5DB] p-6 sm:p-8 mb-4">
+  <div class="bg-white rounded-xl border border-[#E1E5E2] p-6 sm:p-8 mb-4">
 
     <!-- Identity -->
     <div class="flex items-start gap-4 mb-5">
-      <div class="w-12 h-12 rounded-xl bg-[#FDF0EA] border border-[#FAD9C7] flex items-center justify-center shrink-0">
-        <i class="ph ph-map-pin text-[#C2613A] text-2xl"></i>
+      <div class="w-12 h-12 rounded-xl bg-[#E8F2EC] border border-[#C4DDD0] flex items-center justify-center shrink-0">
+        <i class="ph ph-map-pin text-[#1E6B50] text-2xl"></i>
       </div>
       <div class="min-w-0 pt-0.5">
-        <p class="text-lg font-bold text-[#1C1917] leading-tight">{{ v.name }}</p>
+        <p class="text-lg font-bold text-[#1A1D1B] leading-tight">{{ v.name }}</p>
         <div class="flex flex-wrap items-center gap-1.5 mt-2">
           {% if city %}
           <a href="/{{ city_slug }}"
-             class="inline-flex items-center gap-1 text-xs text-[#6A6259] bg-[#F5F2EC] border border-[#EAE5DB] px-2 py-0.5 rounded-md hover:border-[#C2613A] hover:text-[#8A4226] transition-colors">
-            <i class="ph ph-map-pin text-[#B5ADA0]"></i> {{ city }}
+             class="inline-flex items-center gap-1 text-xs text-[#4F5752] bg-[#F2F4F2] border border-[#E1E5E2] px-2 py-0.5 rounded-md hover:border-[#1E6B50] hover:text-[#134A37] transition-colors">
+            <i class="ph ph-map-pin text-[#9AA29D]"></i> {{ city }}
           </a>
           {% endif %}
           {% if v.venue_type %}
-          <span class="inline-flex items-center gap-1 text-xs text-[#8A4226] bg-[#FDF0EA] border border-[#FAD9C7] px-2 py-0.5 rounded-md">
-            <i class="ph ph-buildings text-[#C2613A]"></i>
+          <span class="inline-flex items-center gap-1 text-xs text-[#134A37] bg-[#E8F2EC] border border-[#C4DDD0] px-2 py-0.5 rounded-md">
+            <i class="ph ph-buildings text-[#1E6B50]"></i>
             {{ venue_type_labels.get(v.venue_type, v.venue_type.replace('_',' ')) }}
           </span>
           {% endif %}
@@ -58,27 +58,27 @@
     </div>
 
     {% if v.description %}
-    <p class="text-[#4A4441] leading-relaxed mb-6 text-base">{{ v.description }}</p>
+    <p class="text-[#3B413D] leading-relaxed mb-6 text-base">{{ v.description }}</p>
     {% endif %}
 
     <!-- Contact / links -->
     {% set has_links = (v.website and v.website | valid_url) or v.social_links %}
     {% set has_contact = v.address or v.email or v.phone or v.contact %}
     {% if has_links or has_contact %}
-    <div class="mb-6 pb-6 border-b border-[#F5F2EC]">
-      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">{{ t('community_contact') }}</p>
+    <div class="mb-6 pb-6 border-b border-[#F2F4F2]">
+      <p class="text-sm font-semibold text-[#1A1D1B] mb-3">{{ t('community_contact') }}</p>
 
       {% macro detail_row(icon, value, href='') %}
       {% if value %}
       <div class="flex items-start gap-3 text-sm">
-        <div class="w-7 h-7 rounded-md bg-[#F5F2EC] border border-[#EAE5DB] flex items-center justify-center shrink-0 mt-0.5">
-          <i class="ph ph-{{ icon }} text-[#8C8478]" style="font-size:13px"></i>
+        <div class="w-7 h-7 rounded-md bg-[#F2F4F2] border border-[#E1E5E2] flex items-center justify-center shrink-0 mt-0.5">
+          <i class="ph ph-{{ icon }} text-[#646C67]" style="font-size:13px"></i>
         </div>
         <div class="min-w-0 pt-0.5">
           {% if href %}
-          <a href="{{ href }}" class="text-[#A8512F] hover:underline truncate block">{{ value }}</a>
+          <a href="{{ href }}" class="text-[#185A43] hover:underline truncate block">{{ value }}</a>
           {% else %}
-          <span class="text-[#4A4441]">{{ value }}</span>
+          <span class="text-[#3B413D]">{{ value }}</span>
           {% endif %}
         </div>
       </div>
@@ -95,17 +95,17 @@
       {% if v.website and v.website | valid_url %}
       {% set wm = v.website | link_meta %}
       <a href="{{ v.website }}" target="_blank" rel="noopener"
-         class="flex items-center gap-3 group rounded-lg px-3 py-2.5 hover:bg-[#F5F2EC] transition-colors -mx-3 mt-2">
+         class="flex items-center gap-3 group rounded-lg px-3 py-2.5 hover:bg-[#F2F4F2] transition-colors -mx-3 mt-2">
         <span class="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 {{ wm.color }}">
           <i class="ph {{ wm.icon }}" style="font-size:17px"></i>
         </span>
         <span class="flex flex-col min-w-0">
-          <span class="text-sm font-semibold text-[#1C1917]">{{ wm.label }}</span>
-          <span class="text-xs text-[#8C8478] truncate group-hover:text-[#C2613A] transition-colors">
+          <span class="text-sm font-semibold text-[#1A1D1B]">{{ wm.label }}</span>
+          <span class="text-xs text-[#646C67] truncate group-hover:text-[#1E6B50] transition-colors">
             {{ v.website | replace('https://','') | replace('http://','') | truncate(55, True, '…') }}
           </span>
         </span>
-        <i class="ph ph-arrow-square-out text-[#D8D1C4] group-hover:text-[#C2613A] ml-auto shrink-0 transition-colors" style="font-size:15px"></i>
+        <i class="ph ph-arrow-square-out text-[#CDD3CF] group-hover:text-[#1E6B50] ml-auto shrink-0 transition-colors" style="font-size:15px"></i>
       </a>
       {% endif %}
 
@@ -114,17 +114,17 @@
       {% if link | valid_url %}
       {% set lm = link | link_meta %}
       <a href="{{ link }}" target="_blank" rel="noopener"
-         class="flex items-center gap-3 group rounded-lg px-3 py-2.5 hover:bg-[#F5F2EC] transition-colors -mx-3">
+         class="flex items-center gap-3 group rounded-lg px-3 py-2.5 hover:bg-[#F2F4F2] transition-colors -mx-3">
         <span class="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 {{ lm.color }}">
           <i class="ph {{ lm.icon }}" style="font-size:17px"></i>
         </span>
         <span class="flex flex-col min-w-0">
-          <span class="text-sm font-semibold text-[#1C1917]">{{ lm.label }}</span>
-          <span class="text-xs text-[#8C8478] truncate group-hover:text-[#C2613A] transition-colors">
+          <span class="text-sm font-semibold text-[#1A1D1B]">{{ lm.label }}</span>
+          <span class="text-xs text-[#646C67] truncate group-hover:text-[#1E6B50] transition-colors">
             {{ link | replace('https://','') | replace('http://','') | truncate(55, True, '…') }}
           </span>
         </span>
-        <i class="ph ph-arrow-square-out text-[#D8D1C4] group-hover:text-[#C2613A] ml-auto shrink-0 transition-colors" style="font-size:15px"></i>
+        <i class="ph ph-arrow-square-out text-[#CDD3CF] group-hover:text-[#1E6B50] ml-auto shrink-0 transition-colors" style="font-size:15px"></i>
       </a>
       {% endif %}
       {% endfor %}
@@ -135,13 +135,13 @@
 
     <!-- Welcomed topics -->
     {% if v.welcomed_topics %}
-    <div class="{% if has_links or has_contact %}{% else %}mb-6 pb-6 border-b border-[#F5F2EC]{% endif %}">
-      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">{{ t('venue_welcomed_topics') }}</p>
+    <div class="{% if has_links or has_contact %}{% else %}mb-6 pb-6 border-b border-[#F2F4F2]{% endif %}">
+      <p class="text-sm font-semibold text-[#1A1D1B] mb-3">{{ t('venue_welcomed_topics') }}</p>
       <div class="flex flex-wrap gap-2">
         {% for t in v.welcomed_topics %}
         {% set t_slug = topic_url_slugs.get(t, t.replace('_','-')) %}
         <a href="/{{ city_slug }}/{{ t_slug }}"
-           class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-[#FDF0EA] text-[#A8512F] border border-[#FAD9C7] hover:bg-[#FAD9C7] transition-colors">
+           class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-[#E8F2EC] text-[#185A43] border border-[#C4DDD0] hover:bg-[#C4DDD0] transition-colors">
           <i class="ph ph-{{ topic_icons.get(t, 'circle') }}" style="font-size:14px"></i>
           {{ topic_labels.get(t, t.replace('_',' ').title()) }}
         </a>
@@ -152,21 +152,21 @@
 
     <!-- Communities at this venue -->
     {% if communities %}
-    <div class="{% if v.welcomed_topics or has_links or has_contact %}pt-5 border-t border-[#F5F2EC]{% endif %}">
-      <p class="text-xs font-semibold text-[#8C8478] uppercase tracking-[0.08em] mb-3">
+    <div class="{% if v.welcomed_topics or has_links or has_contact %}pt-5 border-t border-[#F2F4F2]{% endif %}">
+      <p class="text-sm font-semibold text-[#1A1D1B] mb-3">
         <i class="ph ph-users-three mr-1"></i>{{ t('venue_communities_here') }}
-        <span class="font-normal text-[#B5ADA0]">{{ communities | length }}</span>
+        <span class="font-normal text-[#9AA29D]">{{ communities | length }}</span>
       </p>
       <div class="flex flex-col gap-2">
         {% for c in communities %}
         {% set c_city_sl = c.city | slugify %}
         {% set c_name_sl = c.name | slugify %}
         <a href="/{{ c_city_sl }}/{{ c_name_sl }}"
-           class="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-[#EAE5DB] hover:border-[#E88E6B] hover:bg-[#FDF0EA]/30 transition-colors -mx-3">
-          <i class="ph ph-{{ topic_icons.get(c.topic, 'circle') }} text-[#C2613A] shrink-0" style="font-size:16px"></i>
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-[#E1E5E2] hover:border-[#5E9E84] hover:bg-[#E8F2EC]/30 transition-colors -mx-3">
+          <i class="ph ph-{{ topic_icons.get(c.topic, 'circle') }} text-[#1E6B50] shrink-0" style="font-size:16px"></i>
           <div class="min-w-0">
-            <p class="text-sm font-medium text-[#1C1917] truncate">{{ c.name }}</p>
-            <p class="text-xs text-[#8C8478]">{{ topic_labels.get(c.topic, c.topic) }}</p>
+            <p class="text-sm font-medium text-[#1A1D1B] truncate">{{ c.name }}</p>
+            <p class="text-xs text-[#646C67]">{{ topic_labels.get(c.topic, c.topic) }}</p>
           </div>
         </a>
         {% endfor %}
@@ -177,17 +177,17 @@
   </div>
 
   <!-- Edit request -->
-  <div class="mt-4 bg-white border border-[#EAE5DB] rounded-xl p-5">
+  <div class="mt-4 bg-white border border-[#E1E5E2] rounded-xl p-5">
     <div id="venue-edit-prompt">
-      <p class="text-sm text-[#8C8478] mb-3">{{ t('entity_edit_prompt') }}</p>
+      <p class="text-sm text-[#646C67] mb-3">{{ t('entity_edit_prompt') }}</p>
       <button
         onclick="document.getElementById('venue-edit-prompt').classList.add('hidden'); document.getElementById('venue-edit-form').classList.remove('hidden');"
-        class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-[#EAE5DB] rounded-lg text-[#6A6259] hover:border-[#C2613A] hover:text-[#8A4226] transition-colors">
+        class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 border border-[#E1E5E2] rounded-lg text-[#4F5752] hover:border-[#1E6B50] hover:text-[#134A37] transition-colors">
         <i class="ph ph-pencil-simple"></i> {{ t('entity_edit_button') }}
       </button>
     </div>
     <div id="venue-edit-form" class="hidden">
-      <p class="text-sm font-medium text-[#2E2B29] mb-3">{{ t('entity_edit_title') }} <strong>{{ v.name }}</strong></p>
+      <p class="text-sm font-medium text-[#232825] mb-3">{{ t('entity_edit_title') }} <strong>{{ v.name }}</strong></p>
       <form onsubmit="submitVenueEditRequest(event, this)">
         <input type="hidden" name="entity_type" value="venue">
         <input type="hidden" name="entity_id" value="{{ v.venue_id | default('') | e }}">
@@ -195,33 +195,33 @@
         <input type="hidden" name="entity_city" value="{{ city | e }}">
         <input type="hidden" name="entity_topic" value="">
         <input type="hidden" name="record_key" value="{{ v.record_key | default('') | e }}">
-        <label class="block text-xs font-medium text-[#6A6259] mb-1">{{ t('community_report_what_problem') }}</label>
+        <label class="block text-xs font-medium text-[#4F5752] mb-1">{{ t('community_report_what_problem') }}</label>
         <select name="change_type" required onchange="onVenueChangeType(this.value)"
-          class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] mb-3 text-[#1C1917] bg-white">
+          class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg focus:outline-none focus:border-[#1E6B50] mb-3 text-[#1A1D1B] bg-white">
           <option value="">{{ t('community_report_select') }}</option>
           <option value="wrong_info">{{ t('entity_edit_wrong_info') }}</option>
           <option value="closed">{{ t('venue_edit_closed') }}</option>
           <option value="name_correction">{{ t('community_report_name_correction') }}</option>
         </select>
         <div id="venue-edit-new-name" class="hidden mb-3">
-          <label class="block text-xs font-medium text-[#6A6259] mb-1">{{ t('community_report_correct_name') }}</label>
+          <label class="block text-xs font-medium text-[#4F5752] mb-1">{{ t('community_report_correct_name') }}</label>
           <input type="text" name="new_value_name" value="{{ v.name | e }}"
-            class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] text-[#1C1917]">
+            class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg focus:outline-none focus:border-[#1E6B50] text-[#1A1D1B]">
         </div>
         <textarea name="notes" rows="2" required
           placeholder="{{ t('entity_edit_notes_placeholder') }}"
-          class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg resize-none focus:outline-none focus:border-[#C2613A] mb-3 text-[#1C1917] placeholder-[#B5ADA0]"></textarea>
+          class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg resize-none focus:outline-none focus:border-[#1E6B50] mb-3 text-[#1A1D1B] placeholder-[#9AA29D]"></textarea>
         <input type="email" name="email" required
           placeholder="{{ t('entity_edit_email_placeholder') }}"
-          class="w-full text-sm px-3 py-2 border border-[#D8D1C4] rounded-lg focus:outline-none focus:border-[#C2613A] mb-3 text-[#1C1917] placeholder-[#B5ADA0]">
+          class="w-full text-sm px-3 py-2 border border-[#CDD3CF] rounded-lg focus:outline-none focus:border-[#1E6B50] mb-3 text-[#1A1D1B] placeholder-[#9AA29D]">
         <div class="flex items-center gap-3">
           <button type="submit"
-            class="px-4 py-2 bg-[#A8512F] text-white text-xs font-semibold rounded-lg hover:bg-[#8A4226] transition-colors">
+            class="px-4 py-2 bg-[#185A43] text-white text-xs font-semibold rounded-lg hover:bg-[#134A37] transition-colors">
             {{ t('entity_edit_submit') }}
           </button>
           <button type="button"
             onclick="document.getElementById('venue-edit-form').classList.add('hidden'); document.getElementById('venue-edit-prompt').classList.remove('hidden');"
-            class="text-xs text-[#8C8478] hover:text-[#4A4441] transition-colors">
+            class="text-xs text-[#646C67] hover:text-[#3B413D] transition-colors">
             {{ t('community_feedback_cancel') }}
           </button>
         </div>

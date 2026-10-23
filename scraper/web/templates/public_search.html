@@ -15,7 +15,7 @@
         value="{{ q }}"
         placeholder="{{ t('nav_search_placeholder') }}"
         autofocus
-        class="flex-1 px-4 py-2.5 rounded-lg text-[#1C1917] bg-white placeholder-[#B5ADA0] focus:outline-none focus:ring-2 focus:ring-white/50 text-base"
+        class="flex-1 px-4 py-2.5 rounded-lg text-[#1A1D1B] bg-white placeholder-[#9AA29D] focus:outline-none focus:ring-2 focus:ring-white/50 text-base"
       >
       <button type="submit"
         class="px-5 py-2.5 bg-white/20 hover:bg-white/30 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2">
@@ -27,28 +27,28 @@
 
 <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8">
   {% if not q %}
-  <p class="text-[#8C8478] text-base">{{ t('search_no_query') }}</p>
+  <p class="text-[#646C67] text-base">{{ t('search_no_query') }}</p>
 
   {% elif total == 0 %}
-  <p class="text-[#8C8478] text-base">{{ t('search_no_results') }} <strong class="text-[#1C1917]">„{{ q }}"</strong></p>
+  <p class="text-[#646C67] text-base">{{ t('search_no_results') }} <strong class="text-[#1A1D1B]">„{{ q }}"</strong></p>
 
   {% else %}
-  <p class="text-sm text-[#8C8478] mb-6">{{ t('search_results_for') }} <strong class="text-[#1C1917]">„{{ q }}"</strong> — {{ total }} {{ t('search_hits') }}</p>
+  <p class="text-sm text-[#646C67] mb-6">{{ t('search_results_for') }} <strong class="text-[#1A1D1B]">„{{ q }}"</strong> — {{ total }} {{ t('search_hits') }}</p>
 
   {% if communities %}
   <section class="mb-8">
-    <h2 class="text-base font-semibold text-[#1C1917] mb-3">{{ t('search_section_communities') }}</h2>
+    <h2 class="text-base font-semibold text-[#1A1D1B] mb-3">{{ t('search_section_communities') }}</h2>
     <div class="space-y-2">
       {% for c in communities %}
       {% set city_sl = c.city | slugify %}
       {% set name_sl = c.name | slugify %}
       <a href="/{{ city_sl }}/{{ name_sl }}"
-         class="flex items-center gap-3 px-4 py-3 rounded-lg bg-white border border-[#EAE5DB] hover:border-[#A8512F] hover:shadow-sm transition-all group">
-        <i class="ph ph-{{ topic_icons.get(c.topic, 'circle') }} text-[#A8512F] text-lg shrink-0"></i>
+         class="flex items-center gap-3 px-4 py-3 rounded-lg bg-white border border-[#E1E5E2] hover:border-[#185A43] hover:shadow-sm transition-all group">
+        <i class="ph ph-{{ topic_icons.get(c.topic, 'circle') }} text-[#185A43] text-lg shrink-0"></i>
         <div class="min-w-0">
-          <div class="font-medium text-[#1C1917] group-hover:text-[#A8512F] transition-colors truncate">{{ c.name }}</div>
-          <div class="text-xs text-[#8C8478]">{{ c.city }} · {{ topic_labels.get(c.topic, c.topic) }}</div>
-          {% if c.short_description or c.description %}<div class="text-xs text-[#B5ADA0] truncate mt-0.5">{{ (c.short_description or c.description) | truncate(120, True, '…') }}</div>{% endif %}
+          <div class="font-medium text-[#1A1D1B] group-hover:text-[#185A43] transition-colors truncate">{{ c.name }}</div>
+          <div class="text-xs text-[#646C67]">{{ c.city }} · {{ topic_labels.get(c.topic, c.topic) }}</div>
+          {% if c.short_description or c.description %}<div class="text-xs text-[#9AA29D] truncate mt-0.5">{{ (c.short_description or c.description) | truncate(120, True, '…') }}</div>{% endif %}
         </div>
       </a>
       {% endfor %}
@@ -58,17 +58,17 @@
 
   {% if venues %}
   <section class="mb-8">
-    <h2 class="text-base font-semibold text-[#1C1917] mb-3">{{ t('search_section_venues') }}</h2>
+    <h2 class="text-base font-semibold text-[#1A1D1B] mb-3">{{ t('search_section_venues') }}</h2>
     <div class="space-y-2">
       {% for v in venues %}
       {% set city_sl = v.city | slugify %}
       {% set name_sl = v.name | slugify %}
       <a href="/{{ city_sl }}/helyszin/{{ name_sl }}"
-         class="flex items-center gap-3 px-4 py-3 rounded-lg bg-white border border-[#EAE5DB] hover:border-[#A8512F] hover:shadow-sm transition-all group">
-        <i class="ph ph-map-pin text-[#A8512F] text-lg shrink-0"></i>
+         class="flex items-center gap-3 px-4 py-3 rounded-lg bg-white border border-[#E1E5E2] hover:border-[#185A43] hover:shadow-sm transition-all group">
+        <i class="ph ph-map-pin text-[#185A43] text-lg shrink-0"></i>
         <div class="min-w-0">
-          <div class="font-medium text-[#1C1917] group-hover:text-[#A8512F] transition-colors truncate">{{ v.name }}</div>
-          <div class="text-xs text-[#8C8478]">{{ v.city }}{% if v.venue_type %} · {{ venue_type_labels.get(v.venue_type, v.venue_type.replace('_',' ')) }}{% endif %}</div>
+          <div class="font-medium text-[#1A1D1B] group-hover:text-[#185A43] transition-colors truncate">{{ v.name }}</div>
+          <div class="text-xs text-[#646C67]">{{ v.city }}{% if v.venue_type %} · {{ venue_type_labels.get(v.venue_type, v.venue_type.replace('_',' ')) }}{% endif %}</div>
         </div>
       </a>
       {% endfor %}
@@ -78,17 +78,17 @@
 
   {% if persons %}
   <section class="mb-8">
-    <h2 class="text-base font-semibold text-[#1C1917] mb-3">{{ t('search_section_people') }}</h2>
+    <h2 class="text-base font-semibold text-[#1A1D1B] mb-3">{{ t('search_section_people') }}</h2>
     <div class="space-y-2">
       {% for p in persons %}
       {% set city_sl = p.city | slugify %}
       {% set name_sl = p.name | slugify %}
       <a href="/{{ city_sl }}/ember/{{ name_sl }}"
-         class="flex items-center gap-3 px-4 py-3 rounded-lg bg-white border border-[#EAE5DB] hover:border-[#A8512F] hover:shadow-sm transition-all group">
-        <i class="ph ph-person-simple text-[#A8512F] text-lg shrink-0"></i>
+         class="flex items-center gap-3 px-4 py-3 rounded-lg bg-white border border-[#E1E5E2] hover:border-[#185A43] hover:shadow-sm transition-all group">
+        <i class="ph ph-person-simple text-[#185A43] text-lg shrink-0"></i>
         <div class="min-w-0">
-          <div class="font-medium text-[#1C1917] group-hover:text-[#A8512F] transition-colors truncate">{{ p.name }}</div>
-          <div class="text-xs text-[#8C8478]">{{ p.city }}{% if p.role %} · {{ p.role }}{% endif %}</div>
+          <div class="font-medium text-[#1A1D1B] group-hover:text-[#185A43] transition-colors truncate">{{ p.name }}</div>
+          <div class="text-xs text-[#646C67]">{{ p.city }}{% if p.role %} · {{ p.role }}{% endif %}</div>
         </div>
       </a>
       {% endfor %}

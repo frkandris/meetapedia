@@ -11,7 +11,10 @@
    [data-mp-filter] block on DOMContentLoaded. Jinja2 does not hoist macros, so
    the import must precede the call. #}
 
-{% macro filter_bar(t, target, item='[data-name]', group='', placeholder='', autofocus=false) %}
+{#- `az=false` drops the letter bar: it helps on a list of towns or people,
+    whose names a reader knows how to spell, and not on a city's communities,
+    whose names they do not know yet (Pécs: 291 groups, 24 letters). -#}
+{% macro filter_bar(t, target, item='[data-name]', group='', placeholder='', autofocus=false, az=true) %}
 <div class="mb-5 flex flex-col gap-2.5"
      data-mp-filter
      data-target="{{ target }}"
@@ -19,22 +22,22 @@
      {% if group %}data-group="{{ group }}"{% endif %}>
   <div class="flex items-center gap-2">
     <div class="relative flex-1 min-w-0 max-w-md">
-      <i class="ph ph-magnifying-glass absolute left-3 inset-y-0 my-auto h-4 text-[#B5ADA0] pointer-events-none"></i>
+      <i class="ph ph-magnifying-glass absolute left-3 inset-y-0 my-auto h-4 text-[#9AA29D] pointer-events-none"></i>
       <input type="search"
         data-mp-filter-input
         {% if autofocus %}autofocus{% endif %}
         placeholder="{{ placeholder or t('list_filter_placeholder') }}"
         aria-label="{{ t('list_filter_label') }}"
-        class="w-full pl-9 pr-3 py-2.5 text-base sm:text-sm border border-[#D8D1C4] rounded-lg
-               focus:outline-none focus:border-[#C2613A] focus:ring-2 focus:ring-[#C2613A]/20
-               bg-white placeholder-[#B5ADA0] text-[#1C1917] transition-colors">
+        class="w-full pl-9 pr-3 py-2.5 text-base sm:text-sm border border-[#CDD3CF] rounded-lg
+               focus:outline-none focus:border-[#1E6B50] focus:ring-2 focus:ring-[#1E6B50]/20
+               bg-white placeholder-[#9AA29D] text-[#1A1D1B] transition-colors">
     </div>
-    <span class="text-xs text-[#8C8478] whitespace-nowrap shrink-0">
+    <span class="text-xs text-[#646C67] whitespace-nowrap shrink-0">
       <span data-mp-filter-count>0</span>
     </span>
   </div>
-  <div class="mp-az-bar" data-mp-filter-az data-all-label="{{ t('list_filter_all') }}"></div>
-  <p data-mp-filter-empty hidden class="text-sm text-[#8C8478] py-6 text-center">
+  {% if az %}<div class="mp-az-bar" data-mp-filter-az data-all-label="{{ t('list_filter_all') }}"></div>{% endif %}
+  <p data-mp-filter-empty hidden class="text-sm text-[#646C67] py-6 text-center">
     {{ t('list_no_match') }}
   </p>
 </div>

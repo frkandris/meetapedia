@@ -1084,6 +1084,13 @@ _T: dict[str, dict[str, str]] = {
     "about_open_source": "open source",
     "about_project_line_hu": "It is an {open_source} hobby project by {author}; its Hungarian edition is {sister}.",
     "about_project_line_en": "This site is part of the {sister} project — an {open_source} hobby project by {author}.",
+    # The About page tells a reader what the site is and how far to trust it.
+    # It used to end in every city of the site, A to Z — 1,312 tiles on
+    # kozossegek.com — which answered no question anyone brings to an About page.
+    "about_counts": "It currently lists {communities} communities from {cities} towns and cities.",
+    "about_fix_title": "Missing a group, or found a mistake?",
+    "about_fix_text": "Send in a community we have not found yet. If something on a community's page is wrong, use the correction link on that page — we fix what you report.",
+    "about_fix_cta": "Add a community",
     "footer_tagline": "Every community in the world, in one place",
     # Cross-domain (Wikipedia-style "also available in …"). Two separate keys
     # instead of one language-dependent string: meetapedia.com can be read in
@@ -1319,6 +1326,10 @@ _T: dict[str, dict[str, str]] = {
     "about_description": "A {site_name} 2026-ban jött létre azzal a céllal, hogy segítsen helyi közösségeket és új, hasonló érdeklődésű barátokat találni.",
     "about_how_it_works": "Hogyan működik",
     "about_how_it_works_text": "Egy automatizált rendszer keres az interneten közösségi csoportokat minden város × érdeklődési kör kombináció alapján. Letölti a releváns oldalakat, és egy AI nyelvi modellel strukturált adatokat nyer ki belőlük — találkozási időpontok, helyszínek, elérhetőségek, weboldalak —, majd kiszűri azokat az eredményeket, amelyek nem valódi, csatlakozható csoportok.",
+    "about_counts": "Jelenleg {communities} közösség szerepel benne, {cities} településről.",
+    "about_fix_title": "Hiányzik egy csoport, vagy hibát találtál?",
+    "about_fix_text": "Küldd be azt a közösséget, amelyet még nem találtunk meg. Ha egy közösség oldalán valami nem stimmel, az oldalon lévő javítás linkkel jelezd — amit bejelentesz, azt javítjuk.",
+    "about_fix_cta": "Közösség beküldése",
     "about_open_source": "nyílt forráskódú",
     "about_project_line_hu": "{author} {open_source} hobbiprojektje; magyar kiadása a {sister}.",
     "about_project_line_en": "Ez az oldal a {sister} projekt része — {author} {open_source} hobbiprojektje.",
