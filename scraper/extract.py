@@ -242,7 +242,7 @@ If nothing on the page is a real community group, return an empty communities ar
 USER_PROMPT_TEMPLATE = """\
 Extract all {topic} community groups located in or near {city} from the following web page text.
 The page was found at: {source_url}
-
+{topic_rule}
 IMPORTANT: Only include communities that are actually based in {city} or its immediate surroundings. \
 If the page is a national/regional directory listing clubs from many different cities, \
 skip communities that are clearly located elsewhere. When in doubt, set confidence below 0.5.
@@ -251,6 +251,46 @@ skip communities that are clearly located elsewhere. When in doubt, set confiden
 {page_text}
 --- PAGE TEXT END ---
 """
+
+#: What a topic slug means, for the prompt. The slug used to be sent as is, so
+#: the model read "Extract all nok community groups located in Pécs": `nok`
+#: (Hungarian "women", unaccented) is not a word in any language. From a page
+#: listing every NGO in the city it took all of them as women's groups and
+#: wrote "női civil szervezet" into their descriptions — on 2026-10-23, 526 of
+#: 1,328 visible `nok` records had nothing female in their name or tags. The
+#: user prompt is not part of the extraction fingerprint, so this changes new
+#: extractions only and invalidates nothing.
+_TOPIC_PROMPT = {
+    "nok": "women's",
+    "kisallat": "pet owners'",
+    "vallalkozas": "entrepreneurs' and business networking",
+    "hagyomanyorzes": "folk tradition and heritage",
+    "fogyatekossag": "disability",
+    "senior": "seniors' and retirees'",
+    "baby": "parent-and-baby",
+    "other": "local",
+}
+
+
+def topic_for_prompt(topic: str) -> str:
+    """A readable topic phrase in English for the extraction prompt."""
+    return _TOPIC_PROMPT.get(topic, (topic or "").replace("_", " "))
+
+
+def topic_rule(topic: str) -> str:
+    """The paragraph that keeps a city-wide NGO list from becoming one topic.
+
+    Empty for `other`, whose groups are exactly what such a list holds. An
+    admin override of the user prompt without `{topic_rule}` simply omits it.
+    """
+    if topic == "other":
+        return ""
+    phrase = topic_for_prompt(topic)
+    return (f"\nOnly include groups whose main purpose is {phrase} activity. A page that lists "
+            f"every local association, club or NGO is not a list of {phrase} groups: from such a "
+            "page take only the groups that clearly belong to the topic, and describe each group "
+            "as the page does — never add the topic to a description the page does not support.\n")
+
 
 EXTRACTION_SCHEMA = {
     "type": "object",
@@ -1282,7 +1322,8 @@ class _ApiExtractor:
     ) -> list[CommunityRecord]:
         truncated = text[: self.max_text_chars]
         user_message = get_prompt("extraction_user").format(
-            topic=topic, city=city, source_url=source_url, page_text=truncated,
+            topic=topic_for_prompt(topic), topic_rule=topic_rule(topic), city=city,
+            source_url=source_url, page_text=truncated,
         )
         payload = {
             "model": self.model,

@@ -3,6 +3,7 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-10-23
+- **Creation**: [[2026-10-topic-slug-in-prompt]] — prompt sent "nok"; 527/1,328 nok records misfiled; readable topic phrase + topic_rule, fingerprint unchanged; audit script (dry run).
 - **Creation**: [[search-console-2026-10-23]] — kozossegek.com 0 clicks / 0 indexed in sample; meetapedia 50 clicks, 38 on 301'd HU URLs; venue and person pages out of both sitemaps.
 - **Update**: [[ai-provider-quota-runbook]] — free-tier audit: OpenRouter nemotron-3-super listed but 404, replaced by nemotron-3-ultra (60, measured); inkling 403; no new provider adds capacity.
 - **Creation**: [[site-visual-identity]] — terracotta gradient, cream and all-caps labels replaced by white, ink, town green and Atkinson Hyperlegible Next; About drops its 1,312-city list; community page has one title.

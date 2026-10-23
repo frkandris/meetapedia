@@ -57,3 +57,5 @@ guards exist since 2026-07-25: a `preflight()` live check before any pair loop, 
 circuit breaker that marks every provider exhausted after 20 consecutive failed calls.
 `providers_down` (as opposed to `exhausted`, which is also true with no API key
 configured) is what aborts a run. See [[extractor-circuit-breaker]].
+
+Topics reach the model as readable phrases with a `{topic_rule}` paragraph, never as slugs — see [[2026-10-topic-slug-in-prompt]].
