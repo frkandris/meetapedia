@@ -42,3 +42,19 @@ Two changes, which only work together:
   the tunnel answers 502, which production now reads as absent.
 
 Setup is in [[local-gpu-machine-setup]].
+
+## First evening in service (2026-10-23)
+
+- **It oscillated.** Two loaded slots took free memory from ~54% to ~24%, under
+  the 25% needed for `full`, so it fell to `low`, freed the memory and climbed
+  back: 36 llama-server restarts in five hours, each cancelling the calls in
+  flight (the ledger's last error read `cancelled`). `desired_state` now takes
+  the current state: 25% gates *entering* `full`, staying needs only
+  `MIN_FREE_PCT` (12%), because the reading already includes the model's own
+  cache.
+- **The old machine had been failing for two days before it was switched
+  off.** Production's ledger: 14,193 localgpu calls on 2026-10-21 and 27,759 on
+  10-22, every one a failure (HTTP 530). The daily report's "~28,000
+  enrichment calls a day" were those failures. On 10-23, with absence handling
+  and this machine, ~450 calls succeeded (687K tokens) and 53 pages were
+  extracted by it in the first hours.

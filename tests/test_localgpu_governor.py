@@ -40,3 +40,14 @@ def test_desired_state(signals, state):
 
 def test_low_runs_fewer_slots_than_production_allows():
     assert gov.SLOTS["low"] < gov.SLOTS["full"] == 2
+
+
+def test_full_does_not_evict_itself():
+    """Two loaded slots push free memory from ~54% to ~24%; staying full must
+    not depend on the entry threshold, or the governor restarts the model
+    every few minutes (36 times in five hours on 2026-10-23)."""
+    loaded = _sig(idle_s=900, free_pct=24)
+    assert gov.desired_state(loaded, 300, "off")[0] == "low"
+    assert gov.desired_state(loaded, 300, "full")[0] == "full"
+    assert gov.desired_state(_sig(idle_s=900, free_pct=10), 300, "full")[0] == "off"
+    assert gov.desired_state(_sig(idle_s=5, free_pct=24), 300, "full")[0] == "low"

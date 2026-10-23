@@ -113,7 +113,7 @@ def read_signals() -> dict:
             "paused": PAUSE_FILE.exists()}
 
 
-def desired_state(sig: dict, idle_full_s: int) -> "tuple[str, str]":
+def desired_state(sig: dict, idle_full_s: int, current: str = "off") -> "tuple[str, str]":
     if sig["paused"]:
         return "off", "paused by owner"
     if not sig["ac"]:
@@ -122,7 +122,14 @@ def desired_state(sig: dict, idle_full_s: int) -> "tuple[str, str]":
         return "off", f"memory short ({sig['free_pct']}% free)"
     if sig["thermal"]:
         return "off", "thermal limit"
-    if sig["idle_s"] >= idle_full_s and sig["free_pct"] >= FULL_FREE_PCT:
+    # Hysteresis. Entering `full` needs FULL_FREE_PCT free; staying in it only
+    # needs more than MIN_FREE_PCT, because once two slots are loaded the
+    # reading includes the model's own cache. Without this the governor
+    # oscillated: full took free memory from ~54% to ~24%, under 25% it dropped
+    # to low, freed it, went full again — 36 llama-server restarts in five
+    # hours on 2026-10-23, each one cancelling the calls in flight.
+    need = MIN_FREE_PCT if current == "full" else FULL_FREE_PCT
+    if sig["idle_s"] >= idle_full_s and sig["free_pct"] >= need:
         return "full", f"idle {sig['idle_s']}s"
     return "low", f"in use (idle {sig['idle_s']}s)"
 
@@ -213,7 +220,7 @@ def cmd_run(args) -> None:
     log("governor_start", idle_full_s=args.idle, check_s=args.check)
     while True:
         sig = read_signals()
-        want, why = desired_state(sig, args.idle)
+        want, why = desired_state(sig, args.idle, server.state)
         if server.state != "off" and not server.alive():
             log("llama_exited", state=server.state)  # crashed: start it again
             server.state = "off"
