@@ -290,8 +290,14 @@ providers:
     # lowers it.
     rpd: 1000
     models:
-      - model: nvidia/nemotron-3-super-120b-a12b:free
-        quality: 58
+      # Replaced nvidia/nemotron-3-super-120b-a12b:free (58) on 2026-10-23: still
+      # listed by OpenRouter, but every call came back 404 "Function … Not
+      # Found" from NVIDIA behind it — listed is not served. The ultra model
+      # answered 4 of 4 on the Hungarian golden sample 7ba469cf2df8 and scored
+      # 60 (scripts/score_candidates.py). thinkingmachines/inkling:free, also
+      # new that day, answers 403 outside "agentic harnesses".
+      - model: nvidia/nemotron-3-ultra-550b-a55b:free
+        quality: 60
       - model: google/gemma-4-31b-it:free
         # Left at 52 despite answering 0 of 20 on 2026-09-18. That run is void
         # for this model, not damning: every failure was `api_rate_limited` with

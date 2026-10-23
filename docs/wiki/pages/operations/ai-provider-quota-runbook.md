@@ -132,3 +132,20 @@ highest-quality model for the whole window.
 ## A provider that fails every call
 
 A 100% failure rate is a catalogue question, not a bug in the router. Make the real call and read the error: `billing limit (HTTP 402)` means the free tier is gone, not that the model is. Since 2026-08-23 the ledger blocks a 402 provider until the next UTC midnight and persists it, so the worker stops rebuilding an extractor around a dead provider every few minutes — see [[2026-08-cerebras-free-tier-ended]].
+
+## Free-tier audit, 2026-10-23
+
+`check_free_models.py` in the container reported every configured model
+present; a real call disagreed. `nvidia/nemotron-3-super-120b-a12b:free` was
+listed by OpenRouter and answered 404 "Function … Not Found" (NVIDIA retired
+it behind the listing) — replaced by `nvidia/nemotron-3-ultra-550b-a55b:free`,
+measured at **60** on the Hungarian sample `7ba469cf2df8` with
+`scripts/score_candidates.py`. `thinkingmachines/inkling:free` answers 403
+outside "agentic harnesses". Both Gemma `:free` models were refused upstream
+(429 from Google behind OpenRouter) — re-score after 00:00 UTC, as is
+`open-mistral-nemo` (still unlisted; the confirming call hit
+`quota_exhausted`). Outside the fleet nothing adds real capacity: NVIDIA NIM
+publishes no daily limit and counts serving a public site as production
+(Enterprise licence), SambaNova's free tier is reported at ~20 requests/day per
+model, and Cerebras reportedly ended its no-card tier (ours is already
+`enabled: false`).

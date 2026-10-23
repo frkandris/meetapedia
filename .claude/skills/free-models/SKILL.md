@@ -101,6 +101,22 @@ router plans for fourteen times the real allowance and spends the day being
 refused. A wrong `rpd` is worse than a conservative one: the ledger budgets
 against it.
 
+## Measure a candidate before it enters the catalogue
+
+`POST /v1/score` scores configured models only. `scripts/score_candidates.py`
+scores NEW ones with a provider's existing key, on the same golden set, with
+the configured models as the baseline — run it in the container over stdin
+(usage in its docstring). One call per model per page, so keep `--pages`
+small, and run candidates **one at a time**: OpenRouter's `:free` tier is
+20/min across all models, and a batch makes every model after the first look
+broken.
+
+It also catches the opposite of UNLISTED: **listed but not served.** On
+2026-10-23 the configured `nvidia/nemotron-3-super-120b-a12b:free` was still in
+OpenRouter's list while every call returned 404 "Function … Not Found" from
+NVIDIA behind it; `check_free_models.py` reported it OK. Only a call says a
+model works.
+
 ## Acting on it
 
 Edit `config/providers.yaml` **in the repository** and deploy. It is *not* a

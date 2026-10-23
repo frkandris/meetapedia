@@ -3,6 +3,7 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-10-23
+- **Update**: [[ai-provider-quota-runbook]] — free-tier audit: OpenRouter nemotron-3-super listed but 404, replaced by nemotron-3-ultra (60, measured); inkling 403; no new provider adds capacity.
 - **Creation**: [[site-visual-identity]] — terracotta gradient, cream and all-caps labels replaced by white, ink, town green and Atkinson Hyperlegible Next; About drops its 1,312-city list; community page has one title.
 - **Creation**: [[world-expansion]] — wave 1 adds 3,169 cities ≥100k in 146 countries (core topics); search placed by country via `config/countries.yaml`, $5/day DataForSEO ceiling, population order for every country, core search terms in 44 more languages; Norwegian `no` was being read as `False`.
 - **Update**: [[importing-city-lists]] — `scripts/import_world.py` for all countries at once; next waves at 15,000 and 1,000.
