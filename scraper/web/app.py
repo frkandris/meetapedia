@@ -94,7 +94,7 @@ from ..false_positives import (add as fp_add, diff_html as fp_diff_html,
                                load as fp_load, load_history as fp_load_history,
                                remove as fp_remove, build_prompt_section)
 from ..extract import (ENRICH_SCHEMA, ENRICH_SYSTEM_PROMPT, EXTRACTION_SCHEMA,
-                       SYSTEM_PROMPT, USER_PROMPT_TEMPLATE,
+                       SYSTEM_PROMPT,
                        VENUE_SCHEMA, PERSON_SCHEMA, PROMPT_KEYS, get_prompt, set_prompt_override)
 from ..fetch import fetch_and_clean
 from ..identity import public_slug
@@ -8109,12 +8109,10 @@ async def public_source_page(request: Request, url_hash: str):
 
     extract_user_prompt = ""
     if entry.get("raw_text") and entry.get("topic") and entry.get("city"):
-        extract_user_prompt = USER_PROMPT_TEMPLATE.format(
-            topic=entry.get("topic", ""),
-            city=entry.get("city", ""),
-            source_url=entry.get("url", ""),
-            page_text=entry.get("raw_text", "")[:max_text_chars],
-        )
+        from ..extract import extraction_user_prompt
+        extract_user_prompt = extraction_user_prompt(
+            entry.get("topic", ""), entry.get("city", ""), entry.get("url", ""),
+            entry.get("raw_text", "")[:max_text_chars])
 
     # Look up search cache to find what queries led to this URL
     search_queries: list[str] = entry.get("source_queries") or []
@@ -10253,12 +10251,10 @@ async def cache_detail(request: Request, url_hash: str):
 
     extract_user_prompt = ""
     if entry.get("raw_text") and entry.get("topic") and entry.get("city"):
-        extract_user_prompt = USER_PROMPT_TEMPLATE.format(
-            topic=entry.get("topic", ""),
-            city=entry.get("city", ""),
-            source_url=entry.get("url", ""),
-            page_text=entry.get("raw_text", "")[:max_text_chars],
-        )
+        from ..extract import extraction_user_prompt
+        extract_user_prompt = extraction_user_prompt(
+            entry.get("topic", ""), entry.get("city", ""), entry.get("url", ""),
+            entry.get("raw_text", "")[:max_text_chars])
 
     fps = fp_load(_db())
     fp_extraction = {(fp["name"], fp["city"], fp["topic"])

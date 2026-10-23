@@ -277,6 +277,15 @@ def topic_for_prompt(topic: str) -> str:
     return _TOPIC_PROMPT.get(topic, (topic or "").replace("_", " "))
 
 
+def extraction_user_prompt(topic: str, city: str, source_url: str, page_text: str) -> str:
+    """The user message exactly as the extractor sends it — also what the
+    source-view pages show. One place: two copies of `.format(...)` in app.py
+    missed `{topic_rule}` and answered 500 (2026-10-23)."""
+    return get_prompt("extraction_user").format(
+        topic=topic_for_prompt(topic), topic_rule=topic_rule(topic), city=city,
+        source_url=source_url, page_text=page_text)
+
+
 def topic_rule(topic: str) -> str:
     """The paragraph that keeps a city-wide NGO list from becoming one topic.
 
@@ -1321,10 +1330,7 @@ class _ApiExtractor:
         false_positive_examples: str = "",
     ) -> list[CommunityRecord]:
         truncated = text[: self.max_text_chars]
-        user_message = get_prompt("extraction_user").format(
-            topic=topic_for_prompt(topic), topic_rule=topic_rule(topic), city=city,
-            source_url=source_url, page_text=truncated,
-        )
+        user_message = extraction_user_prompt(topic, city, source_url, truncated)
         payload = {
             "model": self.model,
             "messages": [

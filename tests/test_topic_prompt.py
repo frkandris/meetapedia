@@ -47,3 +47,31 @@ def test_the_user_prompt_is_outside_the_extraction_fingerprint():
         assert extract.get_extract_fingerprint() == before
     finally:
         extract.USER_PROMPT_TEMPLATE = old
+
+
+def test_the_public_source_page_renders_the_prompt_it_sent(tmp_path):
+    """/source/{hash} formatted the template itself and missed {topic_rule}:
+    every request answered 500 from 2026-10-23 20:56 until fixed."""
+    import hashlib
+
+    from fastapi.testclient import TestClient
+
+    from scraper.cache import CacheManager
+    from scraper.db import init_db
+    from scraper.web import app as web_app
+    from scraper.web.state import app_state
+
+    db = tmp_path / "scraper.db"
+    init_db(db)
+    url = "https://pecs.hu/civil-szervezetek/"
+    cm = CacheManager(db)
+    cm.save_scraped(url, "Egyesületek listája Pécsen …", "Pécs", "nok")
+    old_db, old_cm = app_state.db_path, app_state.cache_manager
+    app_state.db_path, app_state.cache_manager = db, cm
+    try:
+        h = hashlib.sha256(url.encode()).hexdigest()[:16]
+        r = TestClient(web_app.app).get(f"/source/{h}", headers={"host": "kozossegek.com"})
+        assert r.status_code == 200
+        assert "women&#39;s community groups" in r.text or "women's community groups" in r.text
+    finally:
+        app_state.db_path, app_state.cache_manager = old_db, old_cm
