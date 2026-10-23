@@ -5,6 +5,7 @@ import weakref
 import structlog
 import httpx
 
+from .countries import dataforseo_language, dataforseo_location
 from .models import SearchResult
 
 log = structlog.get_logger()
@@ -56,6 +57,67 @@ class SearchUnavailableError(Exception):
     """Raised when a search could not run (network error, 5xx, bad response,
     queue timeout). Callers MUST NOT record the pair as searched — caching an
     empty result here would permanently mark it done without ever searching."""
+
+
+def _where(country: str) -> dict:
+    """`country=` for a provider call, only when there is one — a provider
+    without the parameter keeps working for cities that carry no country."""
+    return {"country": country} if country else {}
+
+
+#: List prices, used only when a response does not report its own `cost`.
+_LIVE_USD_PER_TASK = 0.002
+_STANDARD_USD_PER_TASK = {1: 0.0006, 2: 0.0012}
+
+
+class SearchBudget:
+    """A daily ceiling on what DataForSEO may charge, in USD per UTC day.
+
+    Nothing else stops a paid search: a free LLM tier answers 429, DataForSEO
+    keeps charging until the balance is gone. Expanding to every country made
+    that matter — tens of thousands of new pairs, all unsearched, all due at
+    once. The spend is what DataForSEO itself reports in each response's `cost`
+    (the list price when it reports none), kept in `daily_counters` so a restart
+    does not reset it. Reaching the ceiling raises `SearchQuotaError`, which the
+    pipeline already handles the right way: the run's search stops, nothing is
+    cached, extraction carries on, and the next UTC day searches again.
+    `daily_usd` None means no ceiling; 0 means no paid searches at all.
+    """
+
+    COUNTER = "dataforseo_microusd"
+
+    def __init__(self, db_path, daily_usd: float | None):
+        self.db_path = db_path
+        self.daily_usd = None if daily_usd is None else float(daily_usd)
+
+    @staticmethod
+    def _day() -> str:
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    def spent_today(self) -> float:
+        from .db import get_daily_counter
+        return get_daily_counter(self.db_path, self._day(), self.COUNTER) / 1e6
+
+    def check(self) -> None:
+        if self.daily_usd is None:
+            return
+        spent = self.spent_today()
+        if spent >= self.daily_usd:
+            log.warning("dataforseo_daily_budget_reached", spent_usd=round(spent, 4),
+                        budget_usd=self.daily_usd)
+            raise SearchQuotaError(
+                f"DataForSEO daily budget reached (${spent:.2f} of "
+                f"${self.daily_usd:.2f}); searching resumes at 00:00 UTC")
+
+    def charge(self, cost, fallback_usd: float) -> None:
+        from .db import bump_daily_counter
+        try:
+            usd = float(cost) if cost is not None else fallback_usd
+        except (TypeError, ValueError):
+            usd = fallback_usd
+        bump_daily_counter(self.db_path, self._day(), self.COUNTER, int(round(usd * 1e6)))
+
 
 
 # DataForSEO location codes: https://api.dataforseo.com/v3/serp/google/locations
@@ -130,8 +192,10 @@ class DataForSEOClient:
     _NORMAL_PRIORITY_TIMEOUT_SECONDS = 1500.0
 
     def __init__(self, login: str, password: str, rate_limit_seconds: float = 1.0,
-                 mode: str = "live", standard_priority: int = 1):
+                 mode: str = "live", standard_priority: int = 1,
+                 budget: "SearchBudget | None" = None):
         import base64
+        self.budget = budget
         self.rate_limit_seconds = rate_limit_seconds
         self.mode = mode if mode in ("live", "standard") else "live"
         self.standard_priority = 2 if standard_priority == 2 else 1
@@ -144,13 +208,18 @@ class DataForSEOClient:
         query: str,
         locale: str = "en",
         num_results: int = 10,
+        country: str = "",
     ) -> list[SearchResult]:
         await self._rate_limit()
         locale = str(locale)  # guard against PyYAML parsing "no" as bool False
         # DataForSEO uses bare ISO 639-1 language codes
         lang = locale.split("-")[0] if "-" in locale else locale
-        task: dict = {"keyword": query, "language_code": lang, "depth": min(num_results, 100)}
-        location_code = LOCALE_TO_DATAFORSEO_LOCATION.get(lang)
+        task: dict = {"keyword": query, "language_code": dataforseo_language(lang),
+                      "depth": min(num_results, 100)}
+        # The city's country first: the language alone sent every Spanish-
+        # speaking city's search to Spain and every English one to the US.
+        location_code = (dataforseo_location(country)
+                         or LOCALE_TO_DATAFORSEO_LOCATION.get(lang))
         if location_code:
             task["location_code"] = location_code
         elif self.mode == "standard":
@@ -166,6 +235,8 @@ class DataForSEOClient:
             return await self._search_standard(task, query, num_results)
         payload = [task]
         headers = {"Authorization": self._auth_header, "Content-Type": "application/json"}
+        if self.budget is not None:
+            self.budget.check()
         try:
             client = shared_client()
             resp = await client.post(self._BASE, json=payload, headers=headers)
@@ -187,6 +258,8 @@ class DataForSEOClient:
             log.warning("dataforseo_bad_json", query=query)
             raise SearchUnavailableError("DataForSEO returned invalid JSON") from exc
 
+        if self.budget is not None:
+            self.budget.charge(data.get("cost"), fallback_usd=_LIVE_USD_PER_TASK)
         top = data.get("status_code", 0)
         if top == 40201:
             raise SearchQuotaError("DataForSEO: insufficient credits (40201)")
@@ -283,6 +356,8 @@ class DataForSEOClient:
         raise SearchUnavailableError("DataForSEO standard task timed out")
 
     async def _post_task(self, task: dict, query: str, headers: dict) -> str:
+        if self.budget is not None:
+            self.budget.check()
         try:
             client = shared_client()
             resp = await client.post(
@@ -299,6 +374,10 @@ class DataForSEOClient:
             data = resp.json()
         except Exception as exc:
             raise SearchUnavailableError("DataForSEO task_post returned invalid JSON") from exc
+        if self.budget is not None:
+            # Charged at task_post, so counted here — the poll is free.
+            self.budget.charge(data.get("cost"), fallback_usd=(
+                _STANDARD_USD_PER_TASK[self.standard_priority]))
         if data.get("status_code") == 40201:
             raise SearchQuotaError("DataForSEO: insufficient credits (40201)")
         tasks = data.get("tasks") or []
@@ -326,11 +405,13 @@ class DataForSEOClient:
         queries: list[str],
         locale: str = "en",
         num_results: int = 10,
+        country: str = "",
     ) -> list[SearchResult]:
         seen_urls: set[str] = set()
         combined: list[SearchResult] = []
         for query in queries:
-            for r in await self.search(query, locale=locale, num_results=num_results):
+            for r in await self.search(query, locale=locale, num_results=num_results,
+                                       country=country):
                 if r.url not in seen_urls:
                     seen_urls.add(r.url)
                     combined.append(r)
@@ -397,7 +478,7 @@ class FallbackSearchClient:
         raise SearchQuotaError(f"no search provider available{detail}")
 
     async def search(self, query: str, locale: str = "en",
-                     num_results: int = 10) -> list[SearchResult]:
+                     num_results: int = 10, country: str = "") -> list[SearchResult]:
         if self.exhausted:
             self._raise_exhausted()
         hit_transient = False
@@ -406,7 +487,8 @@ class FallbackSearchClient:
             if self._is_provider_blocked(i):
                 continue
             try:
-                result = await primary.search(query, locale=locale, num_results=num_results)
+                result = await primary.search(query, locale=locale, num_results=num_results,
+                                              **_where(country))
                 self._unavailable_count[i] = 0
                 return result
             except SearchQuotaError as exc:
@@ -431,7 +513,7 @@ class FallbackSearchClient:
     async def search_all(self, queries: list[str], locale: str = "en",
                          num_results: int = 10,
                          stop_after: int | None = None,
-                         usable=None) -> list[SearchResult]:
+                         usable=None, country: str = "") -> list[SearchResult]:
         """Run queries left-to-right across providers, deduplicating by URL.
 
         stop_after: stop issuing further (paid) queries once this many unique
@@ -469,7 +551,8 @@ class FallbackSearchClient:
                         log.info("search_stop_after_reached", collected=len(combined),
                                  skipped_queries=len(remaining) - len(provider_done))
                         return combined
-                    for r in await primary.search(query, locale=locale, num_results=num_results):
+                    for r in await primary.search(query, locale=locale, num_results=num_results,
+                                                  **_where(country)):
                         if r.url not in seen_urls:
                             seen_urls.add(r.url)
                             combined.append(r)

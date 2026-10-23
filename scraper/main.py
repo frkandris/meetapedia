@@ -83,17 +83,26 @@ def _settings_schedule() -> dict:
 def _settings_country_priority() -> list[str] | None:
     """pipeline.country_priority from settings.yaml, or None to use the default.
 
-    Lets an operator re-order expansion markets by editing config (which is a
-    mounted volume in production) instead of shipping a code change.
+    Lets an operator re-order expansion markets by editing config instead of
+    shipping a code change.
+
+    The named countries come first; every other country in
+    `config/countries.yaml` follows by population, largest first (2026-10-23,
+    the world expansion). Without that tail ~200 countries would share one
+    trailing group in `cities.yaml` order — alphabetical within each import.
     """
+    from .countries import population_order
+    named: list[str] = []
     try:
         settings = yaml.safe_load((CONFIG_DIR / "settings.yaml").read_text(encoding="utf-8")) or {}
         order = (settings.get("pipeline") or {}).get("country_priority")
-        if isinstance(order, list) and all(isinstance(c, str) for c in order) and order:
-            return order
+        if isinstance(order, list) and all(isinstance(c, str) for c in order):
+            named = list(order)
     except Exception:
         pass
-    return None
+    seen = set(named)
+    tail = [c for c in population_order() if c not in seen]
+    return (named + tail) or None
 
 
 # Order the worker walks countries in. A pass ends when the work signal flips,
@@ -117,9 +126,12 @@ def _saver_city_groups(cities: list, priority: list[str] | None = None) -> list[
     which the caller skips.
     """
     order = priority or DEFAULT_COUNTRY_PRIORITY
-    groups = [[city for city in cities if city.country == country] for country in order]
-    named = set(order)
-    groups.append([city for city in cities if city.country not in named])
+    # One pass, not one scan per country: with every country named that was
+    # ~200 scans of ~8,000 cities at the start of every worker pass.
+    index = {country: i for i, country in enumerate(order)}
+    groups: list[list] = [[] for _ in range(len(order) + 1)]
+    for city in cities:
+        groups[index.get(city.country, len(order))].append(city)
     return groups
 
 

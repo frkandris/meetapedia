@@ -86,3 +86,9 @@ international list, with the `Kota ` prefix trimmed.
   `core`), plus 83 Indonesian kota. Hungary moved to the front of
   `country_priority`: it had been last *because* it was fully indexed, and the
   import made it the largest unprocessed backlog on the primary market.
+- **2026-10-23** — every other searchable country, ≥100,000 people, all
+  `core`: 3,169 new cities in 146 countries, by `scripts/import_world.py` —
+  one run for all countries, which also writes `config/countries.yaml`
+  (DataForSEO location, search language, population order). See
+  [[world-expansion]]. Next waves: the same command with `--min-pop 15000`,
+  then `1000`.

@@ -15,7 +15,7 @@ from .extract import (DeepSeekExtractor, ExtractorContentError,
 from .false_positives import build_prompt_section
 from .false_positives import load as load_false_positives
 from .fetch import _is_blocked, fetch_and_clean
-from .search import (DataForSEOClient, FallbackSearchClient, SearchQuotaError,
+from .search import (DataForSEOClient, FallbackSearchClient, SearchBudget, SearchQuotaError,
                      SearchUnavailableError, build_queries)
 from .db import get_daily_counters_with_prefix, get_search_cache, save_search_cache, mark_search_collection_complete, get_collected_pairs, get_searched_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs
 from .router import build_router
@@ -777,6 +777,9 @@ class PipelineConfig:
     enrich_communities: bool = True
     dataforseo_mode: str = "live"  # "standard" = queued task_post/task_get API
     dataforseo_priority: int = 1  # standard mode: 1=normal, 2=high priority
+    # USD DataForSEO may charge per UTC day (search.daily_budget_usd).
+    # None = no ceiling, 0 = no paid searches — see search.SearchBudget.
+    dataforseo_daily_budget_usd: float | None = None
     # Topics still searched for topic_tier="core" cities; empty = tiering disabled.
     core_topics: list[str] = field(default_factory=list)
     #: Pages whose community extraction may be in flight at once. 1 reproduces
@@ -1181,6 +1184,7 @@ def _build_search_client(config: PipelineConfig) -> FallbackSearchClient:
             rate_limit_seconds=config.search_rate_limit,
             mode=config.dataforseo_mode,
             standard_priority=config.dataforseo_priority,
+            budget=SearchBudget(config.db_path, config.dataforseo_daily_budget_usd),
         ))
     log.info("search_client", primaries=[type(p).__name__ for p in search_primaries])
     return FallbackSearchClient(primaries=search_primaries)
@@ -1222,7 +1226,7 @@ async def _prefetch_searches(
             queries = build_queries(city.name, city.search_variants, terms)
             try:
                 results = await searxng.search_all(
-                    queries, locale=city.locale,
+                    queries, locale=city.locale, country=city.country,
                     num_results=config.search_results_per_query,
                     stop_after=config.search_max_pages,
                     usable=lambda url: not _is_blocked(url, config.fetch_blocked_domains),
@@ -1379,7 +1383,8 @@ async def _run_full(
                     if isinstance(_pre, BaseException):
                         raise _pre
                     search_results = _pre if _pre is not None else await searxng.search_all(
-                        queries, locale=city.locale, num_results=config.search_results_per_query,
+                        queries, locale=city.locale, country=city.country,
+                        num_results=config.search_results_per_query,
                         stop_after=config.search_max_pages,
                         usable=lambda url: not _is_blocked(url, config.fetch_blocked_domains),
                     )

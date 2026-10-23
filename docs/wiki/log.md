@@ -3,6 +3,8 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-10-23
+- **Creation**: [[world-expansion]] — wave 1 adds 3,169 cities ≥100k in 146 countries (core topics); search placed by country via `config/countries.yaml`, $5/day DataForSEO ceiling, population order for every country, core search terms in 44 more languages; Norwegian `no` was being read as `False`.
+- **Update**: [[importing-city-lists]] — `scripts/import_world.py` for all countries at once; next waves at 15,000 and 1,000.
 - **Creation**: [[localgpu-governor]] — a switched-off GPU is now *absent* (`ExtractorAbsentError`: skipped 180 s, slot handed back, no failure or 429 booked) and the provider's concurrency follows the server's `/props` slot count; the model moves to the owner's working Mac under `tools/localgpu-governor/` (full / low / off).
 - **Update**: [[local-gpu-machine-setup]] — the governor agent replaces `com.meetapedia.llama`; `install.sh`, `status`/`pause`/`resume`, taking the key from the container.
 

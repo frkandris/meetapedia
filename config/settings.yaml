@@ -48,6 +48,11 @@ search:
   # and pipeline.search_concurrency overlaps the waits. Switching to 1 halves
   # the search bill — do it together with search_concurrency, never alone.
   standard_priority: 1
+  # USD DataForSEO may charge per UTC day; when it is reached the search stops
+  # until 00:00 UTC and extraction carries on (search.SearchBudget). Set for
+  # the 2026-10-23 world expansion: ~27K new pairs at ~0.2-0.4 cents each.
+  # Remove the key for no ceiling; 0 means no paid searches at all.
+  daily_budget_usd: 5.0
 
 fetch:
   timeout_seconds: 15

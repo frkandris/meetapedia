@@ -63,8 +63,13 @@ def test_every_city_locale_has_a_dataforseo_location():
     cities = yaml.safe_load(
         (Path(__file__).parent.parent / "config" / "cities.yaml").read_text(
             encoding="utf-8"))["cities"]
-    locales = {str(c["locale"]).split("-")[0] for c in cities}
-    unmapped = locales - set(LOCALE_TO_DATAFORSEO_LOCATION)
+    from scraper.countries import dataforseo_location
+
+    # Since 2026-10-23 the city's country places the search; the language
+    # table is the fallback for countries outside config/countries.yaml.
+    locales = {str(c["locale"]).split("-")[0] for c in cities
+               if not dataforseo_location(c["country"])}
+    unmapped = locales - set(LOCALE_TO_DATAFORSEO_LOCATION) - {"False"}
     assert not unmapped, f"locales without DataForSEO location_code: {sorted(unmapped)}"
 
 

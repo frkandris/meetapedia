@@ -10,6 +10,14 @@ BASE_DIR = Path(__file__).parent.parent
 CONFIG_DIR = BASE_DIR / "config"
 
 
+def yaml_locale(value) -> str:
+    """A `locale` as YAML 1.1 reads it: a bare `no` (Norwegian) is the boolean
+    False. `str()` alone made it "False" — consistent between cities and topics,
+    so the terms matched, but DataForSEO has no language "False", so every
+    Norwegian search ran in English from the United States."""
+    return "no" if value is False else str(value)
+
+
 def _mapping(value: object, label: str) -> dict:
     if not isinstance(value, dict):
         raise ValueError(f"{label} must be a mapping")
@@ -42,7 +50,7 @@ def load_config_from_docs(
         CityConfig(
             name=c["name"],
             country=c.get("country", ""),
-            locale=str(c["locale"]),  # str() guards against PyYAML parsing "no" as bool
+            locale=yaml_locale(c["locale"]),
             search_variants=c.get("search_variants", [c["name"]]),
             topic_tier=str(c.get("topic_tier", "full")),
         )
@@ -51,7 +59,7 @@ def load_config_from_docs(
     cities = [c for c in all_cities if not test_mode or c.name in test_cities]
 
     topics = [
-        TopicConfig(name=t["name"], search_terms={str(k): v for k, v in t["search_terms"].items()})
+        TopicConfig(name=t["name"], search_terms={yaml_locale(k): v for k, v in t["search_terms"].items()})
         for t in topic_items
     ]
     cache_cfg = settings.get("cache", {})
@@ -65,6 +73,9 @@ def load_config_from_docs(
         search_rate_limit=settings["search"]["rate_limit_seconds"],
         dataforseo_mode=settings["search"].get("dataforseo_mode", "live"),
         dataforseo_priority=int(settings["search"].get("standard_priority", 1)),
+        dataforseo_daily_budget_usd=(
+            None if settings["search"].get("daily_budget_usd") is None
+            else float(settings["search"]["daily_budget_usd"])),
         core_topics=pipeline_settings.get("core_topics", []) or [],
         extract_concurrency=int(pipeline_settings.get("extract_concurrency", 1) or 1),
         search_concurrency=int(pipeline_settings.get("search_concurrency", 1) or 1),
