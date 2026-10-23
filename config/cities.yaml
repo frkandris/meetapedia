@@ -8030,6 +8030,21 @@ cities:
     locale: en
     search_variants: ["Eastbourne", "Eastbourne United Kingdom"]
     topic_tier: core
+  - name: "Westminster (United Kingdom)"
+    country: "United Kingdom"
+    locale: en
+    search_variants: ["Westminster", "Westminster United Kingdom"]
+    topic_tier: core
+  - name: "Cambridge (United Kingdom)"
+    country: "United Kingdom"
+    locale: en
+    search_variants: ["Cambridge", "Cambridge United Kingdom"]
+    topic_tier: core
+  - name: "Worcester (United Kingdom)"
+    country: "United Kingdom"
+    locale: en
+    search_variants: ["Worcester", "Worcester United Kingdom"]
+    topic_tier: core
 
   # Ireland
   - name: Dublin
@@ -9268,6 +9283,31 @@ cities:
     locale: en
     search_variants: ["Roanoke", "Roanoke United States"]
     topic_tier: core
+  - name: "Birmingham (United States)"
+    country: "United States"
+    locale: en
+    search_variants: ["Birmingham", "Birmingham United States"]
+    topic_tier: core
+  - name: "Vancouver (United States)"
+    country: "United States"
+    locale: en
+    search_variants: ["Vancouver", "Vancouver United States"]
+    topic_tier: core
+  - name: "Salem (United States)"
+    country: "United States"
+    locale: en
+    search_variants: ["Salem", "Salem United States"]
+    topic_tier: core
+  - name: "Athens (United States)"
+    country: "United States"
+    locale: en
+    search_variants: ["Athens", "Athens United States"]
+    topic_tier: core
+  - name: "Manchester (United States)"
+    country: "United States"
+    locale: en
+    search_variants: ["Manchester", "Manchester United States"]
+    topic_tier: core
 
   # Canada
   - name: Toronto
@@ -9473,6 +9513,21 @@ cities:
     locale: en
     search_variants: ["Red Deer", "Red Deer Canada"]
     topic_tier: core
+  - name: "London (Canada)"
+    country: "Canada"
+    locale: en
+    search_variants: ["London", "London Canada"]
+    topic_tier: core
+  - name: "Windsor"
+    country: "Canada"
+    locale: en
+    search_variants: ["Windsor", "Windsor Canada"]
+    topic_tier: core
+  - name: "Cambridge (Canada)"
+    country: "Canada"
+    locale: en
+    search_variants: ["Cambridge", "Cambridge Canada"]
+    topic_tier: core
 
   # Australia
   - name: Sydney
@@ -9577,6 +9632,11 @@ cities:
     country: "New Zealand"
     locale: en
     search_variants: ["Lower Hutt", "Lower Hutt New Zealand"]
+    topic_tier: core
+  - name: "Hamilton (New Zealand)"
+    country: "New Zealand"
+    locale: en
+    search_variants: ["Hamilton", "Hamilton New Zealand"]
     topic_tier: core
 
   # France
@@ -10011,6 +10071,11 @@ cities:
     country: "Spain"
     locale: es
     search_variants: ["Barakaldo", "Barakaldo Spain"]
+    topic_tier: core
+  - name: "Córdoba (Spain)"
+    country: "Spain"
+    locale: es
+    search_variants: ["Córdoba", "Cordoba", "Córdoba Spain"]
     topic_tier: core
 
   # Portugal
@@ -13081,6 +13146,11 @@ cities:
     locale: ko
     search_variants: ["Boryeong", "Boryeong South Korea"]
     topic_tier: core
+  - name: "Anyang (South Korea)"
+    country: "South Korea"
+    locale: ko
+    search_variants: ["Anyang", "Anyang South Korea"]
+    topic_tier: core
 
   # China
   - name: Beijing
@@ -14749,6 +14819,11 @@ cities:
     country: "China"
     locale: zh
     search_variants: ["Suifenhe", "Suifenhe China"]
+    topic_tier: core
+  - name: "Hong Kong (China)"
+    country: "China"
+    locale: zh
+    search_variants: ["Hong Kong", "Hong Kong China"]
     topic_tier: core
 
   # SE Asia
@@ -16473,6 +16548,11 @@ cities:
     country: "India"
     locale: en
     search_variants: ["Gangtok", "Gangtok India"]
+    topic_tier: core
+  - name: "Salem (India)"
+    country: "India"
+    locale: en
+    search_variants: ["Salem", "Salem India"]
     topic_tier: core
 
   # Israel
@@ -27154,6 +27234,11 @@ cities:
     locale: en
     search_variants: ["Renala Khurd", "Renala Khurd Pakistan"]
     topic_tier: core
+  - name: "Hyderabad (Pakistan)"
+    country: "Pakistan"
+    locale: en
+    search_variants: ["Hyderabad", "Hyderabad Pakistan"]
+    topic_tier: core
 
   # Brazil
   - name: "São Paulo (Brazil)"
@@ -28626,6 +28711,11 @@ cities:
     locale: pt
     search_variants: ["Itaperuna", "Itaperuna Brazil"]
     topic_tier: core
+  - name: "Toledo (Brazil)"
+    country: "Brazil"
+    locale: pt
+    search_variants: ["Toledo", "Toledo Brazil"]
+    topic_tier: core
 
   # Nigeria
   - name: "Kano"
@@ -28937,6 +29027,11 @@ cities:
     country: "Nigeria"
     locale: en
     search_variants: ["Birnin Kebbi", "Birnin Kebbi Nigeria"]
+    topic_tier: core
+  - name: "Aba (Nigeria)"
+    country: "Nigeria"
+    locale: en
+    search_variants: ["Aba", "Aba Nigeria"]
     topic_tier: core
 
   # Bangladesh
@@ -29801,6 +29896,11 @@ cities:
     locale: en
     search_variants: ["Ras Gharib", "Ras Gharib Egypt"]
     topic_tier: core
+  - name: "Alexandria (Egypt)"
+    country: "Egypt"
+    locale: en
+    search_variants: ["Alexandria", "Alexandria Egypt"]
+    topic_tier: core
 
   # Philippines
   - name: "Quezon"
@@ -30272,6 +30372,31 @@ cities:
     country: "Philippines"
     locale: en
     search_variants: ["Alaminos", "Alaminos Philippines"]
+    topic_tier: core
+  - name: "Santa Rosa (Philippines)"
+    country: "Philippines"
+    locale: en
+    search_variants: ["Santa Rosa", "Santa Rosa Philippines"]
+    topic_tier: core
+  - name: "Valencia (Philippines)"
+    country: "Philippines"
+    locale: en
+    search_variants: ["Valencia", "Valencia Philippines"]
+    topic_tier: core
+  - name: "Toledo (Philippines)"
+    country: "Philippines"
+    locale: en
+    search_variants: ["Toledo", "Toledo Philippines"]
+    topic_tier: core
+  - name: "San Jose (Philippines)"
+    country: "Philippines"
+    locale: en
+    search_variants: ["San Jose", "San Jose Philippines"]
+    topic_tier: core
+  - name: "Santiago (Philippines)"
+    country: "Philippines"
+    locale: en
+    search_variants: ["Santiago", "Santiago Philippines"]
     topic_tier: core
 
   # Democratic Republic of the Congo
@@ -30755,6 +30880,11 @@ cities:
     locale: my
     search_variants: ["Sittwe", "Sittwe Myanmar"]
     topic_tier: core
+  - name: "Bago (Myanmar)"
+    country: "Myanmar"
+    locale: my
+    search_variants: ["Bago", "Bago Myanmar"]
+    topic_tier: core
 
   # Colombia
   - name: "Bogotá (Colombia)"
@@ -31225,6 +31355,26 @@ cities:
     country: "Argentina"
     locale: es
     search_variants: ["Libertad", "Libertad Argentina"]
+    topic_tier: core
+  - name: "Córdoba (Argentina)"
+    country: "Argentina"
+    locale: es
+    search_variants: ["Córdoba", "Cordoba", "Córdoba Argentina"]
+    topic_tier: core
+  - name: "San Juan (Argentina)"
+    country: "Argentina"
+    locale: es
+    search_variants: ["San Juan", "San Juan Argentina"]
+    topic_tier: core
+  - name: "Formosa (Argentina)"
+    country: "Argentina"
+    locale: es
+    search_variants: ["Formosa", "Formosa Argentina"]
+    topic_tier: core
+  - name: "Santa Rosa (Argentina)"
+    country: "Argentina"
+    locale: es
+    search_variants: ["Santa Rosa", "Santa Rosa Argentina"]
     topic_tier: core
 
   # Uganda
@@ -32219,6 +32369,11 @@ cities:
     locale: es
     search_variants: ["Pisco", "Pisco Peru"]
     topic_tier: core
+  - name: "Buenos Aires (Peru)"
+    country: "Peru"
+    locale: es
+    search_variants: ["Buenos Aires", "Buenos Aires Peru"]
+    topic_tier: core
 
   # Saudi Arabia
   - name: "Riyadh"
@@ -32335,6 +32490,11 @@ cities:
     country: "Saudi Arabia"
     locale: ar
     search_variants: ["Qurayyat", "Qurayyat Saudi Arabia"]
+    topic_tier: core
+  - name: "Tabuk (Saudi Arabia)"
+    country: "Saudi Arabia"
+    locale: ar
+    search_variants: ["Tabuk", "Tabuk Saudi Arabia"]
     topic_tier: core
 
   # Ghana
@@ -32657,6 +32817,31 @@ cities:
     locale: es
     search_variants: ["Punta de Mata", "Punta de Mata Venezuela"]
     topic_tier: core
+  - name: "Valencia (Venezuela)"
+    country: "Venezuela"
+    locale: es
+    search_variants: ["Valencia", "Valencia Venezuela"]
+    topic_tier: core
+  - name: "Mérida (Venezuela)"
+    country: "Venezuela"
+    locale: es
+    search_variants: ["Mérida", "Merida", "Mérida Venezuela"]
+    topic_tier: core
+  - name: "San Diego (Venezuela)"
+    country: "Venezuela"
+    locale: es
+    search_variants: ["San Diego", "San Diego Venezuela"]
+    topic_tier: core
+  - name: "Santa Rita (Venezuela)"
+    country: "Venezuela"
+    locale: es
+    search_variants: ["Santa Rita", "Santa Rita Venezuela"]
+    topic_tier: core
+  - name: "San Carlos (Venezuela)"
+    country: "Venezuela"
+    locale: es
+    search_variants: ["San Carlos", "San Carlos Venezuela"]
+    topic_tier: core
 
   # Cote d'Ivoire
   - name: "Abidjan"
@@ -32963,6 +33148,11 @@ cities:
     locale: ne
     search_variants: ["Dhangadhi", "Dhangadhi Nepal"]
     topic_tier: core
+  - name: "Bharatpur (Nepal)"
+    country: "Nepal"
+    locale: ne
+    search_variants: ["Bharatpur", "Bharatpur Nepal"]
+    topic_tier: core
 
   # Cameroon
   - name: "Douala"
@@ -33169,6 +33359,11 @@ cities:
     country: "Sri Lanka"
     locale: en
     search_variants: ["Sri Jayawardenepura Kotte", "Sri Jayawardenepura Kotte Sri Lanka"]
+    topic_tier: core
+  - name: "Colombo (Sri Lanka)"
+    country: "Sri Lanka"
+    locale: en
+    search_variants: ["Colombo", "Colombo Sri Lanka"]
     topic_tier: core
 
   # Kazakhstan
@@ -33540,6 +33735,11 @@ cities:
     locale: en
     search_variants: ["Mzuzu", "Mzuzu Malawi"]
     topic_tier: core
+  - name: "Zomba (Malawi)"
+    country: "Malawi"
+    locale: en
+    search_variants: ["Zomba", "Zomba Malawi"]
+    topic_tier: core
 
   # Guinea
   - name: "Conakry"
@@ -33723,6 +33923,11 @@ cities:
     locale: es
     search_variants: ["La Libertad", "La Libertad Ecuador"]
     topic_tier: core
+  - name: "Santo Domingo (Ecuador)"
+    country: "Ecuador"
+    locale: es
+    search_variants: ["Santo Domingo", "Santo Domingo Ecuador"]
+    topic_tier: core
 
   # Senegal
   - name: "Dakar"
@@ -33821,6 +34026,11 @@ cities:
     country: "Zimbabwe"
     locale: en
     search_variants: ["Gweru", "Gweru Zimbabwe"]
+    topic_tier: core
+  - name: "Kadoma (Zimbabwe)"
+    country: "Zimbabwe"
+    locale: en
+    search_variants: ["Kadoma", "Kadoma Zimbabwe"]
     topic_tier: core
 
   # Rwanda
@@ -33940,6 +34150,11 @@ cities:
     locale: es
     search_variants: ["Trinidad", "Trinidad Bolivia"]
     topic_tier: core
+  - name: "La Paz (Bolivia)"
+    country: "Bolivia"
+    locale: es
+    search_variants: ["La Paz", "La Paz Bolivia"]
+    topic_tier: core
 
   # Tunisia
   - name: "Tunis"
@@ -34015,6 +34230,11 @@ cities:
     country: "Dominican Republic"
     locale: es
     search_variants: ["La Romana", "La Romana Dominican Republic"]
+    topic_tier: core
+  - name: "Santo Domingo (Dominican Republic)"
+    country: "Dominican Republic"
+    locale: es
+    search_variants: ["Santo Domingo", "Santo Domingo Dominican Republic"]
     topic_tier: core
 
   # Jordan
@@ -34290,6 +34510,11 @@ cities:
     locale: es
     search_variants: ["Caaguazú District", "Caaguazu District", "Caaguazú District Paraguay"]
     topic_tier: core
+  - name: "San Lorenzo (Paraguay)"
+    country: "Paraguay"
+    locale: es
+    search_variants: ["San Lorenzo", "San Lorenzo Paraguay"]
+    topic_tier: core
 
   # Republic of the Congo
   - name: "Brazzaville"
@@ -34366,6 +34591,11 @@ cities:
     locale: en
     search_variants: ["Zahlé", "Zahle", "Zahlé Lebanon"]
     topic_tier: core
+  - name: "Tripoli (Lebanon)"
+    country: "Lebanon"
+    locale: en
+    search_variants: ["Tripoli", "Tripoli Lebanon"]
+    topic_tier: core
 
   # El Salvador
   - name: "San Salvador"
@@ -34382,6 +34612,16 @@ cities:
     country: "El Salvador"
     locale: es
     search_variants: ["Santa Tecla", "Santa Tecla El Salvador"]
+    topic_tier: core
+  - name: "Santa Ana (El Salvador)"
+    country: "El Salvador"
+    locale: es
+    search_variants: ["Santa Ana", "Santa Ana El Salvador"]
+    topic_tier: core
+  - name: "San Miguel (El Salvador)"
+    country: "El Salvador"
+    locale: es
+    search_variants: ["San Miguel", "San Miguel El Salvador"]
     topic_tier: core
 
   # Singapore
@@ -34470,6 +34710,11 @@ cities:
     country: "Norway"
     locale: "no"
     search_variants: ["Sandvika", "Sandvika Norway"]
+    topic_tier: core
+  - name: "Bergen (Norway)"
+    country: "Norway"
+    locale: "no"
+    search_variants: ["Bergen", "Bergen Norway"]
     topic_tier: core
 
   # Costa Rica
@@ -34623,6 +34868,11 @@ cities:
     locale: es
     search_variants: ["Ciudad de la Costa", "Ciudad de la Costa Uruguay"]
     topic_tier: core
+  - name: "Salto (Uruguay)"
+    country: "Uruguay"
+    locale: es
+    search_variants: ["Salto", "Salto Uruguay"]
+    topic_tier: core
 
   # Mongolia
   - name: "Ulaanbaatar"
@@ -34697,6 +34947,11 @@ cities:
     country: "Jamaica"
     locale: en
     search_variants: ["Montego Bay", "Montego Bay Jamaica"]
+    topic_tier: core
+  - name: "Kingston (Jamaica)"
+    country: "Jamaica"
+    locale: en
+    search_variants: ["Kingston", "Kingston Jamaica"]
     topic_tier: core
 
   # Qatar
@@ -34920,4 +35175,11 @@ cities:
     country: "Curacao"
     locale: nl
     search_variants: ["Willemstad", "Willemstad Curacao"]
+    topic_tier: core
+
+  # The Bahamas
+  - name: "Nassau (The Bahamas)"
+    country: "The Bahamas"
+    locale: en
+    search_variants: ["Nassau", "Nassau The Bahamas"]
     topic_tier: core
