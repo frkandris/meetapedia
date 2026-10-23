@@ -1768,8 +1768,8 @@ def get_low_yield_domains(db_path: Path, min_pages: int = 15) -> set[str]:
     (`search.max_pages_per_topic`). Measured 2026-10-23: 8,357 of 170,230
     extracted pages (4.9%) on 208 domains — dancenow.net alone in 607 cities.
     """
-    if not db_path.exists():
-        return set()
+    if min_pages <= 0 or not db_path.exists():
+        return set()  # 0 disables the measured list (fetch.low_yield_min_pages)
     with _connect(db_path) as conn:
         rows = conn.execute(
             "SELECT domain FROM cache_pages WHERE extract_fingerprint IS NOT NULL"

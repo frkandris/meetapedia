@@ -283,7 +283,10 @@ def main() -> int:
         for name, info in sorted(found.items(), key=lambda x: -x[1]["pop"]):
             # The listed name may be the local one (Nürnberg for Nuremberg) or
             # a longer form (Ludwigshafen am Rhein).
-            if name in have or info.get("local") in have or any(
+            # Duplicates are judged within the country: Venezuela's Valencia is
+            # not Spain's. A cross-country name clash reaches the slug check
+            # below and is imported as "Valencia (Venezuela)".
+            if name in listed_here or info.get("local") in listed_here or any(
                     h.startswith(name + " ") for h in listed_here):
                 continue
             if info["coord"] and any(_km(info["coord"], c) < _SAME_PLACE_KM for c in coords):
@@ -297,6 +300,7 @@ def main() -> int:
             info = {**info, "search_name": name}
             new.append((display, info))
             have.add(display)
+            listed_here.add(name)
             slugs.add(public_slug(display))
             if info["coord"]:
                 coords.append(info["coord"])

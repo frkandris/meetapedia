@@ -101,11 +101,23 @@ def test_a_failed_district_query_is_retried_and_paid_results_are_kept(tmp_path):
         async def search(self, q, **kw):
             if "Camden" in q:
                 raise SearchUnavailableError("task timed out")
-            return [SimpleNamespace(url="https://hackney-choir.example/")]
+            return [SimpleNamespace(url="https://www.facebook.com/hackneychoir"),
+                    SimpleNamespace(url="https://hackney-choir.example/")]
 
-    cfg = SimpleNamespace(db_path=db, search_concurrency=4, search_results_per_query=10)
+    cfg = SimpleNamespace(db_path=db, search_concurrency=4, search_results_per_query=10,
+                          fetch_blocked_domains=["facebook.com"])
     urls = asyncio.run(_deepen_with_districts(_Search(), cfg, city, "choir",
                                               ["choir"], ["https://old.example/"]))
+    # Blocked URLs are not stored: the done-pair filter caps the stored list,
+    # and a never-fetched URL would push fetched pages past the cap (Codex P1).
     assert urls == ["https://old.example/", "https://hackney-choir.example/"]
     ran = get_search_cache_queries(db, "London", "choir")
     assert "choir Hackney London" in ran and "choir Camden London" not in ran
+
+
+def test_zero_disables_the_measured_low_yield_list(tmp_path):
+    """`low_yield_min_pages: 0` once meant COUNT(*) >= 0: block every
+    zero-yield domain (Codex P2)."""
+    db = tmp_path / "t.db"
+    init_db(db)
+    assert get_low_yield_domains(db, 0) == set()

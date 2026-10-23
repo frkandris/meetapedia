@@ -1268,7 +1268,11 @@ async def _deepen_with_districts(searxng, config, city, topic_name: str,
                     failed=len(errors), error=str(errors[0]))
     if not ok:
         return None
-    merged = list(dict.fromkeys(cached_urls + [res.url for _q, batch in ok for res in batch]))
+    # Stored without blocked URLs, like a fresh search's list: the done-pair
+    # filter caps the *stored* list, and a blocked URL that is never fetched
+    # would push fetched pages past the cap and leave them unextracted.
+    merged = [u for u in dict.fromkeys(cached_urls + [res.url for _q, batch in ok for res in batch])
+              if not _is_blocked(u, config.fetch_blocked_domains)]
     await _off_loop(save_search_cache, config.db_path, city.name, topic_name,
                     merged, sorted(have | {q for q, _r in ok}))
     log.info("district_search_done", city=city.name, topic=topic_name,
@@ -1520,10 +1524,9 @@ async def _run_full(
                     if isinstance(_pre, BaseException):
                         raise _pre
                     search_results = _pre if _pre is not None else await searxng.search_all(
-                        queries + district_queries(city, terms), locale=city.locale,
-                        country=city.country,
+                        queries, locale=city.locale, country=city.country,
                         num_results=config.search_results_per_query,
-                        stop_after=_pages_for(city, config),
+                        stop_after=config.search_max_pages,
                         usable=lambda url: not _is_blocked(url, config.fetch_blocked_domains),
                     )
                 except (SearchQuotaError, SearchUnavailableError) as exc:
@@ -1547,6 +1550,13 @@ async def _run_full(
                 # marks the pair as done. The full (uncapped) URL list is stored; reads
                 # apply [:search_max_pages].
                 await _off_loop(save_search_cache, config.db_path, city.name, topic.name, all_urls, queries)
+                if getattr(city, "search_districts", None) and not searxng.exhausted:
+                    # Same path as a cached pair, so every mode — prefetch,
+                    # Full Refresh — runs the districts and records exactly the
+                    # queries that ran.
+                    all_urls = await _deepen_with_districts(
+                        searxng, config, city, topic.name, terms, all_urls) or all_urls
+                    urls = all_urls[:_pages_for(city, config)]
 
             fetched: list[tuple[str, str]] = []
             pair_log = {**_new_pair_log(city.name, topic.name, queries),
