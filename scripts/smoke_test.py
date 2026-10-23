@@ -58,14 +58,22 @@ class Checks:
         self.warnings: list[str] = []
 
     def check(self, name: str, url: str, *, status: int = 200,
-              must_contain: str = "", headers: dict | None = None) -> str:
+              must_contain: str = "", must_not_contain: tuple = (),
+              predicate=None, headers: dict | None = None) -> str:
+        """`must_not_contain`: strings that must be absent. `predicate`:
+        body -> error message, "" when fine (for counts and the like)."""
         code, body, secs = fetch(url, headers)
-        ok = code == status and (not must_contain or must_contain in body)
+        present = [x for x in must_not_contain if x in body]
+        problem = predicate(body) if (predicate and code == status) else ""
+        ok = (code == status and (not must_contain or must_contain in body)
+              and not present and not problem)
         mark = "ok  " if ok else "FAIL"
         print(f"  {mark} {name:34} {code} in {secs:5.2f}s")
         if not ok:
             detail = (f"expected {status}, got {code}" if code != status
-                      else f"missing {must_contain!r}")
+                      else f"missing {must_contain!r}" if must_contain and must_contain not in body
+                      else f"must not contain {present[0]!r}" if present
+                      else problem)
             self.failures.append(f"{name}: {detail}")
             if code == 0:
                 print(f"       {body[:140]}")
@@ -105,6 +113,27 @@ def run(base_hu: str, base_intl: str, expect_version: str = "") -> Checks:
     # The operator endpoints start and stop pipeline runs. An unauthenticated
     # one would be worse than an open gateway, so it is checked by name.
     c.check("control requires auth", f"{base_hu}/v1/control/status", status=401)
+
+    print("Behaviour shipped 2026-10-23 (each one broke or was absent once):")
+    c.check("about: no list of every town", f"{base_hu}/rolunk",
+            must_contain="szerepel benne", must_not_contain=("Magyar városok A–Z",))
+    c.check("city page: topic headings", f"{base_hu}/pecs", must_contain="data-topic-section")
+    community = c.check("community page: one h1", f"{base_hu}/pecs/mecsek-korus",
+                        predicate=lambda b: "" if b.count("<h1") == 1
+                        else f"{b.count('<h1')} h1 elements")
+    import re as _re
+    src = _re.search(r'/source/[0-9a-f]{16}', community)
+    if src:
+        # Formatted the extraction prompt itself and answered 500 for 2.5 h.
+        c.check("source page renders", f"{base_hu}{src.group(0)}", must_contain="</html>")
+    c.check("map: OSM tiles, no CARTO", f"{base_intl}/map",
+            must_contain="tile.openstreetmap.org",
+            must_not_contain=("cartocdn", "<title>Térkép"))
+    c.check("map: popup button contrast", f"{base_intl}/map",
+            must_contain=".leaflet-container a.city-popup-btn")
+    c.check("sitemap: no person/venue pages", f"{base_hu}/sitemap-1.xml",
+            must_not_contain=("/ember/", "/helyszin/"))
+    c.check("typeface loaded", f"{base_hu}/", must_contain="Atkinson+Hyperlegible+Next")
 
     if version:
         print(f"\ndeployed version: {version}")

@@ -82,3 +82,30 @@ def test_the_pilot_cities_ship_with_districts():
     cities = {c.name: c for c in load_config(Path("/nonexistent.db"))[0]}
     for name in ("London", "New York", "Lagos", "Beijing"):
         assert cities[name].search_districts
+
+
+def test_a_failed_district_query_is_retried_and_paid_results_are_kept(tmp_path):
+    import asyncio
+    from types import SimpleNamespace
+
+    from scraper.pipeline import _deepen_with_districts
+    from scraper.search import SearchUnavailableError
+
+    db = tmp_path / "t.db"
+    init_db(db)
+    save_search_cache(db, "London", "choir", ["https://old.example/"], ["choir London"])
+    city = CityConfig(name="London", locale="en", search_variants=["London"],
+                      search_districts=["Hackney", "Camden"])
+
+    class _Search:
+        async def search(self, q, **kw):
+            if "Camden" in q:
+                raise SearchUnavailableError("task timed out")
+            return [SimpleNamespace(url="https://hackney-choir.example/")]
+
+    cfg = SimpleNamespace(db_path=db, search_concurrency=4, search_results_per_query=10)
+    urls = asyncio.run(_deepen_with_districts(_Search(), cfg, city, "choir",
+                                              ["choir"], ["https://old.example/"]))
+    assert urls == ["https://old.example/", "https://hackney-choir.example/"]
+    ran = get_search_cache_queries(db, "London", "choir")
+    assert "choir Hackney London" in ran and "choir Camden London" not in ran

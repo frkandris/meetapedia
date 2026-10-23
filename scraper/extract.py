@@ -824,6 +824,7 @@ class _SlotGate:
         self.busy = 0
         self.checked_at = float("-inf")
         self._cond: "asyncio.Condition | None" = None
+        self._wakers: set = set()
 
     def _condition(self) -> asyncio.Condition:
         if self._cond is None:
@@ -842,7 +843,11 @@ class _SlotGate:
             async with cond:
                 cond.notify_all()
         try:
-            asyncio.get_running_loop().create_task(_wake())
+            # Held until done: the event loop keeps only a weak reference to
+            # a task, and an unreferenced one can be collected mid-flight.
+            task = asyncio.get_running_loop().create_task(_wake())
+            self._wakers.add(task)
+            task.add_done_callback(self._wakers.discard)
         except RuntimeError:
             pass  # no loop: nobody can be waiting
 

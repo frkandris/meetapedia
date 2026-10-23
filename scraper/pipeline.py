@@ -1092,19 +1092,8 @@ async def run_pipeline(
     if run_mode in ("full", "search_only"):
         # A pair searched before its city had districts reads as done; it is
         # not until its district queries have run.
-        _district_cities = {c.name: c for c in cities if getattr(c, "search_districts", None)}
-        if _district_cities:
-            _terms = {t.name: t for t in topics}
-            for (c_name, t_name) in all_pairs & done_pairs:
-                _c = _district_cities.get(c_name)
-                if _c is None:
-                    continue
-                _t = _terms.get(t_name)
-                _tt = (_t.search_terms.get(_c.locale) or _t.search_terms.get("en", [])) if _t else []
-                _have = set(await _off_loop(get_search_cache_queries, config.db_path,
-                                            c_name, t_name))
-                if any(q not in _have for q in district_queries(_c, _tt)):
-                    pairs_to_run.add((c_name, t_name))
+        pairs_to_run |= await _pairs_needing_districts(
+            config, cities, topics, all_pairs & done_pairs)
     if run_mode == "ai_only":
         # A pair never searched has no cached page, so extraction can only log
         # "ai_only_no_cache" for it — ~100 per pass in production, 11,677 such
@@ -1245,6 +1234,65 @@ def district_queries(city: CityConfig, terms: list[str]) -> list[str]:
     return [f"{terms[0]} {d} {main}" for d in (getattr(city, "search_districts", None) or [])]
 
 
+def _search_terms(topic, city) -> list[str]:
+    """The topic's terms in the city's language, English when it has none."""
+    return topic.search_terms.get(city.locale) or topic.search_terms.get("en", [])
+
+
+async def _deepen_with_districts(searxng, config, city, topic_name: str,
+                                 terms: list[str], cached_urls: list[str]) -> "list[str] | None":
+    """Run a cached pair's missing district queries and merge their URLs.
+
+    Returns the merged URL list (unchanged when nothing was missing), or None
+    when every missing query failed. Concurrent because a normal-priority
+    DataForSEO task can wait 25 minutes; sequential would be hours per pair. A
+    failed query is not recorded as run, so the next pass retries only that
+    one, and a timed-out task is resumed rather than bought again.
+    """
+    have = set(await _off_loop(get_search_cache_queries, config.db_path, city.name, topic_name))
+    missing = [q for q in district_queries(city, terms) if q not in have]
+    if not missing:
+        return cached_urls
+    sem = asyncio.Semaphore(max(1, int(config.search_concurrency or 1)))
+
+    async def _one(q: str):
+        async with sem:
+            return await searxng.search(q, locale=city.locale, country=city.country,
+                                        num_results=config.search_results_per_query)
+
+    found = await asyncio.gather(*[_one(q) for q in missing], return_exceptions=True)
+    ok = [(q, r) for q, r in zip(missing, found) if not isinstance(r, BaseException)]
+    errors = [r for r in found if isinstance(r, BaseException)]
+    if errors:
+        log.warning("district_search_partial", city=city.name, topic=topic_name,
+                    failed=len(errors), error=str(errors[0]))
+    if not ok:
+        return None
+    merged = list(dict.fromkeys(cached_urls + [res.url for _q, batch in ok for res in batch]))
+    await _off_loop(save_search_cache, config.db_path, city.name, topic_name,
+                    merged, sorted(have | {q for q, _r in ok}))
+    log.info("district_search_done", city=city.name, topic=topic_name,
+             districts=len(ok), urls=len(merged))
+    return merged
+
+
+async def _pairs_needing_districts(config, cities, topics, done_pairs) -> set:
+    """Pairs that read as done but were searched before their city had districts."""
+    district_cities = {c.name: c for c in cities if getattr(c, "search_districts", None)}
+    if not district_cities:
+        return set()
+    by_name = {t.name: t for t in topics}
+    out = set()
+    for (c_name, t_name) in done_pairs:
+        city, topic = district_cities.get(c_name), by_name.get(t_name)
+        if city is None or topic is None:
+            continue
+        have = set(await _off_loop(get_search_cache_queries, config.db_path, c_name, t_name))
+        if any(q not in have for q in district_queries(city, _search_terms(topic, city))):
+            out.add((c_name, t_name))
+    return out
+
+
 def _queries_for(city: CityConfig, config: PipelineConfig) -> int | None:
     """How many paid queries this city's pairs may run; None = no cap."""
     if getattr(city, "topic_tier", "full") == "core":
@@ -1298,7 +1346,7 @@ async def _prefetch_searches(
         async with sem:
             if searxng.exhausted:
                 return
-            terms = topic.search_terms.get(city.locale) or topic.search_terms.get("en", [])
+            terms = _search_terms(topic, city)
             queries = build_queries(city.name, city.search_variants, terms,
                                     max_queries=_queries_for(city, config))
             try:
@@ -1419,7 +1467,7 @@ async def _run_full(
                 on_pair_start(city.name, topic.name)
             log.info("processing_pair", city=city.name, topic=topic.name)
 
-            terms = topic.search_terms.get(city.locale) or topic.search_terms.get("en", [])
+            terms = _search_terms(topic, city)
             queries = build_queries(city.name, city.search_variants, terms,
                                     max_queries=_queries_for(city, config))
 
@@ -1435,43 +1483,16 @@ async def _run_full(
             cached_urls = get_search_cache(config.db_path, city.name, topic.name,
                                            config.search_cache_ttl_days) if use_search_cache else None
             if cached_urls is not None:
-                _missing = []
-                if getattr(city, "search_districts", None):
-                    _have = set(await _off_loop(get_search_cache_queries, config.db_path,
-                                                city.name, topic.name))
-                    _missing = [q for q in district_queries(city, terms) if q not in _have]
-                if _missing and not searxng.exhausted:
-                    # Deepen a pair searched before its city had districts: run
-                    # only the district queries, concurrently (a normal-priority
-                    # DataForSEO task can wait 25 min; sequential would be hours).
-                    _sem = asyncio.Semaphore(max(1, int(config.search_concurrency or 1)))
-
-                    async def _one_district(q: str):
-                        async with _sem:
-                            return await searxng.search(
-                                q, locale=city.locale, country=city.country,
-                                num_results=config.search_results_per_query)
-                    _found = await asyncio.gather(*[_one_district(q) for q in _missing],
-                                                  return_exceptions=True)
-                    # Keep what was paid for. A query that failed is not recorded
-                    # as run, so the next pass retries only that one (a timed-out
-                    # DataForSEO task is resumed, not bought again).
-                    _ok = [(q, r) for q, r in zip(_missing, _found)
-                           if not isinstance(r, BaseException)]
-                    _err = [r for r in _found if isinstance(r, BaseException)]
-                    if _err:
-                        log.warning("district_search_partial", city=city.name,
-                                    topic=topic.name, failed=len(_err), error=str(_err[0]))
-                    if not _ok:
-                        pair_logs.append({**_new_pair_log(city.name, topic.name, _missing),
-                                          "search_failed": True, "search_error": str(_err[0])})
+                if getattr(city, "search_districts", None) and not searxng.exhausted:
+                    _deep = await _deepen_with_districts(
+                        searxng, config, city, topic.name, terms, cached_urls)
+                    if _deep is None:
+                        pair_logs.append({**_new_pair_log(city.name, topic.name,
+                                                          district_queries(city, terms)),
+                                          "search_failed": True,
+                                          "search_error": "district search failed"})
                         continue
-                    _new = [res.url for _q, batch in _ok for res in batch]
-                    cached_urls = list(dict.fromkeys(cached_urls + _new))
-                    await _off_loop(save_search_cache, config.db_path, city.name, topic.name,
-                                    cached_urls, sorted(_have | {q for q, _r in _ok}))
-                    log.info("district_search_done", city=city.name, topic=topic.name,
-                             districts=len(_ok), urls=len(cached_urls))
+                    cached_urls = _deep
                 urls = [u for u in cached_urls
                         if not _is_blocked(u, config.fetch_blocked_domains)][:_pages_for(city, config)]
                 urls_found = len(urls)
