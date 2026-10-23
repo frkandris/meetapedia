@@ -86,3 +86,6 @@ Countries already in `cities.yaml` keep their existing search language for new
 cities (Egypt, Vietnam, Thailand, Malaysia search in English); whether the
 local language finds more groups there is unmeasured. Wikidata's city typing is
 uneven — Vietnam yields 9 cities ≥100k, India 262 of roughly 500.
+
+
+Depth inside a city is a separate lever: see [[district-search]].

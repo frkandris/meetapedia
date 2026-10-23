@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import hashlib
 import re
 import time
@@ -17,7 +18,7 @@ from .false_positives import load as load_false_positives
 from .fetch import _is_blocked, fetch_and_clean
 from .search import (DataForSEOClient, FallbackSearchClient, SearchBudget, SearchQuotaError,
                      SearchUnavailableError, build_queries)
-from .db import get_daily_counters_with_prefix, get_search_cache, save_search_cache, mark_search_collection_complete, get_collected_pairs, get_searched_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs
+from .db import get_daily_counters_with_prefix, get_search_cache, save_search_cache, mark_search_collection_complete, get_collected_pairs, get_searched_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs, get_low_yield_domains, get_search_cache_queries
 from .router import build_router
 from .store import save_results
 
@@ -739,6 +740,10 @@ class CityConfig:
     # "full" = all topics; "core" = only PipelineConfig.core_topics (small towns
     # where most niche topics can't yield results — cuts search + LLM spend).
     topic_tier: str = "full"
+    # Districts searched in addition to the city itself (`search_districts` in
+    # cities.yaml). A city of millions got the same five pages per topic as a
+    # town of fifty thousand: London 62 communities, Lagos 31 (2026-10-23).
+    search_districts: list = field(default_factory=list)
 
 
 @dataclass
@@ -785,6 +790,11 @@ class PipelineConfig:
     # ~19,000 core pairs at a third of the cost; `stop_after` already ends most
     # pairs early, so the first query is where the results are.
     core_queries_per_pair: int | None = None
+    # Never-yielding domains are skipped from this many extracted pages up
+    # (fetch.low_yield_min_pages); 0 disables the measured list.
+    low_yield_min_pages: int = 15
+    # Host patterns skipped the same way (fetch.low_yield_patterns).
+    low_yield_patterns: list = field(default_factory=list)
     # Topics still searched for topic_tier="core" cities; empty = tiering disabled.
     core_topics: list[str] = field(default_factory=list)
     #: Pages whose community extraction may be in flight at once. 1 reproduces
@@ -1003,6 +1013,22 @@ async def run_pipeline(
     _skip_scraped = skip_scraped if skip_scraped is not None else config.cache_skip_scraped
     _skip_extracted = skip_extracted if skip_extracted is not None else config.cache_skip_extracted
 
+    if run_mode in ("full", "search_only"):
+        # Domains that have never yielded a community stop taking fetch slots:
+        # they leave the search's `stop_after` count, the pair's URL list and
+        # the fetch, so the next query's results take their place. Plus the
+        # city tourism portals (settings: fetch.low_yield_patterns), which are
+        # different hosts in every city and never reach the measured threshold
+        # one by one — visitlondon.com: 14 London pages, no community.
+        _low = await _off_loop(get_low_yield_domains, config.db_path,
+                               config.low_yield_min_pages)
+        _extra = sorted(_low) + list(config.low_yield_patterns)
+        if _extra:
+            config = dataclasses.replace(
+                config, fetch_blocked_domains=[*config.fetch_blocked_domains, *_extra])
+            log.info("low_yield_domains_skipped", measured=len(_low),
+                     patterns=len(config.low_yield_patterns))
+
     extractor: FallbackExtractor = build_extractor(config)
     # The chain may sit out a 429 for up to 15 minutes; past the window end that
     # sleep finishes nothing and delays the collector window behind it.
@@ -1051,6 +1077,8 @@ async def run_pipeline(
                 run_persons=run_persons and config.llm_person_extraction,
                 max_pages=config.search_max_pages,
                 quarantine_threshold=config.extract_max_page_failures,
+                max_pages_by_city={c.name: _pages_for(c, config) for c in cities
+                                   if getattr(c, "search_districts", None)},
             )
     if _skip_extracted:
         # Timed because moving it to a thread is only half a fix: the SQLite
@@ -1061,6 +1089,22 @@ async def run_pipeline(
         log.info("done_pair_filter", pairs=len(done_pairs),
                  seconds=round(time.monotonic() - _filter_started, 2))
     pairs_to_run = all_pairs - done_pairs
+    if run_mode in ("full", "search_only"):
+        # A pair searched before its city had districts reads as done; it is
+        # not until its district queries have run.
+        _district_cities = {c.name: c for c in cities if getattr(c, "search_districts", None)}
+        if _district_cities:
+            _terms = {t.name: t for t in topics}
+            for (c_name, t_name) in all_pairs & done_pairs:
+                _c = _district_cities.get(c_name)
+                if _c is None:
+                    continue
+                _t = _terms.get(t_name)
+                _tt = (_t.search_terms.get(_c.locale) or _t.search_terms.get("en", [])) if _t else []
+                _have = set(await _off_loop(get_search_cache_queries, config.db_path,
+                                            c_name, t_name))
+                if any(q not in _have for q in district_queries(_c, _tt)):
+                    pairs_to_run.add((c_name, t_name))
     if run_mode == "ai_only":
         # A pair never searched has no cached page, so extraction can only log
         # "ai_only_no_cache" for it — ~100 per pass in production, 11,677 such
@@ -1179,6 +1223,26 @@ async def run_pipeline(
                     extract_failed_pages=failed_extract,
                     note="failed items were NOT cached and will be retried next run")
     return pair_logs, total_new
+
+
+#: Extra fetch slots per district, and the most a pair may fetch at all.
+_PAGES_PER_DISTRICT = 2
+_MAX_PAGES_PER_PAIR = 60
+
+
+def _pages_for(city: CityConfig, config: PipelineConfig) -> int:
+    """How many search results a pair may fetch: deeper for a city with districts."""
+    extra = _PAGES_PER_DISTRICT * len(getattr(city, "search_districts", None) or [])
+    return min(config.search_max_pages + extra, _MAX_PAGES_PER_PAIR)
+
+
+def district_queries(city: CityConfig, terms: list[str]) -> list[str]:
+    """One query per district: the topic's first term, the district, the city —
+    the city name keeps "York" (Toronto) from being York (England)."""
+    if not terms:
+        return []
+    main = (city.search_variants or [city.name])[0]
+    return [f"{terms[0]} {d} {main}" for d in (getattr(city, "search_districts", None) or [])]
 
 
 def _queries_for(city: CityConfig, config: PipelineConfig) -> int | None:
@@ -1371,7 +1435,45 @@ async def _run_full(
             cached_urls = get_search_cache(config.db_path, city.name, topic.name,
                                            config.search_cache_ttl_days) if use_search_cache else None
             if cached_urls is not None:
-                urls = cached_urls[:config.search_max_pages]
+                _missing = []
+                if getattr(city, "search_districts", None):
+                    _have = set(await _off_loop(get_search_cache_queries, config.db_path,
+                                                city.name, topic.name))
+                    _missing = [q for q in district_queries(city, terms) if q not in _have]
+                if _missing and not searxng.exhausted:
+                    # Deepen a pair searched before its city had districts: run
+                    # only the district queries, concurrently (a normal-priority
+                    # DataForSEO task can wait 25 min; sequential would be hours).
+                    _sem = asyncio.Semaphore(max(1, int(config.search_concurrency or 1)))
+
+                    async def _one_district(q: str):
+                        async with _sem:
+                            return await searxng.search(
+                                q, locale=city.locale, country=city.country,
+                                num_results=config.search_results_per_query)
+                    _found = await asyncio.gather(*[_one_district(q) for q in _missing],
+                                                  return_exceptions=True)
+                    # Keep what was paid for. A query that failed is not recorded
+                    # as run, so the next pass retries only that one (a timed-out
+                    # DataForSEO task is resumed, not bought again).
+                    _ok = [(q, r) for q, r in zip(_missing, _found)
+                           if not isinstance(r, BaseException)]
+                    _err = [r for r in _found if isinstance(r, BaseException)]
+                    if _err:
+                        log.warning("district_search_partial", city=city.name,
+                                    topic=topic.name, failed=len(_err), error=str(_err[0]))
+                    if not _ok:
+                        pair_logs.append({**_new_pair_log(city.name, topic.name, _missing),
+                                          "search_failed": True, "search_error": str(_err[0])})
+                        continue
+                    _new = [res.url for _q, batch in _ok for res in batch]
+                    cached_urls = list(dict.fromkeys(cached_urls + _new))
+                    await _off_loop(save_search_cache, config.db_path, city.name, topic.name,
+                                    cached_urls, sorted(_have | {q for q, _r in _ok}))
+                    log.info("district_search_done", city=city.name, topic=topic.name,
+                             districts=len(_ok), urls=len(cached_urls))
+                urls = [u for u in cached_urls
+                        if not _is_blocked(u, config.fetch_blocked_domains)][:_pages_for(city, config)]
                 urls_found = len(urls)
                 search_cache_hit = True
                 log.info("search_cache_hit", city=city.name, topic=topic.name, urls=len(urls))
@@ -1397,9 +1499,10 @@ async def _run_full(
                     if isinstance(_pre, BaseException):
                         raise _pre
                     search_results = _pre if _pre is not None else await searxng.search_all(
-                        queries, locale=city.locale, country=city.country,
+                        queries + district_queries(city, terms), locale=city.locale,
+                        country=city.country,
                         num_results=config.search_results_per_query,
-                        stop_after=config.search_max_pages,
+                        stop_after=_pages_for(city, config),
                         usable=lambda url: not _is_blocked(url, config.fetch_blocked_domains),
                     )
                 except (SearchQuotaError, SearchUnavailableError) as exc:
@@ -1415,7 +1518,7 @@ async def _run_full(
                 ]
                 log.info("search_done", city=city.name, topic=topic.name, urls=len(search_results))
                 all_urls = [r.url for r in search_results]
-                urls = all_urls[:config.search_max_pages]
+                urls = all_urls[:_pages_for(city, config)]
                 urls_found = len(search_results)
                 # Always record the search — even in Full Refresh mode and even when it
                 # found nothing. An unsaved empty result is re-paid on every run (and

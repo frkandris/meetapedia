@@ -1,4 +1,5 @@
 import asyncio
+import re
 import weakref
 from urllib.parse import urljoin, urlparse
 
@@ -63,9 +64,13 @@ def host_matches_domain(host: str, domain: str) -> bool:
 
 
 def _is_blocked(url: str, blocked_domains: list[str]) -> bool:
+    """`blocked_domains` entries match the host and its subdomains; an entry
+    starting with `re:` is a regular expression searched in the host — for a
+    family like the city tourism portals (visitlondon, visitberlin, …)."""
     try:
-        host = urlparse(url).netloc
-        return any(host_matches_domain(host, d) for d in blocked_domains)
+        host = urlparse(url).netloc.lower()
+        return any(re.search(d[3:], host) if d.startswith("re:")
+                   else host_matches_domain(host, d) for d in blocked_domains)
     except Exception:
         return False
 

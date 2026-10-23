@@ -59,6 +59,20 @@ search:
   core_queries_per_pair: 1
 
 fetch:
+  # Domains with at least this many extracted pages and no community ever are
+  # skipped by search runs, so they stop taking a pair's few fetch slots
+  # (4.9% of all pages on 2026-10-23). 0 disables the measured list.
+  low_yield_min_pages: 15
+  # Hosts skipped the same way. City tourism portals are a different host in
+  # every city and never reach the threshold one by one; `re:` is a regex on
+  # the host. London: visitlondon.com 14 pages, timeout.com 4, no community.
+  low_yield_patterns:
+    - "re:^(www\\.)?visit[a-z-]*\\."
+    - timeout.com
+    - lonelyplanet.com
+    - getyourguide.com
+    - tripadvisor.com
+    - viator.com
   timeout_seconds: 15
   min_text_length: 100
   max_concurrent: 3

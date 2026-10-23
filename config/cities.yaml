@@ -7748,6 +7748,7 @@ cities:
     country: United Kingdom
     locale: en
     search_variants: [London, "London UK"]
+    search_districts: ["City of London", "Barking and Dagenham", "Barnet", "Bexley", "Brent", "Bromley", "Camden", "Croydon", "Ealing", "Enfield", "Greenwich", "Hackney", "Hammersmith and Fulham", "Haringey", "Harrow", "Havering", "Hillingdon", "Hounslow", "Islington", "Kensington and Chelsea", "Kingston upon Thames", "Lambeth", "Lewisham", "Merton", "Newham", "Redbridge", "Richmond upon Thames", "Southwark", "Sutton", "Tower Hamlets", "Waltham Forest", "Wandsworth", "Westminster"]
   - name: Manchester
     country: United Kingdom
     locale: en
@@ -8046,14 +8047,17 @@ cities:
     country: United States
     locale: en
     search_variants: ["New York", "New York City", NYC]
+    search_districts: ["Manhattan", "Brooklyn", "Queens", "The Bronx", "Staten Island"]
   - name: Los Angeles
     country: United States
     locale: en
     search_variants: ["Los Angeles", LA, "Los Angeles CA"]
+    search_districts: ["Hollywood", "Downtown", "Venice", "Silver Lake", "Koreatown", "Echo Park", "Westwood", "San Pedro", "Van Nuys", "North Hollywood", "Studio City", "Eagle Rock", "Highland Park", "Boyle Heights", "Sherman Oaks", "Encino", "Woodland Hills", "Westchester", "Mid-City", "Palms"]
   - name: Chicago
     country: United States
     locale: en
     search_variants: [Chicago, "Chicago IL"]
+    search_districts: ["Lincoln Park", "Lakeview", "Logan Square", "Wicker Park", "Hyde Park", "Pilsen", "Uptown", "Rogers Park", "Andersonville", "Bridgeport", "Bronzeville", "Edgewater", "West Loop", "South Loop", "Humboldt Park", "Avondale", "Albany Park", "Beverly", "Chinatown", "Ukrainian Village"]
   - name: San Francisco
     country: United States
     locale: en
@@ -9270,6 +9274,7 @@ cities:
     country: Canada
     locale: en
     search_variants: [Toronto, "Toronto Canada"]
+    search_districts: ["Scarborough", "North York", "Etobicoke", "East York", "York", "Downtown", "The Annex", "Leslieville", "Liberty Village", "The Beaches", "Kensington Market", "Danforth", "High Park", "Yorkville", "Riverdale", "The Junction"]
   - name: Vancouver
     country: Canada
     locale: en
@@ -11464,10 +11469,12 @@ cities:
     country: Egypt
     locale: en
     search_variants: [Cairo, "Cairo Egypt"]
+    search_districts: ["Nasr City", "Heliopolis", "Maadi", "Zamalek", "Dokki", "Downtown", "New Cairo", "Shubra", "Abbassia", "Garden City", "Mokattam", "Helwan", "Sheikh Zayed", "6th of October", "Mohandessin"]
   - name: Lagos
     country: Nigeria
     locale: en
     search_variants: [Lagos, "Lagos Nigeria"]
+    search_districts: ["Ikeja", "Lekki", "Victoria Island", "Ikoyi", "Surulere", "Yaba", "Ajah", "Festac Town", "Ikorodu", "Apapa", "Oshodi", "Agege", "Gbagada", "Maryland", "Magodo", "Ogba", "Mushin", "Badagry"]
   - name: Nairobi
     country: Kenya
     locale: en
@@ -13080,6 +13087,7 @@ cities:
     country: China
     locale: zh
     search_variants: [北京, Beijing, "Beijing China"]
+    search_districts: ["东城区", "西城区", "朝阳区", "丰台区", "石景山区", "海淀区", "门头沟区", "房山区", "通州区", "顺义区", "昌平区", "大兴区", "怀柔区", "平谷区", "密云区", "延庆区"]
   - name: Shanghai
     country: China
     locale: zh
@@ -15208,10 +15216,12 @@ cities:
     country: India
     locale: en
     search_variants: [Mumbai, Bombay, "Mumbai India"]
+    search_districts: ["Andheri", "Bandra", "Juhu", "Powai", "Colaba", "Dadar", "Borivali", "Malad", "Goregaon", "Chembur", "Kurla", "Vile Parle", "Worli", "Lower Parel", "Ghatkopar", "Mulund"]
   - name: Delhi
     country: India
     locale: en
     search_variants: ["New Delhi", Delhi, "Delhi India"]
+    search_districts: ["Central Delhi", "East Delhi", "North Delhi", "North East Delhi", "North West Delhi", "South Delhi", "South East Delhi", "South West Delhi", "West Delhi", "Shahdara", "Connaught Place", "Hauz Khas", "Saket", "Dwarka", "Rohini", "Lajpat Nagar"]
   - name: Chennai
     country: India
     locale: en

@@ -1761,6 +1761,24 @@ def get_searched_pairs(db_path: Path) -> set[tuple[str, str]]:
     return {(row[0], row[1]) for row in rows}
 
 
+def get_low_yield_domains(db_path: Path, min_pages: int = 15) -> set[str]:
+    """Domains with at least `min_pages` extracted pages and no community ever.
+
+    Each such page still took one of a pair's few fetch slots
+    (`search.max_pages_per_topic`). Measured 2026-10-23: 8,357 of 170,230
+    extracted pages (4.9%) on 208 domains — dancenow.net alone in 607 cities.
+    """
+    if not db_path.exists():
+        return set()
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT domain FROM cache_pages WHERE extract_fingerprint IS NOT NULL"
+            " AND domain IS NOT NULL AND domain != ''"
+            " GROUP BY domain HAVING COUNT(*) >= ? AND COALESCE(SUM(records_count), 0) = 0",
+            (int(min_pages),)).fetchall()
+    return {r[0].lower() for r in rows}
+
+
 def get_collected_pairs(db_path: Path, max_pages: int) -> set[tuple[str, str]]:
     """Pairs whose selected search results have all had a fetch attempt."""
     del max_pages  # retained in the public signature for compatibility
@@ -1784,8 +1802,13 @@ def get_fully_processed_pairs(
     run_persons: bool = False,
     max_pages: int | None = None,
     quarantine_threshold: int = 0,
+    max_pages_by_city: dict[str, int] | None = None,
 ) -> set[tuple[str, str]]:
     """Return (city, topic) pairs that need no pipeline work this run.
+
+    `max_pages_by_city` overrides `max_pages` for cities searched deeper (by
+    district): judged on their first five URLs, such a pair read as done while
+    the rest of its fetched pages waited unextracted.
 
     cache_pages is keyed by url_hash and city/topic columns are overwritten on
     every save (last-write-wins), so city/topic-based joins are unreliable.
@@ -1918,8 +1941,9 @@ def get_fully_processed_pairs(
         except (TypeError, json.JSONDecodeError):
             log.warning("invalid_search_cache_urls", city=city, topic=topic)
             continue
-        if max_pages is not None:
-            urls = urls[:max_pages]
+        _cap = (max_pages_by_city or {}).get(city, max_pages)
+        if _cap is not None:
+            urls = urls[:_cap]
         if not urls:
             result.add((city, topic))
             continue
@@ -2526,6 +2550,22 @@ def mark_search_collection_complete(db_path: Path, city: str, topic: str) -> Non
             (now, city, topic),
         )
         conn.commit()
+
+
+def get_search_cache_queries(db_path: Path, city: str, topic: str) -> list[str]:
+    """The queries a cached search ran; [] when there is none."""
+    if not db_path.exists():
+        return []
+    with _connect(db_path) as conn:
+        row = conn.execute("SELECT queries FROM search_cache WHERE city=? AND topic=?",
+                           (city, topic)).fetchone()
+    if not row or not row[0]:
+        return []
+    try:
+        value = json.loads(row[0])
+    except (TypeError, json.JSONDecodeError):
+        return []
+    return [str(q) for q in value] if isinstance(value, list) else []
 
 
 def get_search_cache(db_path: Path, city: str, topic: str,

@@ -3,6 +3,7 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-10-23
+- **Creation**: [[district-search]] — low-yield domains skipped (4.9% of pages); district pilot in 10 large cities (175 districts, ~$3.7), baseline 557 communities.
 - **Creation**: [[2026-10-topic-slug-in-prompt]] — prompt sent "nok"; 527/1,328 nok records misfiled; readable topic phrase + topic_rule, fingerprint unchanged; audit script (dry run).
 - **Creation**: [[search-console-2026-10-23]] — kozossegek.com 0 clicks / 0 indexed in sample; meetapedia 50 clicks, 38 on 301'd HU URLs; venue and person pages out of both sitemaps.
 - **Update**: [[ai-provider-quota-runbook]] — free-tier audit: OpenRouter nemotron-3-super listed but 404, replaced by nemotron-3-ultra (60, measured); inkling 403; no new provider adds capacity.

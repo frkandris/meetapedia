@@ -51,6 +51,7 @@ def load_config_from_docs(
             name=c["name"],
             country=c.get("country", ""),
             locale=yaml_locale(c["locale"]),
+            search_districts=list(c.get("search_districts") or []),
             search_variants=c.get("search_variants", [c["name"]]),
             topic_tier=str(c.get("topic_tier", "full")),
         )
@@ -89,6 +90,8 @@ def load_config_from_docs(
         fetch_min_text_length=settings["fetch"]["min_text_length"],
         fetch_max_concurrent=settings["fetch"]["max_concurrent"],
         fetch_blocked_domains=settings["fetch"].get("blocked_domains", []),
+        low_yield_min_pages=int(settings["fetch"].get("low_yield_min_pages", 15) or 0),
+        low_yield_patterns=list(settings["fetch"].get("low_yield_patterns") or []),
         db_path=db_path,
         cache_skip_scraped=cache_cfg.get("skip_scraped", True),
         cache_skip_extracted=cache_cfg.get("skip_extracted", True),
