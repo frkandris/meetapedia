@@ -121,3 +121,14 @@ def test_zero_disables_the_measured_low_yield_list(tmp_path):
     db = tmp_path / "t.db"
     init_db(db)
     assert get_low_yield_domains(db, 0) == set()
+
+
+def test_indexed_attack_probes_are_never_fetched():
+    """Someone else's SQL-injection scan, indexed by a search engine, must not
+    be replayed from our address."""
+    from scraper.fetch import looks_like_probe
+    assert looks_like_probe("https://x.example/stores.php?district=999999.9%20union%20all%20select%201,2,3")
+    assert looks_like_probe("https://x.example/?city=%27%20and%201=1")
+    assert _is_blocked("https://x.example/?q=1+AND+SLEEP(5)", [])
+    assert not looks_like_probe("https://choir.example/select-your-voice-part")
+    assert not looks_like_probe("https://club.example/events?from=2026-10-01")

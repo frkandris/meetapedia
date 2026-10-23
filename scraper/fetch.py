@@ -63,10 +63,27 @@ def host_matches_domain(host: str, domain: str) -> bool:
     return host == domain or host.endswith("." + domain)
 
 
+#: An attack probe someone else ran, which a search engine then indexed:
+#: `stores.php?…district=999999.9 union all select 1,2,3`. Fetching it sends that
+#: payload to the site from our address, as if we were scanning it (four such
+#: URLs reached the page cache from one Chinese site on 2026-10-23).
+_PROBE = re.compile(
+    r"(union\s+(all\s+)?select|\b(and|or)\s+\d+\s*=\s*\d+|sleep\s*\(|benchmark\s*\("
+    r"|waitfor\s+delay|information_schema|<script|\bselect\b.{0,40}\bfrom\b)", re.I)
+
+
+def looks_like_probe(url: str) -> bool:
+    from urllib.parse import unquote
+    return bool(_PROBE.search(unquote(unquote(url or "")).replace("+", " ")))
+
+
 def _is_blocked(url: str, blocked_domains: list[str]) -> bool:
     """`blocked_domains` entries match the host and its subdomains; an entry
     starting with `re:` is a regular expression searched in the host — for a
-    family like the city tourism portals (visitlondon, visitberlin, …)."""
+    family like the city tourism portals (visitlondon, visitberlin, …). A URL
+    carrying an injection payload is always blocked (`looks_like_probe`)."""
+    if looks_like_probe(url):
+        return True
     try:
         host = urlparse(url).netloc.lower()
         return any(re.search(d[3:], host) if d.startswith("re:")
