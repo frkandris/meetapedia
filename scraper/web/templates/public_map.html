@@ -11,12 +11,15 @@
   .leaflet-popup-content { margin: 14px 16px; }
   .city-popup-name { font-size: 15px; font-weight: 700; color: #1A1D1B; margin-bottom: 6px; }
   .city-popup-count { font-size: 13px; font-weight: 600; color: #1E6B50; margin-bottom: 10px; }
-  .city-popup-btn {
+  /* `.leaflet-container a` (Leaflet's own CSS) paints every popup link
+     #0078A8 and outranks a single class: the button read blue on green. */
+  .leaflet-container a.city-popup-btn {
     display: inline-block; background: #1E6B50; color: #fff;
-    padding: 5px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600;
     text-decoration: none; transition: background 0.15s;
   }
-  .city-popup-btn:hover { background: #185A43; }
+  .leaflet-container a.city-popup-btn:hover,
+  .leaflet-container a.city-popup-btn:focus-visible { background: #134A37; color: #fff; }
 </style>
 {% endblock %}
 
