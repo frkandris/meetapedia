@@ -353,6 +353,19 @@ class QuotaLedger:
         self._reserved[provider] = self._reserved.get(provider, 0) + 1
         self._last_call[provider] = time.monotonic()
 
+    def unreserve_call(self, provider: str) -> None:
+        """Give back a slot whose request never reached a model.
+
+        Only for a self-hosted provider found absent: nothing answered, nothing
+        was consumed, and counting it would book an allowance spent on a
+        switched-off machine (6,623 such "calls" on 2026-10-23).
+        """
+        self._sync()
+        row = self._row(provider)
+        if self._reserved.get(provider):
+            self._reserved[provider] -= 1
+            row["calls"] = max(0, int(row.get("calls") or 0) - 1)
+
     def note_call(
         self, provider: str, *, ok: bool = True, rate_limited: bool = False,
         retry_after: float | None = None, error: str | None = None,
@@ -694,6 +707,12 @@ class ModelRouter:
             return False
         self.ledger.reserve_call(provider)
         return True
+
+    def unreserve(self, extractor) -> None:
+        """Return a slot claimed by `reserve` for a request that never ran."""
+        provider = getattr(extractor, "provider", None)
+        if provider:
+            self.ledger.unreserve_call(provider)
 
     def note(self, extractor, **kwargs) -> None:
         """Attribute one call — and what it cost — to the provider's bucket."""

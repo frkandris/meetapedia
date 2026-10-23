@@ -136,6 +136,47 @@ class ExtractorUnavailableError(Exception):
     under the current fingerprint and the page would never be retried."""
 
 
+class ExtractorAbsentError(ExtractorUnavailableError):
+    """A self-hosted provider has nobody listening: the machine is asleep, the
+    operator's governor stopped the model, or the tunnel has no origin.
+
+    Not a failure, and deliberately not a rate limit either. A failure counts
+    toward the circuit breaker and, before this existed, every page walked the
+    dead address: on 2026-10-23 the GPU was switched off at 09:34 UTC and every
+    enrichment call from then on ended in Cloudflare's HTTP 530, while the
+    ledger booked 6,623 "used" requests that never reached a model. A rate
+    limit would be worse — the ledger reads a 429 as evidence about the day's
+    ceiling. This says only "not here, ask again in a few minutes": the chain
+    skips the provider until `_ABSENT_UNTIL` passes and books nothing.
+    """
+
+
+#: Self-hosted provider name → monotonic time before which it is not asked.
+#: Module-level because extractors are rebuilt every pass and enrichment keeps
+#: its own chain; a per-instance flag would spend one dead request per build.
+_ABSENT_UNTIL: dict[str, float] = {}
+#: How long a provider found absent is left alone. The operator's governor
+#: stops the model while they work; three minutes is quick enough to notice it
+#: back and slow enough that an absent machine costs one fast refusal per
+#: window rather than one per page.
+_ABSENT_SECONDS = 180.0
+#: What "nobody is listening" looks like through Cloudflare's tunnel (530 =
+#: error 1033, no connector; 502/521-523 = origin unreachable) and from
+#: llama-server itself (503 while it loads the model).
+_ABSENT_STATUSES = frozenset({502, 503, 504, 521, 522, 523, 530})
+
+
+def mark_absent(provider: str, seconds: float = _ABSENT_SECONDS) -> None:
+    if time.monotonic() >= _ABSENT_UNTIL.get(provider, 0.0):
+        log.info("provider_absent", provider=provider, recheck_s=round(seconds))
+    _ABSENT_UNTIL[provider] = time.monotonic() + seconds
+
+
+def absent_for(provider: str) -> float:
+    """Seconds until `provider` is asked again; 0 when it is not absent."""
+    return max(0.0, _ABSENT_UNTIL.get(provider, 0.0) - time.monotonic())
+
+
 class ExtractorContentError(ExtractorUnavailableError):
     """The model answered, and the answer was unusable — truncated by
     `max_output_tokens`, or JSON we cannot read.
@@ -716,6 +757,60 @@ _API_ENRICH_SUFFIX = (
 _API_RETRY_DEFAULT_WAIT = 60
 
 
+#: How often a self-hosted provider's slot count is re-read from `/props`.
+_SLOT_REFRESH_S = 60.0
+
+
+class _SlotGate:
+    """A semaphore whose size can change while callers wait on it.
+
+    `asyncio.Semaphore` cannot shrink: the governor on the GPU machine drops
+    from two slots to one when its owner starts working, and the gate has to
+    follow. Waiters are admitted while `busy < limit`; lowering the limit never
+    interrupts a call already in flight, it only holds the next one back.
+    """
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        self.busy = 0
+        self.checked_at = float("-inf")
+        self._cond: "asyncio.Condition | None" = None
+
+    def _condition(self) -> asyncio.Condition:
+        if self._cond is None:
+            self._cond = asyncio.Condition()
+        return self._cond
+
+    def set_limit(self, limit: int) -> None:
+        limit = max(1, int(limit))
+        if limit == self.limit:
+            return
+        log.info("provider_slots_changed", old=self.limit, new=limit)
+        self.limit = limit
+        cond = self._condition()
+
+        async def _wake() -> None:
+            async with cond:
+                cond.notify_all()
+        try:
+            asyncio.get_running_loop().create_task(_wake())
+        except RuntimeError:
+            pass  # no loop: nobody can be waiting
+
+    async def __aenter__(self) -> "_SlotGate":
+        cond = self._condition()
+        async with cond:
+            await cond.wait_for(lambda: self.busy < self.limit)
+            self.busy += 1
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        cond = self._condition()
+        async with cond:
+            self.busy -= 1
+            cond.notify_all()
+
+
 class _ApiExtractor:
     """Base class for OpenAI-compatible API extractors (DeepSeek, …)."""
 
@@ -794,22 +889,59 @@ class _ApiExtractor:
     #: single process — each politely limiting itself to one call while three
     #: ran at once. Measured on 2026-09-06: three slots busy, 1.6-4.0 tok/s, and
     #: single calls stretched to 76 s against Cloudflare's 100 s ceiling.
-    _PROVIDER_SLOTS: "dict[str, asyncio.Semaphore]" = {}
+    _PROVIDER_SLOTS: "dict[str, _SlotGate]" = {}
     max_concurrency: int | None = None
+    #: A provider on hardware we run (its address comes from `base_url_env`).
+    #: It can be absent — asleep, or stopped by the operator's governor — and
+    #: its slot count can change while the process runs.
+    self_hosted: bool = False
 
-    def _slot(self) -> "asyncio.Semaphore | None":
-        """The one semaphore for this provider, created on first use.
+    def _slot(self) -> "_SlotGate | None":
+        """The one gate for this provider, created on first use.
 
         Not at construction: extractors are built before the event loop exists.
         """
         if self.max_concurrency is None:
             return None
         key = getattr(self, "provider", None) or self.__class__.__name__
-        sem = _ApiExtractor._PROVIDER_SLOTS.get(key)
-        if sem is None:
-            sem = asyncio.Semaphore(max(1, int(self.max_concurrency)))
-            _ApiExtractor._PROVIDER_SLOTS[key] = sem
-        return sem
+        gate = _ApiExtractor._PROVIDER_SLOTS.get(key)
+        if gate is None:
+            gate = _SlotGate(max(1, int(self.max_concurrency)))
+            _ApiExtractor._PROVIDER_SLOTS[key] = gate
+        return gate
+
+    async def _refresh_slots(self, gate: "_SlotGate") -> None:
+        """Ask a self-hosted server how many slots it is running right now.
+
+        The operator's governor restarts llama-server with fewer slots while
+        they use the machine. Sending it more concurrent calls than it has
+        slots queues the extra one *inside* the server with the connection
+        open, which is the Cloudflare 524 that `max_concurrency` exists to
+        prevent. So the gate follows `/props` → `total_slots`, never above the
+        configured maximum. Doubles as the presence check: an absent origin is
+        found here in one cheap request instead of on a page.
+        """
+        if time.monotonic() - gate.checked_at < _SLOT_REFRESH_S:
+            return
+        gate.checked_at = time.monotonic()
+        provider = getattr(self, "provider", "?")
+        root = self._BASE_URL[:-3] if self._BASE_URL.endswith("/v1") else self._BASE_URL
+        try:
+            resp = await _shared_client(10).get(f"{root}/props", headers=self._headers())
+        except Exception as exc:
+            mark_absent(provider)
+            raise ExtractorAbsentError(f"{provider}:{self.model}: {exc}") from exc
+        if resp.status_code in _ABSENT_STATUSES:
+            mark_absent(provider)
+            raise ExtractorAbsentError(f"{provider}:{self.model} HTTP {resp.status_code}")
+        if resp.status_code != 200:
+            return  # an older server without /props: keep the configured limit
+        try:
+            slots = int(resp.json().get("total_slots") or 0)
+        except Exception:
+            return
+        if slots > 0:
+            gate.set_limit(min(slots, int(self.max_concurrency or slots)))
 
     #: Cap on generated tokens, sent on every request.
     #:
@@ -960,9 +1092,15 @@ class _ApiExtractor:
             self._last_request_time = time.monotonic()
 
     async def _post(self, payload: dict, label: str) -> dict:
+        if self.self_hosted:
+            provider = getattr(self, "provider", "?")
+            if absent_for(provider):
+                raise ExtractorAbsentError(f"{provider}:{self.model} absent")
         slot = self._slot()
         if slot is None:
             return await self._post_now(payload, label)
+        if self.self_hosted:
+            await self._refresh_slots(slot)
         async with slot:
             return await self._post_now(payload, label)
 
@@ -1045,10 +1183,20 @@ class _ApiExtractor:
                     headers=self._headers(),
                 )
         except Exception as exc:
+            if self.self_hosted and isinstance(exc, httpx.ConnectError):
+                mark_absent(getattr(self, "provider", "?"))
+                raise ExtractorAbsentError(
+                    f"{getattr(self, 'provider', '?')}:{self.model}: {exc}") from exc
             log.warning("api_request_failed", provider=getattr(self, "provider", "?"),
                         model=self.model, label=label, error=str(exc))
             raise ExtractorUnavailableError(
                 f"{getattr(self, 'provider', '?')}:{self.model}: {exc}") from exc
+        if self.self_hosted and resp.status_code in _ABSENT_STATUSES:
+            # Checked before the generic >=400 branch, whose log line carried
+            # Cloudflare's whole 530 error page once per page all afternoon.
+            mark_absent(getattr(self, "provider", "?"))
+            raise ExtractorAbsentError(
+                f"{getattr(self, 'provider', '?')}:{self.model} HTTP {resp.status_code}")
         if resp.status_code == 402:
             raise ExtractorQuotaError(f"{self.__class__.__name__} billing limit (HTTP 402)")
         if resp.status_code == 429:
@@ -1437,6 +1585,11 @@ class FallbackExtractor:
     def _available(self, idx: int) -> bool:
         if self._exhausted[idx] or time.monotonic() < self._blocked_until[idx]:
             return False
+        if getattr(self.primaries[idx], "self_hosted", False):
+            wait = absent_for(getattr(self.primaries[idx], "provider", ""))
+            if wait:
+                self._blocked_until[idx] = time.monotonic() + wait
+                return False
         if self.router is not None:
             # A daily free allowance can run out mid-run, and rpm pacing is
             # per-provider; the ledger is the only thing that knows either.
@@ -1735,6 +1888,20 @@ class FallbackExtractor:
                     self.last_model = getattr(primary, "model", "")
                     self.last_provider = getattr(primary, "provider", "")
                     return result, (self.last_model, self.last_quality or None)
+                except ExtractorAbsentError as exc:
+                    # Nobody home on our own machine. Not an attempt, not a
+                    # failure, not a rate limit: hand back the slot, skip the
+                    # provider until it is due a re-check, try the next one.
+                    self._blocked_until[i] = time.monotonic() + max(
+                        absent_for(getattr(primary, "provider", "")), 1.0)
+                    if _reserved and self.router is not None:
+                        try:
+                            self.router.unreserve(primary)
+                        except Exception as un_exc:
+                            log.warning("router_unreserve_failed", error=str(un_exc))
+                    last_error = str(exc)
+                    _settled = True
+                    continue
                 except ExtractorRateLimitError as exc:
                     self._note_attempt(_t0)
                     self._blocked_until[i] = time.monotonic() + exc.wait_seconds
@@ -2081,6 +2248,12 @@ class FallbackExtractor:
                                   tokens=getattr(primary, "last_tokens", 0))
                 _LAST_SERVED[_served_key(primary)] = time.monotonic()
                 live.append(label)
+            except ExtractorAbsentError:
+                # Our own machine is off or paused. Nothing to retire and
+                # nothing to book; the chain re-checks it in a few minutes.
+                self._blocked_until[i] = time.monotonic() + max(
+                    absent_for(getattr(primary, "provider", "")), 1.0)
+                live.append(label + " (absent)")
             except ExtractorRateLimitError as exc:
                 # Rate limited ≠ broken; leave it enabled and let the ledger
                 # hold it off until its window reopens.

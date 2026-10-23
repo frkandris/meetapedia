@@ -293,3 +293,8 @@ login disabled, `AllowUsers ptothandras`. Model swaps are `PlistBuddy` edits of
 `ProgramArguments` plus bootout/bootstrap; the previous plists are kept as
 `.bak` files for one-step rollback.
 
+
+## 2026-10-23: absence and the governor
+
+A switched-off machine is now *absent*, not failing, and the model runs on its
+owner's working Mac under a governor — see [[localgpu-governor]].

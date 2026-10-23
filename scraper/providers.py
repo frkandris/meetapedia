@@ -199,6 +199,7 @@ class OpenAICompatExtractor(_ApiExtractor):
         usd_per_1m_out: float = 0.0,
         stream: bool = False,
         json_schema: bool = False,
+        self_hosted: bool = False,
     ):
         super().__init__(
             api_key, model, temperature, timeout_seconds, max_text_chars,
@@ -208,6 +209,7 @@ class OpenAICompatExtractor(_ApiExtractor):
         self.max_concurrency = max_concurrency
         self.stream = stream
         self.json_schema = json_schema
+        self.self_hosted = self_hosted
         self.provider = provider
         self.quality = quality
         self.json_mode = json_mode
@@ -448,6 +450,9 @@ def build_extractors(
                 max_concurrency=spec.max_concurrency,
                 stream=spec.stream,
                 json_schema=spec.json_schema,
+                # An address from the environment means a machine we run; see
+                # `ExtractorAbsentError` for what that changes.
+                self_hosted=bool(spec.base_url_env),
                 fingerprint_model=fingerprint_model,
                 usd_per_1m_in=m.usd_per_1m_in,
                 usd_per_1m_out=m.usd_per_1m_out,

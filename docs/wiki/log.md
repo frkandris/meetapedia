@@ -2,6 +2,10 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-10-23
+- **Creation**: [[localgpu-governor]] — a switched-off GPU is now *absent* (`ExtractorAbsentError`: skipped 180 s, slot handed back, no failure or 429 booked) and the provider's concurrency follows the server's `/props` slot count; the model moves to the owner's working Mac under `tools/localgpu-governor/` (full / low / off).
+- **Update**: [[local-gpu-machine-setup]] — the governor agent replaces `com.meetapedia.llama`; `install.sh`, `status`/`pause`/`resume`, taking the key from the container.
+
 ## 2026-10-03
 - **Update**: [[2026-10-sqli-scanner-subscribe]] — every public form now validates: claims, reports and edit requests must name a stored record and take its name from the DB; `page_url` must be this site; town requests must look like a town; submissions need a configured city and topic.
 - **Creation**: [[2026-10-sqli-scanner-subscribe]] — `/subscribe` now accepts only a known city, known topics and a plausible email; a scanner's nine probes had become rows and notification e-mails (no injection: the insert is parameterised).

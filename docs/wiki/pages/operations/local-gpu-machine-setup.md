@@ -187,3 +187,24 @@ rebuilds the chain and logs `enrich_chain_rebuilt`, so a machine that comes back
 picked up within one pause instead of at the next restart. See
 [[free-tier-model-router]] for the chain's retirement rules and [[cost-saver-schedule]]
 for the windows.
+
+## 2026-10-23: the governor replaces the always-on llama agent
+
+On a machine its owner also works on, `com.meetapedia.llama` is replaced by
+`com.meetapedia.governor`, which starts and stops llama-server itself (with the
+same arguments as above, 2 slots or 1) — see `tools/localgpu-governor/README.md`
+for the states and [[localgpu-governor]] for why. After the model, the
+key and the tunnel credentials are in place:
+
+```bash
+tools/localgpu-governor/install.sh       # copies governor.py to ~/.meetapedia/bin, loads both agents
+/usr/bin/python3 ~/.meetapedia/bin/localgpu-governor.py status
+/usr/bin/python3 ~/.meetapedia/bin/localgpu-governor.py pause   # or resume
+```
+
+The key can be taken straight from the container without printing it:
+`ssh meetapedia-prod 'docker exec <container> printenv LOCAL_GPU_KEY' > ~/.meetapedia/localgpu.key`
+(under `umask 077`). Done this way on 2026-10-23 on a second M3 / 16 GB; the
+tunnel was retaken with the token command above and connected from `vie06`.
+`caffeinate -i` now runs only while the model is up, so an `off` machine sleeps
+normally — production treats that as absent, not broken.
