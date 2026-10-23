@@ -102,7 +102,22 @@ def test_no_ceiling_means_none_and_zero_means_no_searches(tmp_path):
 
 def test_shipped_settings_set_a_search_ceiling():
     settings = yaml.safe_load((ROOT / "config/settings.yaml").read_text(encoding="utf-8"))
-    assert settings["search"]["daily_budget_usd"] == 5.0
+    assert settings["search"]["daily_budget_usd"] == 1.0
+    assert settings["search"]["core_queries_per_pair"] == 1
+
+
+def test_core_cities_search_once_per_pair():
+    from scraper.config import load_config
+    from scraper.pipeline import _queries_for
+    from scraper.search import build_queries
+
+    cities, _, cfg = load_config(ROOT / "nonexistent.db")
+    core = next(c for c in cities if c.topic_tier == "core")
+    full = next(c for c in cities if c.topic_tier != "core")
+    assert _queries_for(core, cfg) == 1 and _queries_for(full, cfg) is None
+    terms = ["choir", "chorus"]
+    assert len(build_queries("Lagos", ["Lagos", "Lagos Nigeria"], terms, 1)) == 1
+    assert len(build_queries("Lagos", ["Lagos", "Lagos Nigeria"], terms, None)) == 3
 
 
 def test_countries_are_largest_first_and_all_searchable():

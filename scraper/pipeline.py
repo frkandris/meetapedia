@@ -780,6 +780,11 @@ class PipelineConfig:
     # USD DataForSEO may charge per UTC day (search.daily_budget_usd).
     # None = no ceiling, 0 = no paid searches — see search.SearchBudget.
     dataforseo_daily_budget_usd: float | None = None
+    # Paid queries per pair in a `topic_tier: core` city (search.core_queries_per_pair).
+    # None = all of them (up to three). 1 since 2026-10-23: the world expansion's
+    # ~19,000 core pairs at a third of the cost; `stop_after` already ends most
+    # pairs early, so the first query is where the results are.
+    core_queries_per_pair: int | None = None
     # Topics still searched for topic_tier="core" cities; empty = tiering disabled.
     core_topics: list[str] = field(default_factory=list)
     #: Pages whose community extraction may be in flight at once. 1 reproduces
@@ -1176,6 +1181,13 @@ async def run_pipeline(
     return pair_logs, total_new
 
 
+def _queries_for(city: CityConfig, config: PipelineConfig) -> int | None:
+    """How many paid queries this city's pairs may run; None = no cap."""
+    if getattr(city, "topic_tier", "full") == "core":
+        return config.core_queries_per_pair
+    return None
+
+
 def _build_search_client(config: PipelineConfig) -> FallbackSearchClient:
     search_primaries: list = []
     if config.dataforseo_login and config.dataforseo_password:
@@ -1223,7 +1235,8 @@ async def _prefetch_searches(
             if searxng.exhausted:
                 return
             terms = topic.search_terms.get(city.locale) or topic.search_terms.get("en", [])
-            queries = build_queries(city.name, city.search_variants, terms)
+            queries = build_queries(city.name, city.search_variants, terms,
+                                    max_queries=_queries_for(city, config))
             try:
                 results = await searxng.search_all(
                     queries, locale=city.locale, country=city.country,
@@ -1343,7 +1356,8 @@ async def _run_full(
             log.info("processing_pair", city=city.name, topic=topic.name)
 
             terms = topic.search_terms.get(city.locale) or topic.search_terms.get("en", [])
-            queries = build_queries(city.name, city.search_variants, terms)
+            queries = build_queries(city.name, city.search_variants, terms,
+                                    max_queries=_queries_for(city, config))
 
             # Popped here, before either branch. The prefetch writes its result
             # to `search_cache`, so by the time the loop arrives the pair takes

@@ -607,7 +607,11 @@ def build_queries(
     city_name: str,
     search_variants: list[str],
     topic_terms: list[str],
+    max_queries: int | None = None,
 ) -> list[str]:
+    """Up to three queries: the first two terms with the city's main name, then
+    the first term with its second variant. `max_queries` keeps the first N —
+    the core tier searches once per pair (search.core_queries_per_pair)."""
     if not city_name or not topic_terms:
         return []
 
@@ -618,4 +622,4 @@ def build_queries(
         queries.append(f"{term} {primary_variant}")
     if len(variants) > 1:
         queries.append(f"{topic_terms[0]} {variants[1]}")
-    return queries
+    return queries[:max_queries] if max_queries else queries

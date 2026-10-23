@@ -46,7 +46,9 @@ estimated $40-75 of search.
 - **Countries DataForSEO cannot place are not imported**: no Russia, Iran,
   Taiwan, Hong Kong, Cuba, Syria or Sudan in its 213 locations (checked
   2026-10-23). A search run from another country buys another country's SERP.
-- **A daily ceiling on search spend**, `search.daily_budget_usd: 5.0`
+- **A daily ceiling on search spend**, `search.daily_budget_usd: 1.0` (the
+  operator lowered it from 5.0 the same day, with `search.core_queries_per_pair:
+  1` — one paid query per core pair instead of up to three, ~$11-20 for the wave)
   (`search.SearchBudget`). Nothing else stops DataForSEO — a free LLM answers
   429, a paid search API keeps charging. The spend is DataForSEO's own `cost`
   per response, kept in `daily_counters` (`dataforseo_microusd`); at the

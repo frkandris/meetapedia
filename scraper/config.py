@@ -73,6 +73,9 @@ def load_config_from_docs(
         search_rate_limit=settings["search"]["rate_limit_seconds"],
         dataforseo_mode=settings["search"].get("dataforseo_mode", "live"),
         dataforseo_priority=int(settings["search"].get("standard_priority", 1)),
+        core_queries_per_pair=(
+            int(settings["search"]["core_queries_per_pair"])
+            if settings["search"].get("core_queries_per_pair") else None),
         dataforseo_daily_budget_usd=(
             None if settings["search"].get("daily_budget_usd") is None
             else float(settings["search"]["daily_budget_usd"])),

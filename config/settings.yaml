@@ -50,9 +50,13 @@ search:
   standard_priority: 1
   # USD DataForSEO may charge per UTC day; when it is reached the search stops
   # until 00:00 UTC and extraction carries on (search.SearchBudget). Set for
-  # the 2026-10-23 world expansion: ~27K new pairs at ~0.2-0.4 cents each.
-  # Remove the key for no ceiling; 0 means no paid searches at all.
-  daily_budget_usd: 5.0
+  # the 2026-10-23 world expansion (~19K new core pairs): $1/day by the
+  # operator's choice — slower, never a surprise. Remove the key for no
+  # ceiling; 0 means no paid searches at all.
+  daily_budget_usd: 1.0
+  # Paid queries per pair in `topic_tier: core` cities (full-tier cities keep
+  # up to three). One query is ~0.06 cents, so the wave costs a third.
+  core_queries_per_pair: 1
 
 fetch:
   timeout_seconds: 15
