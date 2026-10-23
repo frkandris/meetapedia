@@ -94,23 +94,20 @@ def test_legacy_detail_has_no_broken_topic_links_and_keeps_report_identity(
 @pytest.mark.parametrize("domain,city", [
     ("kozossegek.com", "budapest"), ("meetapedia.com", "vienna"),
 ])
-def test_venue_and_person_pages_are_submitted_on_both_editions(route_client, domain, city):
-    """meetapedia.com submitted 38,108 URLs and none of its venues or people.
+def test_venue_and_person_pages_are_not_submitted(route_client, domain, city):
+    """The sitemap carries towns, topic hubs, communities and guides only.
 
-    The cause was a pair of prefixes written for an English URL scheme that
-    was never built: /vienna/venue/x is a 404, /vienna/helyszin/x is the page.
-    So the venue and person branch was skipped entirely on that edition rather
-    than producing broken URLs — which is the better of the two bugs, and
-    still meant the international corpus was invisible to a crawler that reads
-    sitemaps.
+    Venue and person pages went in on 2026-09-20; by 2026-10-23 kozossegek.com
+    had nothing indexed and 20,405 of its 48,584 sitemap URLs were these thin
+    pages. They stay live and linked, just not submitted.
     """
     urls = [e.text for e in ET.fromstring(
         route_client.get("/sitemap.xml", headers={"host": domain}).text
     ).findall(".//{*}loc")]
 
-    assert f"https://{domain}/{city}/helyszin/{city}-hall" in urls
-    assert f"https://{domain}/{city}/ember/anna-{city}" in urls
-    assert not [u for u in urls if "/venue/" in u or "/person/" in u]
+    assert not [u for u in urls if "/helyszin/" in u or "/ember/" in u]
+    assert route_client.get(f"/{city}/helyszin/{city}-hall",
+                            headers={"host": domain}).status_code == 200
 
 
 @pytest.mark.parametrize("domain,city", [
@@ -120,5 +117,4 @@ def test_a_person_whose_group_is_not_listed_is_not_submitted(route_client, domai
     """Their page 404s; submitting it would put a dead URL in the sitemap."""
     response = route_client.get("/sitemap.xml", headers={"host": domain})
     urls = [e.text for e in ET.fromstring(response.text).findall(".//{*}loc")]
-    assert f"https://{domain}/{city}/ember/anna-{city}" in urls
-    assert not [u for u in urls if "/ember/orphan-" in u]
+    assert not [u for u in urls if "/ember/" in u]

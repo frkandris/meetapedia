@@ -72,3 +72,5 @@ earns almost nothing.
 - Whether to keep the HU 301 direction, or to make meetapedia.com the Hungarian home that
   Google already prefers. Either way, do not flip it back and forth: a second domain move
   restarts the consolidation clock.
+
+> Followed by [[search-console-2026-10-23]]: 28 days later kozossegek still has nothing indexed in the sample.

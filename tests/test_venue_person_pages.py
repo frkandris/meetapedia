@@ -246,8 +246,9 @@ def test_a_venue_detail_page_is_reachable_from_the_listing(tmp_path):
         assert city_view.status_code == 200
         assert "/budapest/helyszin/mupa-budapest" in city_view.text
 
+        # Reached by links, not the sitemap (out of it since 2026-10-23).
         xml = client.get("/sitemap.xml", headers={"host": "kozossegek.com"}).text
-        assert "/budapest/helyszin/mupa-budapest" in xml
+        assert "/budapest/helyszin/mupa-budapest" not in xml
     finally:
         app_state.db_path = old_db
         app_state.cities = old_cities

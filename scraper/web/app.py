@@ -9044,34 +9044,16 @@ def _build_sitemap(ctx: dict) -> list[tuple[str, str | None]]:
                         if lm and len(lm) == 10:  # YYYY-MM-DD
                             lastmods.setdefault(loc, lm)
 
-        # Venue and person pages, on BOTH editions. They were kozossegek-only
-        # until 2026-09-20, and the reason was a pair of prefixes — "/venue/"
-        # and "/person/" — written for an English URL scheme that does not
-        # exist: /stockholm/venue/x answers 404 while /stockholm/helyszin/x
-        # answers 200 on the same domain. So meetapedia.com submitted 38,108
-        # URLs and not one of its 9,282 venues or 11,554 people, and the fix is
-        # to use the routes that exist rather than to add the ones that do not.
-        #
-        # HU cities are already out of `site_city_names` on meetapedia (they
-        # canonicalize to kozossegek), so this adds the international corpus
-        # there and nothing that would duplicate.
-        for v in get_all_venues(app_state.db_path):
-            if v.get("city", "") not in site_city_names:
-                continue
-            city_sl = _slugify(v.get("city", ""))
-            name_sl = _slugify(v.get("name", ""))
-            if city_sl and name_sl:
-                locs.append(f"{base}/{city_sl}/helyszin/{name_sl}")
-
-        seen_persons: set[tuple[str, str]] = set()
-        for p in get_publishable_persons(app_state.db_path):
-            if p.get("city", "") not in site_city_names:
-                continue
-            city_sl = _slugify(p.get("city", ""))
-            name_sl = _slugify(p.get("name", ""))
-            if city_sl and name_sl and (city_sl, name_sl) not in seen_persons:
-                seen_persons.add((city_sl, name_sl))
-                locs.append(f"{base}/{city_sl}/ember/{name_sl}")
+        # Venue and person pages are NOT submitted (2026-10-23). They were
+        # added on 2026-09-20 to both editions; five weeks later kozossegek.com
+        # had 0 indexed URLs in a 24-URL inspection sample (12 unknown, 12
+        # "crawled – currently not indexed"), and Google had not processed its
+        # sitemap's children at all. 20,405 of its 48,584 submitted URLs were
+        # these pages — a person's name with one group, a venue with an
+        # address — on a domain Google does not yet trust. The sitemap now
+        # carries what a new domain should be judged on: towns, topic hubs,
+        # communities and guides. The pages stay live and indexable; they are
+        # reached by links from the communities that name them.
 
     # Deduplicate while preserving order.
     return [(loc, lastmods.get(loc)) for loc in dict.fromkeys(locs)]
