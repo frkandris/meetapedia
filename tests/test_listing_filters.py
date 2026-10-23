@@ -202,7 +202,7 @@ def test_hub_pages_have_unique_intro_copy(tmp_path):
         # city+topic hub: unique intro sentence
         assert "Böngéssz" in c.get("/budapest/running").text
         # city hub: unique intro sentence
-        assert "Fedezd fel" in c.get("/budapest").text
+        assert "Budapest 1 csoportja, témák szerint" in c.get("/budapest").text
     finally:
         app_state.db_path, app_state.cities, app_state.topics = old_db, old_cities, old_topics
 

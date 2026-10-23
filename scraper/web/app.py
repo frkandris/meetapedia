@@ -7877,6 +7877,11 @@ async def _render_explore(
                 "records": records,
             })
 
+    if city and not topic and len(sections) > 1:
+        # Largest topics first, "other" last: the sections now carry headings,
+        # and the config's topic order means nothing to a reader.
+        sections.sort(key=lambda sec: (sec["topic"] == "other", -len(sec["records"])))
+
     # Country-grouped multi-city view (when no specific city is selected and no tag)
     country_sections: list[dict] = []
     if not city and not tag:

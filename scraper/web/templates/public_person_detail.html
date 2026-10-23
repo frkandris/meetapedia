@@ -5,16 +5,7 @@
 {% from "_related.html" import related_block %}
 {% block content %}
 
-<!-- Mini gradient strip -->
-<div class="brand-gradient relative overflow-hidden">
-  <div class="max-w-3xl mx-auto px-4 sm:px-6 py-5 sm:py-7 relative">
-    <p class="text-[11px] font-semibold text-white/70 mb-1.5">
-      {{ city }} · Emberek
-    </p>
-    <h1 class="text-xl sm:text-2xl font-black tracking-[-0.025em] text-white leading-tight">{{ person.name }}</h1>
-  </div>
-</div>
-
+{# No page-head band: the name was printed three times above the fold. The card carries the h1. #}
 <div class="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
   <!-- Breadcrumb -->
@@ -39,7 +30,7 @@
         <i class="ph ph-person-simple text-[#1E6B50] text-2xl"></i>
       </div>
       <div class="min-w-0 pt-0.5">
-        <p class="text-lg font-bold text-[#1A1D1B] leading-tight">{{ person.name }}</p>
+        <h1 class="text-2xl sm:text-3xl font-bold text-[#1A1D1B] leading-tight tracking-[-0.01em]">{{ person.name }}</h1>
         <div class="flex flex-wrap items-center gap-1.5 mt-2">
           {% if city %}
           <a href="/{{ city_slug }}"

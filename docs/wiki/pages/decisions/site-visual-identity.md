@@ -48,8 +48,26 @@ fold (band, breadcrumb, card).
 `scripts/render_preview.py` renders pages from a throwaway DB to static HTML,
 which is how this was reviewed without a local server.
 
+## Second iteration (same day), with Anthropic's Design plugin
+
+Reviewed with the plugin's design-critique and ux-copy method:
+
+- **City page:** the cards were ordered by topic but in one undivided grid
+  (291 on Pécs). Each topic now has a heading with its count, largest topic
+  first and "other" last; the chips and the name filter hide a heading with
+  its cards.
+- **Intro copy** says what the page is and what to do ("Pécs 291 csoportja,
+  témák szerint. Nyiss meg egyet…") instead of "Discover … find the one that
+  fits you".
+- **Person and venue pages:** the head band went the way of the community
+  page's; the card name is the h1. The person band had "Emberek" hard-coded in
+  Hungarian on meetapedia.com too.
+- **Map:** CARTO's basemaps began answering every tile with an "API KEY
+  REQUIRED" watermark (HTTP 200, so nothing failed loudly). Tiles now come
+  from tile.openstreetmap.org, desaturated so the dots lead.
+
 ## Not done in this iteration
 
-Person and venue pages still repeat their name in a head band; links and
+Links and
 buttons still end in "→"; topic tiles on the home page still carry an icon,
 a label and a count in one card each.

@@ -254,26 +254,35 @@
   </div>
   {% else %}
 
-  {{ lf.filter_bar(t, target='#community-grid', item='.community-card', az=false) }}
+  {{ lf.filter_bar(t, target='#community-grid', item='.community-card', group='[data-topic-section]', az=false) }}
 
-  <div id="community-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+  {#- One heading per topic. The cards were already ordered by topic but sat in
+      one undivided grid — 291 tiles on Pécs with nothing saying where choirs
+      end and dance begins. A single-topic page has one section and no heading. -#}
+  {%- set _headed = sections | length > 1 -%}
+  <div id="community-grid" class="mb-6">
     {% for section in sections %}
-    {% for r in section.records %}
-    <div class="community-card relative bg-white rounded-lg border border-[#E1E5E2] p-5 shadow-sm hover:border-[#5E9E84] hover:bg-[#E8F2EC]/30 hover:shadow-md transition-all flex flex-col gap-3"
-         data-name="{{ r.name }}" data-topic="{{ section.topic }}">
-      <a href="{{ r.community_url }}" class="absolute inset-0 rounded-lg" aria-label="{{ r.name }}"></a>
-
-      <h3 class="font-semibold text-[#1A1D1B] text-base leading-snug flex items-baseline gap-1.5">
-        <i class="ph ph-{{ section.icon }} text-[#1E6B50] text-sm shrink-0"></i>
-        <span>{{ r.name }}</span>
-      </h3>
-
-      {% if r.short_description or r.description %}
-      <p class="text-sm text-[#4F5752] leading-relaxed line-clamp-2">{{ r.short_description or r.description }}</p>
+    <section class="{{ 'mb-10' if _headed else '' }}" data-topic-section data-topic="{{ section.topic }}">
+      {% if _headed %}
+      <h2 class="flex items-baseline gap-2 text-lg font-semibold text-[#1A1D1B] mb-3 pb-2 border-b border-[#E1E5E2]">
+        <i class="ph ph-{{ section.icon }} text-[#1E6B50] self-center"></i>
+        {{ section.label }}
+        <span class="text-sm font-normal text-[#646C67]">{{ section.records | length }}</span>
+      </h2>
       {% endif %}
-
-    </div>
-    {% endfor %}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {% for r in section.records %}
+        <div class="community-card relative bg-white rounded-lg border border-[#E1E5E2] p-5 hover:border-[#5E9E84] hover:bg-[#E8F2EC]/30 transition-colors flex flex-col gap-2"
+             data-name="{{ r.name }}" data-topic="{{ section.topic }}">
+          <a href="{{ r.community_url }}" class="absolute inset-0 rounded-lg" aria-label="{{ r.name }}"></a>
+          <h3 class="font-semibold text-[#1A1D1B] text-base leading-snug">{{ r.name }}</h3>
+          {% if r.short_description or r.description %}
+          <p class="text-sm text-[#4F5752] leading-relaxed line-clamp-2">{{ r.short_description or r.description }}</p>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </section>
     {% endfor %}
   </div>
 
@@ -440,6 +449,10 @@
       var show = active.size === 0 || active.has(el.dataset.topic);
       el.style.display = show ? '' : 'none';
       if (show) visible++;
+    });
+    // A topic heading goes with its cards.
+    document.querySelectorAll('[data-topic-section]').forEach(function(sec) {
+      sec.style.display = (active.size === 0 || active.has(sec.dataset.topic)) ? '' : 'none';
     });
     var cnt = document.getElementById('visible-count');
     if (cnt) cnt.textContent = (cnt.dataset.tpl || '{n}').replace('COUNT', visible);

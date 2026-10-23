@@ -56,6 +56,8 @@ def main() -> int:
             source_url=f"https://{topic}.example/{name.split()[0].lower()}",
             extracted_at="2026-10-01T00:00:00+00:00", description=desc)], db)
     app_state.db_path = db
+    from scraper.config import load_config
+    app_state.topics = load_config(db)[1]
     app_state.cities = [
         CityConfig(name=c, country="Hungary", locale="hu", search_variants=[c])
         for c in ("Budapest", "Pécs", "Debrecen", "Szeged", "Győr")]

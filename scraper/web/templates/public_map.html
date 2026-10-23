@@ -44,10 +44,15 @@
 <script>
 const map = L.map('map', { zoomControl: true }).setView([{{ map_center.lat }}, {{ map_center.lng }}], {{ map_center.zoom }});
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
-  subdomains: 'abcd',
-  maxZoom: 18,
+// OpenStreetMap's own tiles. CARTO's basemaps started answering every tile
+// with an "API KEY REQUIRED" watermark (reported 2026-10-23); OSM needs no key,
+// and its tile policy allows a low-traffic site that shows the attribution.
+// OSM's standard style is busy; muted, the community dots are what stands out.
+document.head.insertAdjacentHTML('beforeend',
+  '<style>.leaflet-tile-pane{filter:grayscale(.85) contrast(.9) brightness(1.05)}</style>');
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom: 19,
 }).addTo(map);
 
 const cities = {{ cities_json | safe }};
