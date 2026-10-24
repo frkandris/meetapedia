@@ -64,3 +64,28 @@ Setup is in [[local-gpu-machine-setup]].
   (10-08) at ~540 K/hour; 123–255 pages extracted an hour. On 10-23, with absence handling
   and this machine, ~450 calls succeeded (687K tokens) and 53 pages were
   extracted by it in the first hours.
+
+## Tuning measured 2026-10-24: the machine is near its optimum
+
+`tools/localgpu-governor/bench.py` sends production's exact request (system
+prompt, `extraction_user_prompt`, schema as grammar) over 12 cached Hungarian
+golden pages ×2; `bench_matrix.sh` runs configurations on port 8090.
+
+- **Profile of real traffic (llama.log, 3,738 requests):** generation is 83% of
+  the time; llama-server already reuses the shared prompt prefix (median 701
+  new prompt tokens, 3 s). Median 197 generated tokens at ~16 tok/s per slot.
+- **On AC, interleaved A/B/A/B** (battery runs drifted by tens of percent and
+  are not comparable): current 2 slots 252/259 pages/h; Qwen3.5-0.8B draft
+  model (`-md`, n-max 8) 265/264 — **+3%**, outputs identical within the
+  baseline's own run-to-run variance. Not worth 0.8 GB more.
+- **Worse:** 4 slots (140 vs 181 on battery), 1 slot (99), n-gram/prompt-lookup
+  speculation (123; 18% acceptance). MLX is not faster than llama.cpp for
+  small dense models per published M3 comparisons.
+- **Pipeline:** 71% of extracted pages yield no community (89% in the world
+  wave's first day), but near-empty answers cost 3.5 s each — 8% of GPU time;
+  a pre-filter would buy little. Runaway answers to the 4,000-token cap: a
+  2,000 cap would save ~5% of generation time, 1,000 ~9% but truncates real
+  many-group pages.
+- **The Hetzner server is not a candidate:** 4 shared AMD EPYC-Rome vCPUs
+  (AVX2, no AVX-512), 7.5 GB RAM with ~4 GB free, no GPU, and the same cores
+  serve the site. A GPU server (GEX45) is ~€214/month + €209 setup.
