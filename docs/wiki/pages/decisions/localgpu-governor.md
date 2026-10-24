@@ -52,9 +52,15 @@ Setup is in [[local-gpu-machine-setup]].
   the current state: 25% gates *entering* `full`, staying needs only
   `MIN_FREE_PCT` (12%), because the reading already includes the model's own
   cache.
-- **The old machine had been failing for two days before it was switched
-  off.** Production's ledger: 14,193 localgpu calls on 2026-10-21 and 27,759 on
-  10-22, every one a failure (HTTP 530). The daily report's "~28,000
-  enrichment calls a day" were those failures. On 10-23, with absence handling
+- **The old machine had been failing for eleven days before it was switched
+  off** (corrected 2026-10-24; this first read "two days" from 10-21/10-22
+  alone). Production's ledger: 7,402 good calls on 10-08, ~3,600–3,900 on
+  10-09/10-10, then from 10-12 to 10-22 about 28,000 calls a day, every one a
+  failure (HTTP 530), zero tokens. The daily report's "~28,000 enrichment calls
+  a day" were those failures — calls counted, success never checked.
+- **Throughput, same ledger:** the new machine's first night (2026-10-24,
+  00:00–07:00 UTC, `full` throughout, no sleep in `pmset -g log`) returned
+  4.15 M tokens in ~7 hours — ~590 K/hour against the old machine's best day
+  (10-08) at ~540 K/hour; 123–255 pages extracted an hour. On 10-23, with absence handling
   and this machine, ~450 calls succeeded (687K tokens) and 53 pages were
   extracted by it in the first hours.
