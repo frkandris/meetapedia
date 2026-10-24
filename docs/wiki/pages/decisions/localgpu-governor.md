@@ -89,3 +89,10 @@ golden pages ×2; `bench_matrix.sh` runs configurations on port 8090.
 - **The Hetzner server is not a candidate:** 4 shared AMD EPYC-Rome vCPUs
   (AVX2, no AVX-512), 7.5 GB RAM with ~4 GB free, no GPU, and the same cores
   serve the site. A GPU server (GEX45) is ~€214/month + €209 setup.
+- **Qwen3.5-2B is not the shortcut (2026-10-24).** Scored on this Mac with
+  `tools/localgpu-governor/score_local.py` over production's 40-page Hungarian
+  golden set (same pages, expected names and generic-token list as
+  `/v1/score`), 2 slots, on AC: 4B Q6_K **81** at 311 pages/h; 2B Q6_K **60**
+  at 753 pages/h. 2.4× the speed for 21 points — the level of the fleet's
+  weakest models. The 4B stays. The same day the localgpu output cap went from
+  4,000 to 2,000 tokens (`providers.yaml`).
