@@ -36,7 +36,7 @@ def main() -> None:
     cat = load_catalogue()
     today = datetime.now(timezone.utc).date()
 
-    print("day        | látog. HU/EN | PV HU/EN  | új köz. HU/EN | AI-oldal | lekeresés | guide | provider-hívások")
+    print("day        | látog. HU/EN (nyers) | PV HU/EN  | új köz. HU/EN | AI-oldal | lekeresés | guide | provider-hívások")
     for back in range(args.days, 0, -1):
         day = (today - timedelta(days=back)).isoformat()
         nxt = (today - timedelta(days=back - 1)).isoformat()

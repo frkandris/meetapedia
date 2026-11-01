@@ -50,9 +50,16 @@ def fetch_ga4_traffic(day: str) -> dict | None:
 
     Requires GA4_PROPERTY_ID and GA4_CREDENTIALS_JSON (service-account key JSON
     content) env vars; the SA email must be a Viewer on the GA4 property.
-    Returns {site: {"visitors": n, "sessions": n, "pageviews": n}} with sites
-    mapped from hostName (kozossegek/meetapedia), or None when not configured
-    or on any error — the email then falls back to the server-side counter.
+    Returns {site: {"visitors": n, "sessions": n, "engaged": n, "pageviews": n}}
+    with sites mapped from hostName (kozossegek/meetapedia), plus "_sources":
+    the top session sources by engaged sessions. None when not configured or on
+    any error — the email then falls back to the server-side counter.
+
+    `engaged` (GA4 engagedSessions: 10 s, a conversion or a second page) is
+    the headline, not `visitors`: from 2026-10-29 a headless Chrome on Windows
+    from Singapore, Hong Kong and Frankfurt datacentres walked the sitemap one
+    page per "user", 0.0–1 s each — 3,700 GA4 visitors a day against ~13 engaged
+    sessions. Raw users stayed in the table so the crawler stays visible.
     """
     import json as _json
     property_id = os.environ.get("GA4_PROPERTY_ID", "")
@@ -73,11 +80,11 @@ def fetch_ga4_traffic(day: str) -> dict | None:
             "dateRanges": [{"startDate": day, "endDate": day}],
             "dimensions": [{"name": "hostName"}],
             "metrics": [{"name": "activeUsers"}, {"name": "sessions"},
-                        {"name": "screenPageViews"}],
+                        {"name": "screenPageViews"}, {"name": "engagedSessions"}],
         }
-        resp = httpx.post(
-            f"https://analyticsdata.googleapis.com/v1beta/properties/{property_id}:runReport",
-            json=body, headers={"Authorization": f"Bearer {creds.token}"}, timeout=30.0)
+        url = f"https://analyticsdata.googleapis.com/v1beta/properties/{property_id}:runReport"
+        headers = {"Authorization": f"Bearer {creds.token}"}
+        resp = httpx.post(url, json=body, headers=headers, timeout=30.0)
         resp.raise_for_status()
         out: dict = {}
         for row in resp.json().get("rows", []):
@@ -87,10 +94,27 @@ def fetch_ga4_traffic(day: str) -> dict | None:
             if not site:
                 continue
             vals = [int(v["value"]) for v in row["metricValues"]]
-            agg = out.setdefault(site, {"visitors": 0, "sessions": 0, "pageviews": 0})
+            agg = out.setdefault(site, {"visitors": 0, "sessions": 0, "pageviews": 0,
+                                        "engaged": 0})
             agg["visitors"] += vals[0]
             agg["sessions"] += vals[1]
             agg["pageviews"] += vals[2]
+            agg["engaged"] += vals[3]
+
+        resp = httpx.post(url, headers=headers, timeout=30.0, json={
+            "dateRanges": [{"startDate": day, "endDate": day}],
+            "dimensions": [{"name": "sessionSource"}],
+            "metrics": [{"name": "engagedSessions"}, {"name": "activeUsers"}],
+            "orderBys": [{"metric": {"metricName": "engagedSessions"}, "desc": True}],
+            "limit": 6,
+        })
+        resp.raise_for_status()
+        out["_sources"] = [
+            {"source": row["dimensionValues"][0]["value"],
+             "engaged": int(row["metricValues"][0]["value"]),
+             "visitors": int(row["metricValues"][1]["value"])}
+            for row in resp.json().get("rows", [])
+            if int(row["metricValues"][0]["value"]) > 0]
         return out
     except Exception as exc:
         log.warning("ga4_fetch_failed", error=str(exc))
@@ -114,10 +138,15 @@ def build_report_html(day: str, summary: dict, traffic: dict,
     total_new = hu["new_communities"] + intl["new_communities"]
     if ga4 is not None:
         total_visitors = g_site("kozossegek", "visitors") + g_site("meetapedia", "visitors")
+        total_engaged = g_site("kozossegek", "engaged") + g_site("meetapedia", "engaged")
+        headline = f"{total_engaged} aktív látogatás"
     else:
         total_visitors = t_site("kozossegek", "visitors") + t_site("meetapedia", "visitors")
+        headline = f"{total_visitors} látogató"
     subject = (f"[közösségek] Napi összefoglaló {day} — "
-               f"{total_new} új közösség, {total_visitors} látogató")
+               f"{total_new} új közösség, {headline}")
+    sources = ", ".join(f"{s['source']} {s['engaged']}"
+                        for s in (ga4 or {}).get("_sources", []))
 
     metric_rows = "".join(
         _ROW.format(label=label, hu=hu[k], intl=intl[k], total=hu[k] + intl[k])
@@ -374,22 +403,25 @@ def build_report_html(day: str, summary: dict, traffic: dict,
   <table style="border-collapse:collapse;font-size:14px">
     <tr style="color:#8C8478;font-size:12px">
       <td style="padding:4px 12px 4px 0"></td>
-      <td align="right" style="padding:4px 8px">Látogató</td>
+      {"<td align='right' style='padding:4px 8px'>Aktív munkamenet</td>" if ga4 is not None else ""}
+      <td align="right" style="padding:4px 8px">{"Látogató (nyers)" if ga4 is not None else "Látogató"}</td>
       {"<td align='right' style='padding:4px 8px'>Munkamenet</td>" if ga4 is not None else ""}
       <td align="right" style="padding:4px 0 4px 8px">Oldalletöltés</td></tr>
     {"".join(
         f"<tr><td style='padding:4px 12px 4px 0'>{site}.com</td>"
-        f"<td align='right' style='padding:4px 8px;font-weight:600'>{g_site(site, 'visitors') if ga4 is not None else t_site(site, 'visitors')}</td>"
+        + (f"<td align='right' style='padding:4px 8px;font-weight:600'>{g_site(site, 'engaged')}</td>" if ga4 is not None else "")
+        + f"<td align='right' style='padding:4px 8px{'' if ga4 is not None else ';font-weight:600'}'>{g_site(site, 'visitors') if ga4 is not None else t_site(site, 'visitors')}</td>"
         + (f"<td align='right' style='padding:4px 8px'>{g_site(site, 'sessions')}</td>" if ga4 is not None else "")
         + f"<td align='right' style='padding:4px 0 4px 8px'>{g_site(site, 'pageviews') if ga4 is not None else t_site(site, 'pageviews')}</td></tr>"
         for site in ("kozossegek", "meetapedia"))}
     <tr style="border-top:1px solid #EAE5DB"><td style="padding:4px 12px 4px 0;font-weight:700">Összesen</td>
+      {f"<td align='right' style='padding:4px 8px;font-weight:700'>{total_engaged}</td>" if ga4 is not None else ""}
       <td align="right" style="padding:4px 8px;font-weight:700">{total_visitors}</td>
       {f"<td align='right' style='padding:4px 8px;font-weight:700'>{g_site('kozossegek', 'sessions') + g_site('meetapedia', 'sessions')}</td>" if ga4 is not None else ""}
       <td align="right" style="padding:4px 0 4px 8px;font-weight:700">{(g_site("kozossegek", "pageviews") + g_site("meetapedia", "pageviews")) if ga4 is not None else (t_site("kozossegek", "pageviews") + t_site("meetapedia", "pageviews"))}</td></tr>
   </table>
   <p style="color:#B5ADA0;font-size:11px;margin:4px 0 16px">
-    {"Forrás: Google Analytics 4. Szerveroldali számláló (bot-szűrt): " + str(t_site("kozossegek", "visitors") + t_site("meetapedia", "visitors")) + " látogató." if ga4 is not None else "Szerveroldali számláló (botok kiszűrve); GA4-bekötéshez GA4_PROPERTY_ID + GA4_CREDENTIALS_JSON env kell."}</p>
+    {("Aktív forrásai: " + sources + ". " if sources else "") + "Aktív munkamenet: legalább 10 mp, vagy kattintás, vagy második oldal — a nyers szám botokat is tartalmaz. Forrás: Google Analytics 4. Szerveroldali számláló (bot-szűrt): " + str(t_site("kozossegek", "visitors") + t_site("meetapedia", "visitors")) + " látogató." if ga4 is not None else "Szerveroldali számláló (botok kiszűrve); GA4-bekötéshez GA4_PROPERTY_ID + GA4_CREDENTIALS_JSON env kell."}</p>
 
   {funnel_html}
 

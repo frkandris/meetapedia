@@ -352,12 +352,16 @@ def test_report_html_ga4_mode():
                                "covered_pairs_hu": 0, "covered_pairs_intl": 0},
     }
     traffic = {"kozossegek": {"pageviews": 3, "visitors": 2}}
-    ga4 = {"kozossegek": {"visitors": 87, "sessions": 110, "pageviews": 240},
-           "meetapedia": {"visitors": 13, "sessions": 15, "pageviews": 30}}
+    ga4 = {"kozossegek": {"visitors": 87, "sessions": 110, "pageviews": 240, "engaged": 9},
+           "meetapedia": {"visitors": 3700, "sessions": 3710, "pageviews": 3690, "engaged": 4},
+           "_sources": [{"source": "chatgpt.com", "engaged": 6, "visitors": 7}]}
     subject, html = build_report_html("2026-07-09", summary, traffic, ga4)
-    assert "100 látogató" in subject          # GA4 wins over the server counter
-    assert "Látogatók (GA4)" in html and "Munkamenet" in html
-    assert ">87<" in html and ">125<" in html  # per-site + total sessions
+    # Engaged sessions are the headline: a crawler's 3,700 one-page "users"
+    # must not read as a traffic record (2026-10-29..11-01).
+    assert "13 aktív látogatás" in subject and "látogató" not in subject
+    assert "Látogatók (GA4)" in html and "Aktív munkamenet" in html
+    assert ">87<" in html and ">3820<" in html  # raw users and sessions stay visible
+    assert "chatgpt.com 6" in html
     # without GA4: falls back to the server counter
     subject2, html2 = build_report_html("2026-07-09", summary, traffic, None)
     assert "2 látogató" in subject2 and "(GA4)" not in html2
