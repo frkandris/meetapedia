@@ -225,6 +225,38 @@ providers:
       - model: gemini-3.5-flash-lite
         quality: 63
 
+  # ── Gemma 4 26B-A4B on the Gemini API — its own entry since 2026-11-13 ────
+  # Same key, its own per-model allowance (the split rule above). Read from
+  # this account's AI Studio rate-limit dashboard on 2026-11-13, free tier:
+  #
+  #     Gemma 4 26B    RPM 30   TPM 16K (input)   RPD 14.4K
+  #
+  # The 16K input tokens a minute is what binds, not the 14.4K a day: a full
+  # `max_text_chars` page plus the system prompt is ~5K tokens in Hungarian, so
+  # three pages a minute — `rpm: 3`, ~4,300 a day, eight times Flash-Lite's 500.
+  # The catalogue has no `tpm`, so `rpm` carries that limit; the RPD is the real
+  # one, so the ledger can still learn from a 429 near it.
+  #
+  # Measured 2026-11-13 with scripts/score_candidates.py on the Hungarian
+  # golden set (sample 93306e32b439, 15 pages): **80** with
+  # `--max-output-tokens 4000`, on the 8 pages it answered. At the global 1,500
+  # the same pages scored 73 on 6 answers — six were truncated, hence the
+  # provider cap below. The other 7 of 15 were HTTP 500 "Internal error
+  # encountered" from Google (a known Gemma-on-AI-Studio problem). A 500 is
+  # transient: retried, then failed over, and the per-provider breaker needs 20
+  # *consecutive* ones. gemma-4-31b-it on the same API scored 20 (1 of 4,
+  # three 500s) and is not added.
+  - name: gemini_gemma
+    enabled: true
+    api_key_env: GEMINI_API_KEY
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    rpm: 3
+    rpd: 14400
+    max_output_tokens: 4000
+    models:
+      - model: gemma-4-26b-a4b-it
+        quality: 80
+
   # ── Google Gemini 3.6 Flash — REMOVED 2026-09-11 ──────────────────────────
   # Added 2026-09-10 as its own entry with the real limits (RPM 5, RPD 20), and
   # the entry was right: `gemini_flash` took exactly the 19-20 calls a day it

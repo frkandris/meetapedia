@@ -3,6 +3,7 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-11-13
+- **Update**: [[ai-provider-quota-runbook]] — Gemma 4 26B-A4B gets its own Gemini allowance (RPM 30, TPM 16K, RPD 14.4K); added as `gemini_gemma` (80 at 4,000 output tokens, ~half the calls HTTP 500); `score_candidates.py --max-output-tokens`.
 - **Creation**: [[2026-11-collector-stuck-on-dead-pairs]] — 1,022 dead pairs re-fetched every turn, no new community for a week; `collect_attempts` bound (3) and collected-with-no-page counts as done.
 
 ## 2026-10-23

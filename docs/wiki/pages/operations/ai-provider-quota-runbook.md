@@ -149,3 +149,22 @@ publishes no daily limit and counts serving a public site as production
 (Enterprise licence), SambaNova's free tier is reported at ~20 requests/day per
 model, and Cerebras reportedly ended its no-card tier (ours is already
 `enabled: false`).
+
+## Free-tier audit, 2026-11-13
+
+`check_free_models.py` in the container listed Gemma 4 on the Gemini API
+(`gemma-4-26b-a4b-it`, `gemma-4-31b-it`) as NEW. On Gemini the limits are per
+model, and this account's AI Studio rate-limit dashboard gives Gemma 4 26B its
+own free allowance: **RPM 30, input TPM 16K, RPD 14.4K** — against Flash-Lite's
+500 a day. The TPM binds (~5K tokens a Hungarian page, so three a minute, ~4,300
+a day). Added as `gemini_gemma` with `rpm: 3`, `rpd: 14400`.
+
+Scored with `scripts/score_candidates.py` on sample `93306e32b439` (15 pages):
+**73** at the default 1,500 output tokens with six truncations, **80** with
+`--max-output-tokens 4000` (a new flag: it separates "ran out of room" from
+"could not do it"). In both runs about half the calls came back HTTP 500
+"Internal error encountered" from Google — transient, so retried and failed
+over, but expect `api_request_failed` noise from this provider.
+`gemma-4-31b-it` scored 20 (1 of 4 answered) and was not added;
+`ministral-14b-latest` hit 429s because production shares the key — not a
+measurement. `liquid/lfm-3-1.7b:free` reasons in prose and returned no JSON.

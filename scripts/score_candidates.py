@@ -34,6 +34,8 @@ def main() -> None:
     ap.add_argument("--locale", default="hu")
     ap.add_argument("--db", default="/app/data/scraper.db")
     ap.add_argument("--no-baseline", action="store_true")
+    ap.add_argument("--max-output-tokens", type=int, default=0,
+                    help="override the provider's cap, e.g. to tell truncation from inability")
     args = ap.parse_args()
 
     spec = next(p for p in load_catalogue().providers if p.name == args.provider)
@@ -43,7 +45,7 @@ def main() -> None:
         return OpenAICompatExtractor(
             provider=spec.name, base_url=spec.url, api_key=spec.api_key, model=model,
             quality=0, timeout_seconds=spec.timeout_seconds or 120,
-            max_output_tokens=spec.max_output_tokens or 1500,
+            max_output_tokens=args.max_output_tokens or spec.max_output_tokens or 1500,
             stream=spec.stream, json_schema=spec.json_schema,
             fingerprint_model="deepseek-chat")
 
