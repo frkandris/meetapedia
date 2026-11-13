@@ -52,3 +52,21 @@ Thresholds are flags on `run` (`--idle`, `--check`) and constants at the top of
 *level* is used only at "critical": on this machine it sat at "warning" with
 46% free, and gating on it would have kept the model off whenever the owner
 worked.
+
+## Score a candidate model
+
+`score_local.py` scores the model on port 8090 against production's golden set
+(`.preview/bench/golden40.json`: 40 Hungarian pages with their expected names,
+exported from the container), with the same `scoring.score_page` as
+`/v1/score`, so its numbers compare with `quality:` in `config/providers.yaml`.
+`score_models.sh` runs several GGUFs in a row with production's server flags,
+pausing the governor for the duration:
+
+```sh
+tools/localgpu-governor/score_models.sh .preview/bench/golden40.json \
+  4b_q6k=$HOME/models/Qwen3.5-4B-Q6_K.gguf \
+  q38_4b_q6k=$HOME/models/qwen38-distill/Qwen3.8-4B-Q6_K.gguf
+```
+
+Always include the production model as a baseline in the same run: pages/hour
+moves with heat and power state.

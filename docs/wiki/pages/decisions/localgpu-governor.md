@@ -96,3 +96,10 @@ golden pages ×2; `bench_matrix.sh` runs configurations on port 8090.
   at 753 pages/h. 2.4× the speed for 21 points — the level of the fleet's
   weakest models. The 4B stays. The same day the localgpu output cap went from
   4,000 to 2,000 tokens (`providers.yaml`).
+- **The Qwen3.8 distills are not the upgrade (2026-11-13).** `empero-ai/Qwen3.8-4B`
+  and `-9B` are community full-parameter distillations of Qwen3.8 2.4T-A95B into
+  the Qwen3.5 architecture (Alibaba shipped no Qwen3.8 below 27B; the cards
+  list English only). Same 40-page golden set, same flags, one run on AC with
+  the production model as baseline (`tools/localgpu-governor/score_models.sh`):
+  Qwen3.5-4B Q6_K **83** at 182 pages/h; Qwen3.8-4B Q6_K **78** at 152;
+  Qwen3.8-9B Q4_K_M **78** at 141. Lower and slower — the 4B stays.

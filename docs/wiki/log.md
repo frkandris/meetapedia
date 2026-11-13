@@ -3,6 +3,7 @@
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
 ## 2026-11-13
+- **Update**: [[localgpu-governor]] — Qwen3.8 4B/9B community distills score 78 (152 / 141 pages/h) against the production Qwen3.5-4B's 83 (182); the 4B stays. `score_models.sh` runs a baseline and candidates in one go.
 - **Update**: [[ai-provider-quota-runbook]] — Gemma 4 26B-A4B gets its own Gemini allowance (RPM 30, TPM 16K, RPD 14.4K); added as `gemini_gemma` (80 at 4,000 output tokens, ~half the calls HTTP 500); `score_candidates.py --max-output-tokens`.
 - **Creation**: [[2026-11-collector-stuck-on-dead-pairs]] — 1,022 dead pairs re-fetched every turn, no new community for a week; `collect_attempts` bound (3) and collected-with-no-page counts as done.
 
