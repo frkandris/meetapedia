@@ -115,6 +115,15 @@ def test_search_collection_requires_terminal_batch_marker(tmp_path):
     assert get_collected_pairs(db, max_pages=1) == {("Budapest", "running")}
 
 
+def test_collected_pair_with_no_fetched_page_is_done(tmp_path):
+    # Every URL failed to fetch: uncollected, a later pass may still get one;
+    # once the collector gave up there is nothing for extraction to do.
+    db = _db(tmp_path)
+    assert _done(db, run_communities=True) == set()
+    mark_search_collection_complete(db, "Budapest", "running")
+    assert _done(db, run_communities=True) == {("Budapest", "running")}
+
+
 def test_init_db_backfills_legacy_search_rows_as_collected(tmp_path):
     db = tmp_path / "legacy.db"
     with sqlite3.connect(db) as conn:

@@ -18,7 +18,7 @@ from .false_positives import load as load_false_positives
 from .fetch import _is_blocked, fetch_and_clean
 from .search import (DataForSEOClient, FallbackSearchClient, SearchBudget, SearchQuotaError,
                      SearchUnavailableError, build_queries)
-from .db import get_daily_counters_with_prefix, get_search_cache, save_search_cache, mark_search_collection_complete, get_collected_pairs, get_searched_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs, get_low_yield_domains, get_search_cache_queries
+from .db import get_daily_counters_with_prefix, get_search_cache, save_search_cache, mark_search_collection_complete, note_failed_collection, get_collected_pairs, get_searched_pairs, get_covered_pairs, upsert_venues, upsert_persons, delete_leader_persons_for_community, load_cache_page, find_community_by_id, get_fully_processed_pairs, get_low_yield_domains, get_search_cache_queries
 from .router import build_router
 from .store import save_results
 
@@ -812,6 +812,11 @@ class PipelineConfig:
     #: every run against every provider — ~21 pages × 30 runs a day, and once
     #: paid providers were on, most of the bill. 0 disables the quarantine.
     extract_max_page_failures: int = 3
+    #: Collection passes in which every URL of a searched pair failed to fetch,
+    #: after which the pair counts as collected. Unbounded, these pairs sat at
+    #: the head of the priority order and filled every collector turn from
+    #: 2026-11-06 (see `db.note_failed_collection`). 0 disables the bound.
+    collect_max_pair_attempts: int = 3
     #: The separate LLM call that extracts people from a page. Off: from
     #: 2026-08 to 2026-09-24 it ran on every page with communities — about a
     #: quarter of all extraction calls, ~40 s each on the local GPU — and saved
@@ -1604,6 +1609,13 @@ async def _run_full(
             # instead of suppressing the pair until the long search-cache TTL.
             if not urls or fetched:
                 await _off_loop(mark_search_collection_complete, config.db_path, city.name, topic.name)
+            else:
+                attempts = await _off_loop(
+                    note_failed_collection, config.db_path, city.name, topic.name,
+                    config.collect_max_pair_attempts)
+                if attempts == config.collect_max_pair_attempts:
+                    log.warning("collect_pair_given_up", city=city.name, topic=topic.name,
+                                urls=len(urls), attempts=attempts)
 
             if not run_communities and not run_venues and not run_persons:
                 # search_only is a strict collection mode: after the fetch batch it

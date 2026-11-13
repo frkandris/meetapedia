@@ -132,6 +132,11 @@ pipeline:
   # the quarantine. Releases automatically when the fingerprint changes, and by
   # hand at /admin/quarantine.
   extract_max_page_failures: 3
+  # Collection passes in which every URL of a searched pair failed to fetch
+  # (only Instagram/YouTube, 403s, broken certificates) before the pair counts
+  # as collected. Unbounded, 1,022 such pairs filled every collector turn from
+  # 2026-11-06 and nothing new was searched for a week. 0 disables the bound.
+  collect_max_pair_attempts: 3
   # The separate LLM person-extraction call. Off since 2026-09-24: it spent a
   # quarter of all extraction calls and saved no one (see PipelineConfig).
   # Leaders still reach the people pages from the community `leader` field.

@@ -140,6 +140,55 @@ def test_search_only_retries_pair_after_every_fetch_fails(tmp_path):
     assert retried_urls == ["https://klub.test/a"]
 
 
+def test_search_only_gives_up_on_pair_after_bounded_failed_passes(tmp_path):
+    """From 2026-11-06 1,022 pairs whose every URL failed filled each collector
+    turn and the 10,637 unsearched pairs behind them were never reached."""
+    from scraper.cache import CacheManager
+    from scraper.db import get_collected_pairs
+
+    db, cfg, cities, topics = _fixtures(tmp_path)
+    cfg.collect_max_pair_attempts = 3
+    cache = CacheManager(db)
+    attempts = []
+
+    async def failed_fetch(url, *a, **k):
+        attempts.append(url)
+        return None
+
+    with patch("scraper.pipeline.FallbackSearchClient", OkSearch), \
+         patch("scraper.pipeline.fetch_and_clean", failed_fetch):
+        for _ in range(5):
+            asyncio.run(run_pipeline(cities, topics, cfg, cache=cache, run_mode="search_only"))
+
+    assert len(attempts) == 3
+    assert get_collected_pairs(db, cfg.search_max_pages) == {("Budapest", "running")}
+
+
+def test_new_search_resets_failed_collection_count(tmp_path):
+    from scraper.db import (get_collected_pairs, init_db, note_failed_collection,
+                            save_search_cache)
+    db = tmp_path / "scraper.db"
+    init_db(db)
+    save_search_cache(db, "Budapest", "running", ["https://klub.test/a"], ["q"])
+    assert note_failed_collection(db, "Budapest", "running", 2) == 1
+    save_search_cache(db, "Budapest", "running", ["https://klub.test/b"], ["q"])
+    assert note_failed_collection(db, "Budapest", "running", 2) == 1
+    assert get_collected_pairs(db, 2) == set()
+    assert note_failed_collection(db, "Budapest", "running", 2) == 2
+    assert get_collected_pairs(db, 2) == {("Budapest", "running")}
+
+
+def test_zero_bound_keeps_retrying(tmp_path):
+    from scraper.db import (get_collected_pairs, init_db, note_failed_collection,
+                            save_search_cache)
+    db = tmp_path / "scraper.db"
+    init_db(db)
+    save_search_cache(db, "Budapest", "running", ["https://klub.test/a"], ["q"])
+    for _ in range(5):
+        note_failed_collection(db, "Budapest", "running", 0)
+    assert get_collected_pairs(db, 2) == set()
+
+
 def test_stop_at_in_past_processes_zero_pairs(tmp_path):
     db, cfg, cities, topics = _fixtures(tmp_path)
     past = datetime.now(timezone.utc) - timedelta(minutes=1)

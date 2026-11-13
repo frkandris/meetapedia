@@ -446,6 +446,13 @@ def init_db(db_path: Path, force: bool = False) -> None:
             conn.execute(
                 "UPDATE search_cache SET collected_at=cached_at WHERE collected_at IS NULL"
             )
+        try:
+            # Collection passes in which every selected URL failed to fetch.
+            # See `note_failed_collection`.
+            conn.execute("ALTER TABLE search_cache ADD COLUMN collect_attempts"
+                         " INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
 
         # Venues — physical locations that host communities
         conn.execute("""
@@ -1931,11 +1938,12 @@ def get_fully_processed_pairs(
             _entry = pages_by_hash.get(_uh)
             if _entry is not None:
                 _entry["quarantined"] = True
-        search_rows = conn.execute("SELECT city, topic, urls FROM search_cache").fetchall()
+        search_rows = conn.execute(
+            "SELECT city, topic, urls, collected_at IS NOT NULL FROM search_cache").fetchall()
         conn.rollback()  # read-only: end the snapshot without pretending to write
 
     result: set[tuple[str, str]] = set()
-    for city, topic, urls_json in search_rows:
+    for city, topic, urls_json, collected in search_rows:
         try:
             urls: list[str] = json.loads(urls_json) if urls_json else []
         except (TypeError, json.JSONDecodeError):
@@ -1954,6 +1962,11 @@ def get_fully_processed_pairs(
             if _url_hash(url) in pages_by_hash
         ]
         if not processable:
+            # Collected and still nothing fetched: every URL was tried and
+            # failed (`note_failed_collection`), so there is nothing to extract.
+            # Uncollected, a later collector pass may still fetch something.
+            if collected:
+                result.add((city, topic))
             continue
 
         pair_person_key = f"{city}/{topic}"
@@ -2531,7 +2544,7 @@ def save_search_cache(db_path: Path, city: str, topic: str,
             VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(city, topic) DO UPDATE SET
                 urls=excluded.urls, queries=excluded.queries,
-                cached_at=excluded.cached_at, collected_at=NULL
+                cached_at=excluded.cached_at, collected_at=NULL, collect_attempts=0
         """, (city, topic, json.dumps(urls), json.dumps(queries), now))
         conn.commit()
 
@@ -2550,6 +2563,36 @@ def mark_search_collection_complete(db_path: Path, city: str, topic: str) -> Non
             (now, city, topic),
         )
         conn.commit()
+
+
+def note_failed_collection(db_path: Path, city: str, topic: str,
+                           max_attempts: int) -> int:
+    """Count a pass in which every selected URL of a searched pair failed.
+
+    Such a pair is left uncollected so a later pass retries it — but without a
+    bound it is retried by every pass forever. From 2026-11-06 the collector
+    spent each 15-minute turn re-fetching 1,022 pairs whose results were all
+    Instagram, 403s or broken certificates, walked in priority order, and never
+    reached the 10,637 pairs nobody had searched yet: no paid search and no new
+    community for a week. After `max_attempts` such passes (0 disables the
+    bound) the pair is marked collected. A new search resets the count.
+    Returns the count after this pass.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect(db_path) as conn:
+        conn.execute(
+            "UPDATE search_cache SET collect_attempts=collect_attempts+1"
+            " WHERE city=? AND topic=?", (city, topic))
+        row = conn.execute(
+            "SELECT collect_attempts FROM search_cache WHERE city=? AND topic=?",
+            (city, topic)).fetchone()
+        attempts = int(row[0]) if row else 0
+        if max_attempts > 0 and attempts >= max_attempts:
+            conn.execute(
+                "UPDATE search_cache SET collected_at=? WHERE city=? AND topic=?",
+                (now, city, topic))
+        conn.commit()
+    return attempts
 
 
 def get_search_cache_queries(db_path: Path, city: str, topic: str) -> list[str]:

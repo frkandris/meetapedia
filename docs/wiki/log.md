@@ -2,6 +2,9 @@
 
 Date-grouped operation log, newest first. See [SCHEMA.md](SCHEMA.md).
 
+## 2026-11-13
+- **Creation**: [[2026-11-collector-stuck-on-dead-pairs]] — 1,022 dead pairs re-fetched every turn, no new community for a week; `collect_attempts` bound (3) and collected-with-no-page counts as done.
+
 ## 2026-10-23
 - **Creation**: [[district-search]] — low-yield domains skipped (4.9% of pages); district pilot in 10 large cities (175 districts, ~$3.7), baseline 557 communities.
 - **Creation**: [[2026-10-topic-slug-in-prompt]] — prompt sent "nok"; 527/1,328 nok records misfiled; readable topic phrase + topic_rule, fingerprint unchanged; audit script (dry run).

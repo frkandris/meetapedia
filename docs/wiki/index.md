@@ -122,6 +122,7 @@ vocabulary), [faq.md](faq.md) (recurring questions).
 - [[sister-site-cross-links]] — The twin-record link between kozossegek.com and meetapedia.com — an icon on the community card only, same path, no redirect hop, suppressed where the twin would 302 home.
 
 ## Post-mortems
+- [[2026-11-collector-stuck-on-dead-pairs]] — Searched pairs whose every URL failed to fetch were never marked collected, so from 2026-11-06 they filled every 15-minute collector turn and the 10,637 unsearched pairs behind them were never reached.
 - [[2026-10-topic-slug-in-prompt]] — The extraction prompt sent topic slugs, so "nok" (women) meant nothing and city-wide NGO lists were filed as women's groups — 527 of 1,328 visible records.
 
 - [[2026-10-sqli-scanner-subscribe]] — An SQL-injection scanner probed /subscribe and /varosok/kerelem; the parameterised inserts ran nothing, but every probe became a stored row (and for /subscribe a notification e-mail), because no public form checked what it was given.

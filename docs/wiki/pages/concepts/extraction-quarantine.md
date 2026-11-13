@@ -84,3 +84,7 @@ say so. That is the same reasoning as the ceiling in [[paid-spend-guard]]: a
 guard nobody can see is a guard nobody trusts.
 
 `pipeline.extract_max_page_failures: 0` disables it entirely.
+
+The collector has the same rule one level up: a searched pair whose every URL
+fails to fetch is retried three passes, then counts as collected — see
+[[2026-11-collector-stuck-on-dead-pairs]].
