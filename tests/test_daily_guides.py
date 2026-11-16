@@ -561,3 +561,41 @@ def test_rewrites_spend_the_same_daily_budget_across_passes(tmp_path):
     assert first.settled and first == [], "two rewrites spend a limit of two"
     asyncio.run(publish_daily_guides(db, cities, _Writer(), limit=2, now=now))
     assert get_daily_counter(db, "2026-09-22", "guide_rewritten") == 2
+
+
+def _seed_flat(db, city: CityConfig, topic: str = "running", count: int = 8) -> None:
+    """Enough described groups, but nothing to compare: no dimension card."""
+    save_results(city.name, topic, [CommunityRecord(
+        name=f"{city.name} Flat {i}", city=city.name, topic=topic, locale=city.locale,
+        description=("A recurring open community with public joining details and "
+                     "a sufficiently informative description for prospective members."),
+        source_url=f"https://example.org/{city.name}/flat/{i}",
+        extracted_at="2026-11-16T00:00:00Z",
+    ) for i in range(count)], db)
+
+
+def test_groups_refused_before_any_call_do_not_spend_the_pass_cap(tmp_path):
+    """From 2026-11-08 no guide was published: the Hungarian groups at the head
+    of the order were either too small or had no comparable dimension, each
+    refusal used one of a pass's `limit * 2` slots, and the 1,191 eligible
+    German candidates behind them were never reached."""
+    db = tmp_path / "head.db"
+    init_db(db)
+    small = _cities(*[f"Falu{i}" for i in range(12)])
+    flat = _cities(*[f"Város{i}" for i in range(6)])
+    berlin = CityConfig("Berlin", "de", [], "Germany")
+    for city in small:
+        _seed(db, city, count=7)
+    for city in flat:
+        _seed_flat(db, city, count=9)
+    _seed(db, berlin)
+    writer = _Writer()
+
+    created = asyncio.run(publish_daily_guides(
+        db, small + flat + [berlin], writer, limit=1,
+        country_priority=["Hungary", "Germany"],
+        now=datetime(2026, 11, 16, 1, tzinfo=timezone.utc)))
+
+    assert [g["city"] for g in created] == ["Berlin"]
+    assert writer.calls_made == 1, "only the eligible group costs a fleet call"
+    assert created.settled

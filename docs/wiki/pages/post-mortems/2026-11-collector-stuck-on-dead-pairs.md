@@ -59,3 +59,5 @@ works: clearing `collected_at` puts a pair back.
 unbounded retry at the head of the order starves everything behind it while
 every individual pass looks healthy. Same rule as the extraction quarantine
 ([[extraction-quarantine]]): remember having tried.
+The guide step repeated the pattern a week later:
+[[2026-11-guides-stuck-on-small-groups]].

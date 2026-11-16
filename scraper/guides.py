@@ -272,6 +272,10 @@ _PACKET_BUDGET_CHARS = 6000
 _REWRITTEN_COUNTER = "guide_rewritten"
 _REFUSED_PREFIX = "guide_refused:"
 
+#: `_draft_guide` reasons decided from the records alone, before any fleet call.
+_PRE_CALL_REFUSALS = frozenset({
+    "too_few_communities", "too_few_descriptions", "too_few_dimensions"})
+
 
 def is_comparable(counts: list[int], covered: int) -> bool:
     """Whether a field's value counts make a comparison worth a card.
@@ -633,12 +637,13 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
         meta = city_meta.get(stale["city"])
         if not meta or f"{stale['city']}|{stale['topic']}" in refused_today:
             continue
-        guide, _reason = await _draft_guide(
+        guide, reason = await _draft_guide(
             db_path, stale["city"], stale["topic"], meta, writer,
             stamp=stamp, day=day, min_dimensions=min_dimensions)
         if not guide:
             _refuse(stale["city"], stale["topic"])
-            _note_refusal(getattr(writer, "last_model", ""))
+            if reason not in _PRE_CALL_REFUSALS:
+                _note_refusal(getattr(writer, "last_model", ""))
             continue
         # The rewrite keeps the original publication date and slug; only the
         # body, the counts and `updated_at` move.
@@ -669,15 +674,29 @@ async def publish_daily_guides(db_path: Path, cities: list, writer, *, limit: in
         meta = city_meta.get(candidate["city"])
         if not meta or f"{candidate['city']}|{candidate['topic']}" in refused_today:
             continue
-        attempts += 1
-        guide, _reason = await _draft_guide(
+        # The inventory row already carries both counts, so a group the first
+        # two gates would refuse is skipped here: no query, no counter, and —
+        # the point — no place in the per-pass cap. From 2026-11-08 thousands
+        # of small Hungarian groups at the head of the order used that cap up
+        # twenty at a time and no German or Swedish candidate was ever reached.
+        count = int(candidate["community_count"])
+        if count < min_communities or (
+                count and int(candidate["described_count"] or 0) / count
+                < min_description_ratio):
+            continue
+        guide, reason = await _draft_guide(
             db_path, candidate["city"], candidate["topic"], meta, writer,
             stamp=stamp, day=day, min_dimensions=min_dimensions,
             min_communities=min_communities,
             min_description_ratio=min_description_ratio)
+        # The cap bounds fleet calls; a refusal made before any call costs
+        # nothing and must not spend it.
+        if reason not in _PRE_CALL_REFUSALS:
+            attempts += 1
         if not guide:
             _refuse(candidate["city"], candidate["topic"])
-            _note_refusal(getattr(writer, "last_model", ""))
+            if reason not in _PRE_CALL_REFUSALS:
+                _note_refusal(getattr(writer, "last_model", ""))
             continue
         if create_data_guide(db_path, guide):
             published.append(guide)
